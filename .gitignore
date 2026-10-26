@@ -1,0 +1,73 @@
+# ==============================================================================
+# Visual Studio / .NET Framework
+# ==============================================================================
+
+# Carpetas de Visual Studio
+.vs/
+**/.vs/
+*.suo
+**/*.suo
+*.user
+**/*.user
+*.userosscache
+**/*.userosscache
+*.sln.docstates
+**/*.sln.docstates
+
+# Carpetas de compilación
+[Bb]in/
+**/[Bb]in/
+[Oo]bj/
+**/[Oo]bj/
+[Dd]ebug/
+**/[Dd]ebug/
+[Rr]elease/
+**/[Rr]elease/
+x64/
+x86/
+
+# Archivos de compilación
+*.pdb
+*.exe
+*.dll
+*.cache
+*.resources
+*.log
+*.tmp
+*.temp
+
+# Paquetes de NuGet
+packages/
+*.nupkg
+*.snupkg
+
+# Archivos de salida temporales
+out.json
+error.log
+
+# ==============================================================================
+# Archivos específicos del proyecto
+# ==============================================================================
+
+# Configuración local (no compartir)
+WP SYSTEM/PlayerUI/appsettings.json
+WP SYSTEM/PlayerUI/App.config
+WP SYSTEM/PlayerUI/migration.sql
+WP SYSTEM/PlayerUI/remitos_validacion.json
+
+# Carpetas de herramientas/agentes (no compartir)
+WP SYSTEM/PlayerUI/gestionWeb/
+WP SYSTEM/PlayerUI/.agent/
+WP SYSTEM/PlayerUI/.agents/
+WP SYSTEM/PlayerUI/.claude/
+skills-lock.json
+
+# Otros
+*.sql
+*.py
+/_build_temp
+.aider*
+
+# Permitir Docker init scripts
+!docker/
+!docker/**

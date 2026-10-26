@@ -1,0 +1,583 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props" Condition="Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props')" />
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{B265B459-B4B6-44BC-BDB1-B401C58DC48F}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>WP_Inventario</RootNamespace>
+    <AssemblyName>SteeLog</AssemblyName>
+    <ApplicationIcon>Resources\7953c261-974a-4135-a2ec-59c65dd31e36.ico</ApplicationIcon>
+    <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+    <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
+    <TargetFrameworkProfile />
+    <GenerateResourceUsePreserializedResources>true</GenerateResourceUsePreserializedResources>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>C:\Users\Gime\Downloads\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <ApplicationRevision>1</ApplicationRevision>
+    <ApplicationVersion>1.0.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup>
+    <NoWin32Manifest>true</NoWin32Manifest>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestCertificateThumbprint>2077412A23C8CE24D6A85EAB7FCD872B4B7F3333</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestKeyFile>WP_Inventario_TemporaryKey.pfx</ManifestKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateManifests>true</GenerateManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignManifests>true</SignManifests>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Costura, Version=6.0.0.0, Culture=neutral, PublicKeyToken=9919ef960d84173d, processorArchitecture=MSIL">
+      <HintPath>..\packages\Costura.Fody.6.0.0\lib\netstandard2.0\Costura.dll</HintPath>
+    </Reference>
+    <Reference Include="Guna.UI2">
+      <HintPath>..\packages\Guna.UI2.WinForms.2.0.4.7\lib\net48\Guna.UI2.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.10.0.2\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Configuration, Version=9.0.0.12, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Configuration.9.0.12\lib\net462\Microsoft.Extensions.Configuration.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Configuration.Abstractions, Version=9.0.0.12, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Configuration.Abstractions.9.0.12\lib\net462\Microsoft.Extensions.Configuration.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Configuration.FileExtensions, Version=9.0.0.12, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Configuration.FileExtensions.9.0.12\lib\net462\Microsoft.Extensions.Configuration.FileExtensions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Configuration.Json, Version=9.0.0.12, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Configuration.Json.9.0.12\lib\net462\Microsoft.Extensions.Configuration.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.FileProviders.Abstractions, Version=10.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.FileProviders.Abstractions.10.0.2\lib\net462\Microsoft.Extensions.FileProviders.Abstractions.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.FileProviders.Physical, Version=10.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.FileProviders.Physical.10.0.2\lib\net462\Microsoft.Extensions.FileProviders.Physical.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.FileSystemGlobbing, Version=10.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.FileSystemGlobbing.10.0.2\lib\net462\Microsoft.Extensions.FileSystemGlobbing.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.Extensions.Primitives, Version=10.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Extensions.Primitives.10.0.2\lib\net462\Microsoft.Extensions.Primitives.dll</HintPath>
+    </Reference>
+    <Reference Include="Npgsql, Version=5.0.18.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
+      <HintPath>..\packages\Npgsql.5.0.18\lib\netstandard2.0\Npgsql.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Resources.Extensions">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\packages\System.Resources.Extensions.6.0.0\lib\net461\System.Resources.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>packages\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="EPPlus">
+      <HintPath>packages\EPPlus.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Windows.Forms.DataVisualization" />
+    <Reference Include="itextsharp">
+      <HintPath>packages\itextsharp.dll</HintPath>
+    </Reference>
+    <Reference Include="System">
+      <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\System.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Core" />
+    <Reference Include="System.Design" />
+    <Reference Include="System.IO.Pipelines, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.IO.Pipelines.10.0.2\lib\net462\System.IO.Pipelines.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Management" />
+    <Reference Include="System.Memory, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Memory.4.6.3\lib\net462\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.6.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Numerics.Vectors.4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.Serialization" />
+    <Reference Include="System.ServiceProcess" />
+    <Reference Include="System.Text.Encodings.Web, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Text.Encodings.Web.10.0.2\lib\net462\System.Text.Encodings.Web.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Json, Version=9.0.0.12, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Text.Json.9.0.12\lib\net462\System.Text.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Channels, Version=4.0.2.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Threading.Channels.4.7.0\lib\netstandard2.0\System.Threading.Channels.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.4.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Threading.Tasks.Extensions.4.6.3\lib\net462\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Web" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="Microsoft.VisualBasic" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Net.Http" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Security" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="Datos\CategoriaDatos.cs" />
+    <Compile Include="Datos\CanaletaPlegadoDatos.cs" />
+    <Compile Include="Datos\CanaletaPlegadoFotoDatos.cs" />
+    <Compile Include="Datos\ComunDatos.cs" />
+    <Compile Include="Datos\ConteoInventarioDatos.cs" />
+    <Compile Include="Datos\ConexionDB.cs" />
+    <Compile Include="Datos\FleteDatos.cs" />
+    <Compile Include="Datos\MaterialDatos.cs" />
+    <Compile Include="Datos\HerramientaDatos.cs" />
+    <Compile Include="Datos\InsumoDatos.cs" />
+    <Compile Include="Datos\InformeObraDatos.cs" />
+    <Compile Include="Datos\ObraDatos.cs" />
+    <Compile Include="Datos\ProveedorDatos.cs" />
+    <Compile Include="Datos\MovimientoDatos.cs" />
+    <Compile Include="Datos\RecorteDatos.cs" />
+    <Compile Include="Datos\ReporteStockDatos.cs" />
+    <Compile Include="Datos\InventarioDatos.cs" />
+    <Compile Include="Datos\OrdenCompraDatos.cs" />
+    <Compile Include="Datos\SortableBindingList.cs" />
+    <Compile Include="Modelos\Categoria.cs" />
+    <Compile Include="Modelos\CanaletaPlegado.cs" />
+    <Compile Include="Modelos\CanaletaPlegadoFoto.cs" />
+    <Compile Include="Modelos\ConteoInventario.cs" />
+    <Compile Include="Modelos\ConteoInventarioDetalle.cs" />
+    <Compile Include="Modelos\ConteoInventarioDiferencia.cs" />
+    <Compile Include="Modelos\Flete.cs" />
+    <Compile Include="Modelos\KardexItem.cs" />
+    <Compile Include="Modelos\Material.cs" />
+    <Compile Include="Modelos\Obra.cs" />
+    <Compile Include="Modelos\Movimiento.cs" />
+    <Compile Include="Modelos\MovimientoGrupo.cs" />
+    <Compile Include="Modelos\MovimientoMaterial.cs" />
+    <Compile Include="Modelos\OrdenCompra.cs" />
+    <Compile Include="Modelos\OrdenCompraDetalle.cs" />
+    <Compile Include="Modelos\OrdenCompraEstados.cs" />
+    <Compile Include="Modelos\Herramienta.cs" />
+    <Compile Include="Modelos\HerramientaMovimiento.cs" />
+    <Compile Include="Modelos\Insumo.cs" />
+    <Compile Include="Modelos\InsumoMovimiento.cs" />
+    <Compile Include="Modelos\Proveedor.cs" />
+    <Compile Include="Modelos\Recorte.cs" />
+    <Compile Include="Modelos\HistorialMovimiento.cs" />
+    <Compile Include="Modelos\ReporteOrdenPendienteItem.cs" />
+    <Compile Include="Modelos\ReporteStockConfiguracion.cs" />
+    <Compile Include="IRefrescable.cs" />
+    <Compile Include="MovimientoDraftService.cs" />
+    <Compile Include="ToastNotification.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="BusquedaGlobal.cs" />
+    <Compile Include="PanelAntiParpadeo.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="AppVersion.cs" />
+    <Compile Include="Servicios\UpdaterService.cs" />
+    <Compile Include="Servicios\SupabaseAuthService.cs" />
+    <Compile Include="Servicios\SupabaseStorageService.cs" />
+    <Compile Include="Servicios\SessionManager.cs" />
+    <Compile Include="Servicios\CredentialStore.cs" />
+    <Compile Include="Vistas\Vista_Login.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\ModalActualizacion.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="VistaGeneral.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="VistaGeneral.designer.cs">
+      <DependentUpon>VistaGeneral.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\FiltroMaterial.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\FiltroMaterial.Designer.cs">
+      <DependentUpon>FiltroMaterial.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vacio.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vacio.Designer.cs">
+      <DependentUpon>Vacio.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vacio2.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vacio2.Designer.cs">
+      <DependentUpon>Vacio2.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Fletes.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Fletes.Designer.cs">
+      <DependentUpon>Vista_Fletes.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Obras.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Obras.Designer.cs">
+      <DependentUpon>Vista_Obras.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Proveedores.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Proveedores.Designer.cs">
+      <DependentUpon>Vista_Proveedores.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Categorias.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Categorias.Designer.cs">
+      <DependentUpon>Vista_Categorias.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_CanaletasPlegados.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_CanaletasPlegados.Designer.cs">
+      <DependentUpon>Vista_CanaletasPlegados.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Materiales.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Materiales.designer.cs">
+      <DependentUpon>Vista_Materiales.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\ModalSeleccionProveedores.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\ModalSeleccionProveedores.Designer.cs">
+      <DependentUpon>ModalSeleccionProveedores.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Form3.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Form3.designer.cs">
+      <DependentUpon>Form3.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Vistas\Gestión\Vista_Recortes.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Recortes.Designer.cs">
+      <DependentUpon>Vista_Recortes.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Ubicaciones.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Ubicaciones.Designer.cs">
+      <DependentUpon>Vista_Ubicaciones.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Herramientas.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Herramientas.Designer.cs">
+      <DependentUpon>Vista_Herramientas.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Insumos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Gestión\Vista_Insumos.Designer.cs">
+      <DependentUpon>Vista_Insumos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalRecortes.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalRecortes.Designer.cs">
+      <DependentUpon>ModalRecortes.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Ordenes\OrdenesUi.cs" />
+    <Compile Include="Vistas\Movimientos\Ordenes\Vista_OrdenesAlta.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Ordenes\Vista_OrdenesListado.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Ordenes\Vista_OrdenesModulo.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Ordenes\Vista_OrdenesRevision.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalInsumos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalInsumos.Designer.cs">
+      <DependentUpon>ModalInsumos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Vista_Movimientos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Vista_Movimientos.Designer.cs">
+      <DependentUpon>Vista_Movimientos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalAgregarFlete.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\ModalAgregarFlete.Designer.cs">
+      <DependentUpon>ModalAgregarFlete.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Vista_HistorialMovimientos.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Movimientos\Vista_HistorialMovimientos.Designer.cs">
+      <DependentUpon>Vista_HistorialMovimientos.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_Kardex.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_Kardex.Designer.cs">
+      <DependentUpon>Vista_Kardex.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_ReporteStock.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Reportes\ModalConfigReporteStock.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_ReporteStock.Designer.cs">
+      <DependentUpon>Vista_ReporteStock.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Reportes\InformeObraPDF.cs" />
+    <Compile Include="Reportes\KardexPDF.cs" />
+    <Compile Include="Reportes\MovimientoPDF.cs" />
+    <Compile Include="Reportes\OrdenesPendientesPDF.cs" />
+    <Compile Include="Reportes\ConteoInventarioPDF.cs" />
+    <Compile Include="Vistas\Reportes\ModalFechasInformeObra.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Reportes\ModalFechasInformeObra.Designer.cs">
+      <DependentUpon>ModalFechasInformeObra.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_InformeObra.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Reportes\Vista_InformeObra.Designer.cs">
+      <DependentUpon>Vista_InformeObra.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Inventario\Vista_Inventario.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Inventario\Vista_Inventario.Designer.cs">
+      <DependentUpon>Vista_Inventario.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Inventario\Vista_Conteo.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Vistas\Inventario\Vista_Conteo.Designer.cs">
+      <DependentUpon>Vista_Conteo.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Vistas\Inventario\ModalStockBajo.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <EmbeddedResource Include="VistaGeneral.resx">
+      <DependentUpon>VistaGeneral.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\FiltroMaterial.resx">
+      <DependentUpon>FiltroMaterial.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vacio.resx">
+      <DependentUpon>Vacio.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vacio2.resx">
+      <DependentUpon>Vacio2.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Categorias.resx">
+      <DependentUpon>Vista_Categorias.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_CanaletasPlegados.resx">
+      <DependentUpon>Vista_CanaletasPlegados.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Fletes.resx">
+      <DependentUpon>Vista_Fletes.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Materiales.resx">
+      <DependentUpon>Vista_Materiales.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Form3.resx">
+      <DependentUpon>Form3.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Obras.resx">
+      <DependentUpon>Vista_Obras.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Proveedores.resx">
+      <DependentUpon>Vista_Proveedores.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Recortes.resx">
+      <DependentUpon>Vista_Recortes.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Ubicaciones.resx">
+      <DependentUpon>Vista_Ubicaciones.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Herramientas.resx">
+      <DependentUpon>Vista_Herramientas.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Gestión\Vista_Insumos.resx">
+      <DependentUpon>Vista_Insumos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Movimientos\Vista_Movimientos.resx">
+      <DependentUpon>Vista_Movimientos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Movimientos\ModalInsumos.resx">
+      <DependentUpon>ModalInsumos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Movimientos\Vista_HistorialMovimientos.resx">
+      <DependentUpon>Vista_HistorialMovimientos.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Reportes\Vista_Kardex.resx">
+      <DependentUpon>Vista_Kardex.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Reportes\Vista_ReporteStock.resx">
+      <DependentUpon>Vista_ReporteStock.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Reportes\Vista_InformeObra.resx">
+      <DependentUpon>Vista_InformeObra.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Inventario\Vista_Inventario.resx">
+      <DependentUpon>Vista_Inventario.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Vistas\Inventario\Vista_Conteo.resx">
+      <DependentUpon>Vista_Conteo.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </EmbeddedResource>
+    <None Include="appsettingscopia.json" />
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+    <None Include="WP_Inventario_TemporaryKey.pfx" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\7953c261-974a-4135-a2ec-59c65dd31e36.ico" />
+    <None Include="Resources\app_icon.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\image.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\image %281%29.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Resources\clean icon.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="Resources\072maximize1_99942 - Editado.png" />
+    <Content Include="Resources\cancel_close_delete_exit_logout_remove_x_icon_123217 - Editado.png" />
+    <Content Include="Resources\cancel_remove_close_x_icon_255948.ico" />
+    <Content Include="Resources\Diseño_sin_título__1_-removebg-preview.png" />
+    <Content Include="Resources\minimize_118918 - Editado.png" />
+    <EmbeddedResource Include="Resources\wp_horizontal.png" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.8">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4.8 %28x86 y x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+  <Import Project="..\packages\Fody.6.8.2\build\Fody.targets" Condition="Exists('..\packages\Fody.6.8.2\build\Fody.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>Este proyecto hace referencia a los paquetes NuGet que faltan en este equipo. Use la restauración de paquetes NuGet para descargarlos. Para obtener más información, consulte http://go.microsoft.com/fwlink/?LinkID=322105. El archivo que falta es {0}.</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\Fody.6.8.2\build\Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Fody.6.8.2\build\Fody.targets'))" />
+    <Error Condition="!Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props'))" />
+    <Error Condition="!Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets'))" />
+  </Target>
+  <Import Project="..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets" Condition="Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" />
+  <ItemGroup>
+    <Reference Include="Transitions">
+      <HintPath>packages\dot-net-transitions.1.2.1.0\lib\net40-full\Transitions.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+</Project>

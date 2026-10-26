@@ -1,0 +1,25 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 18
+VisualStudioVersion = 18.1.11304.174 d18.0
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WP_Inventario", "PlayerUI\WP_Inventario.csproj", "{B265B459-B4B6-44BC-BDB1-B401C58DC48F}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B265B459-B4B6-44BC-BDB1-B401C58DC48F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B265B459-B4B6-44BC-BDB1-B401C58DC48F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B265B459-B4B6-44BC-BDB1-B401C58DC48F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B265B459-B4B6-44BC-BDB1-B401C58DC48F}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C7F6D3D0-270E-41BA-9006-2A087C845F37}
+	EndGlobalSection
+EndGlobal
