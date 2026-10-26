@@ -1,8 +1,19 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 
 namespace WP_Inventario.Modelos
 {
+    public class FiltroMaterialParams
+    {
+        public string Nombre { get; set; }
+        public decimal? DesdeCantidad { get; set; }
+        public decimal? HastaCantidad { get; set; }
+        public List<int> IdsCategoria { get; set; } = new List<int>();
+        public List<int> IdsProveedor { get; set; } = new List<int>();
+        public bool SoloStockBajo { get; set; }
+    }
+
     public class Material
     {
         public int id { set; get; }

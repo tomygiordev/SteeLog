@@ -946,7 +946,7 @@ namespace WP_Inventario.Datos
         /// Si no existe, inserta una fila nueva.
         /// delta positivo = aumento de stock; delta negativo = baja de stock.
         /// </summary>
-        public void ActualizarOAgregarDetalle(int idMovimiento, int idMaterial, int signedDelta, decimal stockActual)
+        public void ActualizarOAgregarDetalle(int idMovimiento, int idMaterial, decimal signedDelta, decimal stockActual)
         {
             ConexionDB conexionDB = new ConexionDB();
             using (var conexion = conexionDB.GetConnection())
