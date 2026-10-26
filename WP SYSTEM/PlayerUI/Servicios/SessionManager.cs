@@ -1,28 +1,31 @@
-﻿namespace WP_Inventario.Servicios
+namespace WP_Inventario.Servicios
 {
     using System;
 
     public enum UserRole
     {
-        Admin,
-        Galpon
+        None = 0,
+        Galpon = 1,
+        Admin = 2
     }
 
     public static class SessionManager
     {
-        // Lista de emails con rol Admin â€” el resto es Galpon
+        // Lista de emails con rol Admin - el resto es Galpon
         private static readonly string[] AdminEmails =
         {
             "admin@steelog.local",
             "admin@gmail.com",
             "tomasroldangiorgi@gmail.com",
+            "admin@tesis.local",
+            "admin"
         };
 
         public static string Email { get; private set; }
         public static string Username { get; private set; }
-        public static UserRole Role { get; private set; }
+        public static UserRole Role { get; private set; } = UserRole.None;
         public static bool IsLoggedIn { get; private set; }
-        public static bool DebeOcultarCantidadesStockMateriales => Role == UserRole.Galpon;
+        public static bool DebeOcultarCantidadesStockMateriales => Role != UserRole.Admin;
 
         public static string AccessToken { get; private set; }
         public static string RefreshToken { get; private set; }
@@ -65,6 +68,7 @@
         {
             Email = null;
             Username = null;
+            Role = UserRole.None;
             IsLoggedIn = false;
             AccessToken = null;
             RefreshToken = null;
@@ -74,9 +78,11 @@
 
         private static bool IsAdmin(string email)
         {
+            if (string.IsNullOrWhiteSpace(email)) return false;
+            string clean = email.ToLower().Trim();
             foreach (var adminEmail in AdminEmails)
             {
-                if (adminEmail.ToLower().Trim() == email)
+                if (adminEmail.ToLower().Trim() == clean)
                     return true;
             }
             return false;
@@ -88,4 +94,3 @@
         }
     }
 }
-
