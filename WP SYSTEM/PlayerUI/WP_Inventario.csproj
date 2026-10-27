@@ -250,18 +250,6 @@
     <Compile Include="Vistas\Gestión\FiltroMaterial.Designer.cs">
       <DependentUpon>FiltroMaterial.cs</DependentUpon>
     </Compile>
-    <Compile Include="Vistas\Gestión\Vacio.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Vistas\Gestión\Vacio.Designer.cs">
-      <DependentUpon>Vacio.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Vistas\Gestión\Vacio2.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Vistas\Gestión\Vacio2.Designer.cs">
-      <DependentUpon>Vacio2.cs</DependentUpon>
-    </Compile>
     <Compile Include="Vistas\Gestión\Vista_Fletes.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -303,12 +291,6 @@
     </Compile>
     <Compile Include="Vistas\Gestión\ModalSeleccionProveedores.Designer.cs">
       <DependentUpon>ModalSeleccionProveedores.cs</DependentUpon>
-    </Compile>
-    <Compile Include="Form3.cs">
-      <SubType>Form</SubType>
-    </Compile>
-    <Compile Include="Form3.designer.cs">
-      <DependentUpon>Form3.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
@@ -432,12 +414,6 @@
     <EmbeddedResource Include="Vistas\Gestión\FiltroMaterial.resx">
       <DependentUpon>FiltroMaterial.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vacio.resx">
-      <DependentUpon>Vacio.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vacio2.resx">
-      <DependentUpon>Vacio2.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Vistas\Gestión\Vista_Categorias.resx">
       <DependentUpon>Vista_Categorias.cs</DependentUpon>
     </EmbeddedResource>
@@ -449,9 +425,6 @@
     </EmbeddedResource>
     <EmbeddedResource Include="Vistas\Gestión\Vista_Materiales.resx">
       <DependentUpon>Vista_Materiales.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Form3.resx">
-      <DependentUpon>Form3.cs</DependentUpon>
     </EmbeddedResource>
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>

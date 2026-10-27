@@ -1,3 +1,4 @@
+using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -22,14 +23,18 @@ namespace WP_Inventario
         private Guna.UI2.WinForms.Guna2TextBox _txtBusqueda;
         private Panel _panelResultados;
         private Timer _timerDebounce;
-        private ComunDatos _comunDatos;
+        private List<Material> _cacheMateriales;
+        private List<Recorte> _cacheRecortes;
+        private List<Herramienta> _cacheHerramientas;
+        private List<Insumo> _cacheInsumos;
+        private DateTime _cacheTimestampUtc = DateTime.MinValue;
+        private int _searchVersion = 0;
 
         public BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
         {
             _parentForm = parentForm;
             _panelMaximizar = panelMaximizar;
             _openChildForm = openChildForm;
-            _comunDatos = new ComunDatos();
 
             CrearTextBoxBusqueda();
             CrearPanelResultados();
@@ -226,134 +231,146 @@ namespace WP_Inventario
             }
         }
 
-        private void EjecutarBusqueda(string query)
+        private async void EjecutarBusqueda(string query)
         {
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2) return;
 
-            List<ResultadoBusqueda> resultados;
-            try
+            int currentVersion = ++_searchVersion;
+            bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+
+            List<ResultadoBusqueda> resultados = await Task.Run(() =>
             {
-                var materiales = new MaterialDatos().obtenerMateriales() ?? new List<Material>();
-                var recortes = new RecorteDatos().ObtenerRecortes() ?? new List<Recorte>();
-                var herramientas = new HerramientaDatos().GetHerramientas() ?? new List<Herramienta>();
-                var insumos = new InsumoDatos().GetInsumos() ?? new List<Insumo>();
-
-                var candidatos = new List<(ResultadoBusqueda item, int estricto, int fuzzy)>();
-
-                foreach (var m in materiales)
+                try
                 {
-                    string textoBusqueda = $"material materiales {m.nombre} {m.nombre_categoria}";
-                    var puntajes = CalcularPuntajes(query, m.nombre, textoBusqueda);
-                    if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
+                    if ((DateTime.UtcNow - _cacheTimestampUtc).TotalSeconds > 10 || _cacheMateriales == null)
                     {
-                        bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
-                        candidatos.Add((new ResultadoBusqueda
-                        {
-                            Nombre = m.nombre,
-                            Tipo = "Material",
-                            Extra = ocultarCantidades
-                                ? SessionManager.ObtenerEstadoStockMaterial(m.stockActual)
-                                : $"Stock: {m.stockActual:N0}",
-                            Detalles = ocultarCantidades
-                                ? $"Categoría: {m.nombre_categoria}\nDisponibilidad: {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
-                                : $"Categoría: {m.nombre_categoria}\nStock Actual: {m.stockActual:N0}\nStock Mínimo: {m.stockMinimo:N0}",
-                            Icono = "📦",
-                            Color = Color.FromArgb(39, 174, 96)
-                        }, puntajes.estricto, puntajes.fuzzy));
+                        _cacheMateriales = new MaterialDatos().obtenerMateriales() ?? new List<Material>();
+                        _cacheRecortes = new RecorteDatos().ObtenerRecortes() ?? new List<Recorte>();
+                        _cacheHerramientas = new HerramientaDatos().GetHerramientas() ?? new List<Herramienta>();
+                        _cacheInsumos = new InsumoDatos().GetInsumos() ?? new List<Insumo>();
+                        _cacheTimestampUtc = DateTime.UtcNow;
                     }
-                }
 
-                foreach (var r in recortes)
-                {
-                    string dimensiones = FormatearDimensiones(r);
-                    if (r.ancho > 0) dimensiones += " " + r.ancho;
-                    if (r.altura > 0) dimensiones += " " + r.altura;
-                    if (r.medida > 0) dimensiones += " " + r.medida.ToString("0.##");
-                    string textoBusqueda = $"recorte recortes {r.nombre_material} {r.nombre_categoria} {dimensiones}";
-                    var puntajes = CalcularPuntajes(query, r.nombre_material, textoBusqueda);
-                    if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
-                    {
-                        string dimensionesDisplay = FormatearDimensiones(r);
-                        candidatos.Add((new ResultadoBusqueda
-                        {
-                            Nombre = r.nombre_material,
-                            Tipo = "Recorte",
-                            Extra = $"{dimensionesDisplay} • Cantidad: {r.cantidad:N0}",
-                            Detalles = $"Material: {r.nombre_material}\nCategoría: {r.nombre_categoria}\nDimensiones: {dimensionesDisplay}\nCantidad: {r.cantidad:N0}",
-                            Icono = "✂️",
-                            Color = Color.Orange
-                        }, puntajes.estricto, puntajes.fuzzy));
-                    }
-                }
+                    var candidatos = new List<(ResultadoBusqueda item, int estricto, int fuzzy)>();
 
-                foreach (var h in herramientas)
-                {
-                    string textoBusqueda = $"herramienta herramientas {h.nombre} {h.estado} {h.nombre_obra} {h.observaciones}";
-                    var puntajes = CalcularPuntajes(query, h.nombre, textoBusqueda);
-                    if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
+                    foreach (var m in _cacheMateriales)
                     {
-                        candidatos.Add((new ResultadoBusqueda
+                        string textoBusqueda = $"material materiales {m.nombre} {m.nombre_categoria}";
+                        var puntajes = CalcularPuntajes(query, m.nombre, textoBusqueda);
+                        if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
-                            Nombre = h.nombre,
-                            Tipo = "Herramienta",
-                            Extra = h.estado + (string.IsNullOrEmpty(h.nombre_obra) ? "" : $" | {h.nombre_obra}"),
-                            Detalles = $"Estado: {h.estado}\nUbicación actual: {(string.IsNullOrEmpty(h.nombre_obra) ? "Galpón" : h.nombre_obra)}\nObservaciones: {(string.IsNullOrEmpty(h.observaciones) ? "Ninguna" : h.observaciones)}",
-                            Icono = "🔧",
-                            Color = Color.FromArgb(52, 152, 219)
-                        }, puntajes.estricto, puntajes.fuzzy));
-                    }
-                }
-
-                foreach (var ins in insumos)
-                {
-                    string textoBusqueda = $"insumo insumos {ins.nombre} {ins.nombre_obra} {ins.observaciones}";
-                    var puntajes = CalcularPuntajes(query, ins.nombre, textoBusqueda);
-                    if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
-                    {
-                        string estadoInsumo = ins.consumido ? "Consumido" : (string.IsNullOrEmpty(ins.nombre_obra) ? "Disponible" : "En Obra");
-                        candidatos.Add((new ResultadoBusqueda
-                        {
-                            Nombre = ins.nombre,
-                            Tipo = "Insumo",
-                            Extra = ins.consumido ? "Consumido" : (ins.nombre_obra ?? "Galpón"),
-                            Detalles = $"Estado: {estadoInsumo}\nUbicación: {(string.IsNullOrEmpty(ins.nombre_obra) ? "Galpón" : ins.nombre_obra)}",
-                            Icono = "🧱",
-                            Color = Color.FromArgb(243, 156, 18)
-                        }, puntajes.estricto, puntajes.fuzzy));
-                    }
-                }
-
-                bool hayCoincidenciaEstricta = candidatos.Any(c => c.estricto > 0);
-                resultados = new List<ResultadoBusqueda>();
-                if (hayCoincidenciaEstricta)
-                {
-                    foreach (var c in candidatos)
-                    {
-                        if (c.estricto > 0)
-                        {
-                            c.item.Puntaje = c.estricto;
-                            resultados.Add(c.item);
+                            candidatos.Add((new ResultadoBusqueda
+                            {
+                                Nombre = m.nombre,
+                                Tipo = "Material",
+                                Extra = ocultarCantidades
+                                    ? SessionManager.ObtenerEstadoStockMaterial(m.stockActual)
+                                    : $"Stock: {m.stockActual:N0}",
+                                Detalles = ocultarCantidades
+                                    ? $"Categoría: {m.nombre_categoria}\nDisponibilidad: {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
+                                    : $"Categoría: {m.nombre_categoria}\nStock Actual: {m.stockActual:N0}\nStock Mínimo: {m.stockMinimo:N0}",
+                                Icono = "📦",
+                                Color = Color.FromArgb(39, 174, 96)
+                            }, puntajes.estricto, puntajes.fuzzy));
                         }
                     }
-                }
-                else
-                {
-                    foreach (var c in candidatos)
+
+                    foreach (var r in _cacheRecortes)
                     {
-                        if (c.fuzzy > 0)
+                        string dimensiones = FormatearDimensiones(r);
+                        if (r.ancho > 0) dimensiones += " " + r.ancho;
+                        if (r.altura > 0) dimensiones += " " + r.altura;
+                        if (r.medida > 0) dimensiones += " " + r.medida.ToString("0.##");
+                        string textoBusqueda = $"recorte recortes {r.nombre_material} {r.nombre_categoria} {dimensiones}";
+                        var puntajes = CalcularPuntajes(query, r.nombre_material, textoBusqueda);
+                        if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
-                            c.item.Puntaje = c.fuzzy;
-                            resultados.Add(c.item);
+                            string dimensionesDisplay = FormatearDimensiones(r);
+                            candidatos.Add((new ResultadoBusqueda
+                            {
+                                Nombre = r.nombre_material,
+                                Tipo = "Recorte",
+                                Extra = $"{dimensionesDisplay} • Cantidad: {r.cantidad:N0}",
+                                Detalles = $"Material: {r.nombre_material}\nCategoría: {r.nombre_categoria}\nDimensiones: {dimensionesDisplay}\nCantidad: {r.cantidad:N0}",
+                                Icono = "✂️",
+                                Color = Color.Orange
+                            }, puntajes.estricto, puntajes.fuzzy));
                         }
                     }
-                }
-            }
-            catch
-            {
-                resultados = new List<ResultadoBusqueda>();
-            }
 
-            MostrarResultados(resultados.OrderByDescending(r => r.Puntaje).ThenBy(r => r.Nombre).ToList(), query);
+                    foreach (var h in _cacheHerramientas)
+                    {
+                        string textoBusqueda = $"herramienta herramientas {h.nombre} {h.estado} {h.nombre_obra} {h.observaciones}";
+                        var puntajes = CalcularPuntajes(query, h.nombre, textoBusqueda);
+                        if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
+                        {
+                            candidatos.Add((new ResultadoBusqueda
+                            {
+                                Nombre = h.nombre,
+                                Tipo = "Herramienta",
+                                Extra = h.estado + (string.IsNullOrEmpty(h.nombre_obra) ? "" : $" | {h.nombre_obra}"),
+                                Detalles = $"Estado: {h.estado}\nUbicación actual: {(string.IsNullOrEmpty(h.nombre_obra) ? "Galpón" : h.nombre_obra)}\nObservaciones: {(string.IsNullOrEmpty(h.observaciones) ? "Ninguna" : h.observaciones)}",
+                                Icono = "🔧",
+                                Color = Color.FromArgb(52, 152, 219)
+                            }, puntajes.estricto, puntajes.fuzzy));
+                        }
+                    }
+
+                    foreach (var ins in _cacheInsumos)
+                    {
+                        string textoBusqueda = $"insumo insumos {ins.nombre} {ins.nombre_obra} {ins.observaciones}";
+                        var puntajes = CalcularPuntajes(query, ins.nombre, textoBusqueda);
+                        if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
+                        {
+                            string estadoInsumo = ins.consumido ? "Consumido" : (string.IsNullOrEmpty(ins.nombre_obra) ? "Disponible" : "En Obra");
+                            candidatos.Add((new ResultadoBusqueda
+                            {
+                                Nombre = ins.nombre,
+                                Tipo = "Insumo",
+                                Extra = ins.consumido ? "Consumido" : (ins.nombre_obra ?? "Galpón"),
+                                Detalles = $"Estado: {estadoInsumo}\nUbicación: {(string.IsNullOrEmpty(ins.nombre_obra) ? "Galpón" : ins.nombre_obra)}",
+                                Icono = "🧱",
+                                Color = Color.FromArgb(243, 156, 18)
+                            }, puntajes.estricto, puntajes.fuzzy));
+                        }
+                    }
+
+                    bool hayCoincidenciaEstricta = candidatos.Any(c => c.estricto > 0);
+                    var res = new List<ResultadoBusqueda>();
+                    if (hayCoincidenciaEstricta)
+                    {
+                        foreach (var c in candidatos)
+                        {
+                            if (c.estricto > 0)
+                            {
+                                c.item.Puntaje = c.estricto;
+                                res.Add(c.item);
+                            }
+                        }
+                    }
+                    else
+                    {
+                        foreach (var c in candidatos)
+                        {
+                            if (c.fuzzy > 0)
+                            {
+                                c.item.Puntaje = c.fuzzy;
+                                res.Add(c.item);
+                            }
+                        }
+                    }
+
+                    return res.OrderByDescending(r => r.Puntaje).ThenBy(r => r.Nombre).ToList();
+                }
+                catch
+                {
+                    return new List<ResultadoBusqueda>();
+                }
+            });
+
+            if (currentVersion != _searchVersion || _parentForm == null || _parentForm.IsDisposed) return;
+
+            MostrarResultados(resultados, query);
         }
 
         private static (int estricto, int fuzzy) CalcularPuntajes(string query, string nombre, string textoCompleto)

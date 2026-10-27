@@ -54,45 +54,51 @@ namespace WP_Inventario.Datos
                 }
             }
         }
-        public void editarMaterial(string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, int id, List<int> idsProveedores = null)
-        {
-            ConexionDB con = new ConexionDB();
-            using(var cone = con.GetConnection())
-            {
-                using (var tx = cone.BeginTransaction())
-                {
-                    try
-                    {
-                        string sql = "UPDATE materiales SET " +
-                            "nombre=@nom, stockActual=@stact," +
-                            "stockMinimo=@stmin, id_categoria=@idCat " +
-                            "WHERE id = @id_mat";
-                        using(var cmd=new NpgsqlCommand(sql, cone, tx))
-                        {
-                            cmd.Parameters.AddWithValue("@nom", nombre);
-                            cmd.Parameters.AddWithValue("@stact", stockActual);
-                            cmd.Parameters.AddWithValue("@stmin", stockMinimo);
-                            cmd.Parameters.AddWithValue("@idCat", id_categoria);
-                            cmd.Parameters.AddWithValue("@id_mat", id);
-
-                            cmd.ExecuteNonQuery();
-                        }
-
-                        if (idsProveedores != null)
-                        {
-                            GuardarProveedoresMaterial(id, idsProveedores, cone, tx);
-                        }
-
-                        tx.Commit();
-                    }
-                    catch
-                    {
-                        tx.Rollback();
-                        throw;
-                    }
-                }
-            }
-        }
+        public void editarMaterial(string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, int id, List<int> idsProveedores = null, decimal? stockAnterior = null)
+        {
+            ConexionDB con = new ConexionDB();
+            using(var cone = con.GetConnection())
+            {
+                using (var tx = cone.BeginTransaction())
+                {
+                    try
+                    {
+                        string sql = "UPDATE materiales SET " +
+                            "nombre=@nom, stockActual=@stact," +
+                            "stockMinimo=@stmin, id_categoria=@idCat " +
+                            "WHERE id = @id_mat";
+                        using(var cmd=new NpgsqlCommand(sql, cone, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@nom", nombre);
+                            cmd.Parameters.AddWithValue("@stact", stockActual);
+                            cmd.Parameters.AddWithValue("@stmin", stockMinimo);
+                            cmd.Parameters.AddWithValue("@idCat", id_categoria);
+                            cmd.Parameters.AddWithValue("@id_mat", id);
+
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        if (idsProveedores != null)
+                        {
+                            GuardarProveedoresMaterial(id, idsProveedores, cone, tx);
+                        }
+
+                        if (stockAnterior.HasValue && stockActual != stockAnterior.Value)
+                        {
+                            decimal signedDelta = stockActual - stockAnterior.Value;
+                            new MovimientoDatos().RegistrarAjusteInternoDiario(id, signedDelta, stockActual, cone, tx);
+                        }
+
+                        tx.Commit();
+                    }
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
         public void eliminarMaterial(int id)
         {
             ConexionDB con = new ConexionDB();

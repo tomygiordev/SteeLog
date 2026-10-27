@@ -950,71 +950,160 @@ namespace WP_Inventario.Datos
         /// Si no existe, inserta una fila nueva.
         /// delta positivo = aumento de stock; delta negativo = baja de stock.
         /// </summary>
-        public void ActualizarOAgregarDetalle(int idMovimiento, int idMaterial, decimal signedDelta, decimal stockActual)
-        {
-            ConexionDB conexionDB = new ConexionDB();
-            using (var conexion = conexionDB.GetConnection())
-            {
-                if (conexion.State == ConnectionState.Closed) conexion.Open();
-
-                // Verificar si ya existe una fila para este material en este movimiento
-                string queryCheck = @"
-                    SELECT id_movimientomaterial, cantidad 
-                    FROM public.movimientomaterial 
-                    WHERE id_movimiento = @idMovimiento AND id_material = @idMaterial
-                    LIMIT 1";
-
-                int? idExistente = null;
-                decimal cantidadExistente = 0;
-
-                using (var cmdCheck = new NpgsqlCommand(queryCheck, conexion))
-                {
-                    cmdCheck.Parameters.AddWithValue("@idMovimiento", idMovimiento);
-                    cmdCheck.Parameters.AddWithValue("@idMaterial", idMaterial);
-                    using (var reader = cmdCheck.ExecuteReader())
-                    {
-                        if (reader.Read())
-                        {
-                            idExistente = reader.GetInt32(0);
-                            cantidadExistente = reader.GetDecimal(1);
-                        }
-                    }
-                }
-
-                if (idExistente.HasValue)
-                {
-                    // Ya existe → acumular delta en cantidad y actualizar stock_actual
-                    decimal nuevaCantidad = cantidadExistente + signedDelta;
-                    string queryUpdate = @"
-                        UPDATE public.movimientomaterial 
-                        SET cantidad = @cantidad, stock_actual = @stockActual
-                        WHERE id_movimientomaterial = @id";
-                    using (var cmdUpdate = new NpgsqlCommand(queryUpdate, conexion))
-                    {
-                        cmdUpdate.Parameters.AddWithValue("@cantidad", nuevaCantidad);
-                        cmdUpdate.Parameters.AddWithValue("@stockActual", stockActual);
-                        cmdUpdate.Parameters.AddWithValue("@id", idExistente.Value);
-                        cmdUpdate.ExecuteNonQuery();
-                    }
-                }
-                else
-                {
-                    // No existe → insertar nuevo
-                    string queryInsert = @"
-                        INSERT INTO public.movimientomaterial
-                            (id_movimiento, id_material, cantidad, stock_actual, esrecorte, id_recorte, medida_recorte, es_compra_eventual)
-                        VALUES
-                            (@idMovimiento, @idMaterial, @cantidad, @stockActual, false, NULL, NULL, false)";
-                    using (var cmdInsert = new NpgsqlCommand(queryInsert, conexion))
-                    {
-                        cmdInsert.Parameters.AddWithValue("@idMovimiento", idMovimiento);
-                        cmdInsert.Parameters.AddWithValue("@idMaterial", idMaterial);
-                        cmdInsert.Parameters.AddWithValue("@cantidad", signedDelta);
-                        cmdInsert.Parameters.AddWithValue("@stockActual", stockActual);
-                        cmdInsert.ExecuteNonQuery();
-                    }
-                }
-            }
-        }
-    }
-}
+        public void ActualizarOAgregarDetalle(int idMovimiento, int idMaterial, decimal signedDelta, decimal stockActual)
+        {
+            ConexionDB conexionDB = new ConexionDB();
+            using (var conexion = conexionDB.GetConnection())
+            {
+                if (conexion.State == ConnectionState.Closed) conexion.Open();
+                using (var tx = conexion.BeginTransaction())
+                {
+                    try
+                    {
+                        ActualizarOAgregarDetalle(idMovimiento, idMaterial, signedDelta, stockActual, conexion, tx);
+                        tx.Commit();
+                    }
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
+
+        public void ActualizarOAgregarDetalle(int idMovimiento, int idMaterial, decimal signedDelta, decimal stockActual, NpgsqlConnection conexion, NpgsqlTransaction transaction)
+        {
+            // Verificar si ya existe una fila para este material en este movimiento
+            string queryCheck = @"
+                SELECT id_movimientomaterial, cantidad 
+                FROM public.movimientomaterial 
+                WHERE id_movimiento = @idMovimiento AND id_material = @idMaterial
+                LIMIT 1 FOR UPDATE";
+
+            int? idExistente = null;
+            decimal cantidadExistente = 0;
+
+            using (var cmdCheck = new NpgsqlCommand(queryCheck, conexion, transaction))
+            {
+                cmdCheck.Parameters.AddWithValue("@idMovimiento", idMovimiento);
+                cmdCheck.Parameters.AddWithValue("@idMaterial", idMaterial);
+                using (var reader = cmdCheck.ExecuteReader())
+                {
+                    if (reader.Read())
+                    {
+                        idExistente = reader.GetInt32(0);
+                        cantidadExistente = reader.GetDecimal(1);
+                    }
+                }
+            }
+
+            if (idExistente.HasValue)
+            {
+                // Ya existe → acumular delta en cantidad y actualizar stock_actual
+                decimal nuevaCantidad = cantidadExistente + signedDelta;
+                string queryUpdate = @"
+                    UPDATE public.movimientomaterial 
+                    SET cantidad = @cantidad, stock_actual = @stockActual
+                    WHERE id_movimientomaterial = @id";
+                using (var cmdUpdate = new NpgsqlCommand(queryUpdate, conexion, transaction))
+                {
+                    cmdUpdate.Parameters.AddWithValue("@cantidad", nuevaCantidad);
+                    cmdUpdate.Parameters.AddWithValue("@stockActual", stockActual);
+                    cmdUpdate.Parameters.AddWithValue("@id", idExistente.Value);
+                    cmdUpdate.ExecuteNonQuery();
+                }
+            }
+            else
+            {
+                // No existe → insertar nuevo
+                string queryInsert = @"
+                    INSERT INTO public.movimientomaterial
+                        (id_movimiento, id_material, cantidad, stock_actual, esrecorte, id_recorte, medida_recorte, es_compra_eventual)
+                    VALUES
+                        (@idMovimiento, @idMaterial, @cantidad, @stockActual, false, NULL, NULL, false)";
+                using (var cmdInsert = new NpgsqlCommand(queryInsert, conexion, transaction))
+                {
+                    cmdInsert.Parameters.AddWithValue("@idMovimiento", idMovimiento);
+                    cmdInsert.Parameters.AddWithValue("@idMaterial", idMaterial);
+                    cmdInsert.Parameters.AddWithValue("@cantidad", signedDelta);
+                    cmdInsert.Parameters.AddWithValue("@stockActual", stockActual);
+                    cmdInsert.ExecuteNonQuery();
+                }
+            }
+        }
+
+        /// <summary>
+        /// Registra el ajuste diario en el movimiento tipo 11 (REGISTRO INTERNO) dentro de la misma transacción.
+        /// </summary>
+        public void RegistrarAjusteInternoDiario(int idMaterial, decimal signedDelta, decimal stockActual, NpgsqlConnection conexion, NpgsqlTransaction transaction)
+        {
+            string queryBuscar = @"
+                SELECT id_movimiento FROM public.movimientos
+                WHERE id_tipomovimiento = 11
+                  AND DATE(fecha) = @fecha
+                ORDER BY id_movimiento DESC
+                LIMIT 1 FOR UPDATE";
+
+            int idRemitoHoy = -1;
+            using (var cmdBuscar = new NpgsqlCommand(queryBuscar, conexion, transaction))
+            {
+                cmdBuscar.Parameters.AddWithValue("@fecha", DateTime.Today);
+                object res = cmdBuscar.ExecuteScalar();
+                if (res != null && res != DBNull.Value)
+                {
+                    idRemitoHoy = Convert.ToInt32(res);
+                }
+            }
+
+            if (idRemitoHoy > 0)
+            {
+                ActualizarOAgregarDetalle(idRemitoHoy, idMaterial, signedDelta, stockActual, conexion, transaction);
+            }
+            else
+            {
+                string queryInsertMov = @"
+                    INSERT INTO public.movimientos (
+                        fecha, nroremito, id_origen, tipo_origen, id_destino, tipo_destino,
+                        id_tipomovimiento, id_obra, costoflete, observaciones, precio_total, id_flete
+                    ) VALUES (
+                        @fecha, @nroremito, @id_origen, @tipo_origen, @id_destino, @tipo_destino,
+                        @id_tipomovimiento, @id_obra, @costoflete, @observaciones, @precio_total, @id_flete
+                    ) RETURNING id_movimiento;";
+
+                int nuevoIdMov;
+                using (var cmdMov = new NpgsqlCommand(queryInsertMov, conexion, transaction))
+                {
+                    cmdMov.Parameters.AddWithValue("@fecha", DateTime.Now);
+                    cmdMov.Parameters.AddWithValue("@nroremito", $"141414-{DateTime.Today:yyyyMMdd}");
+                    cmdMov.Parameters.AddWithValue("@id_origen", 1);
+                    cmdMov.Parameters.AddWithValue("@tipo_origen", "UBICACION");
+                    cmdMov.Parameters.AddWithValue("@id_destino", 1);
+                    cmdMov.Parameters.AddWithValue("@tipo_destino", "UBICACION");
+                    cmdMov.Parameters.AddWithValue("@id_tipomovimiento", 11);
+                    cmdMov.Parameters.AddWithValue("@id_obra", DBNull.Value);
+                    cmdMov.Parameters.AddWithValue("@costoflete", 0m);
+                    cmdMov.Parameters.AddWithValue("@observaciones", "Actualización interna de stock");
+                    cmdMov.Parameters.AddWithValue("@precio_total", 0m);
+                    cmdMov.Parameters.AddWithValue("@id_flete", DBNull.Value);
+
+                    nuevoIdMov = Convert.ToInt32(cmdMov.ExecuteScalar());
+                }
+
+                string queryInsertDetalle = @"
+                    INSERT INTO public.movimientomaterial
+                        (id_movimiento, id_material, cantidad, stock_actual, esrecorte, id_recorte, medida_recorte, es_compra_eventual)
+                    VALUES
+                        (@idMovimiento, @idMaterial, @cantidad, @stockActual, false, NULL, NULL, false)";
+                using (var cmdDetalle = new NpgsqlCommand(queryInsertDetalle, conexion, transaction))
+                {
+                    cmdDetalle.Parameters.AddWithValue("@idMovimiento", nuevoIdMov);
+                    cmdDetalle.Parameters.AddWithValue("@idMaterial", idMaterial);
+                    cmdDetalle.Parameters.AddWithValue("@cantidad", signedDelta);
+                    cmdDetalle.Parameters.AddWithValue("@stockActual", stockActual);
+                    cmdDetalle.ExecuteNonQuery();
+                }
+            }
+        }
+    }
+}

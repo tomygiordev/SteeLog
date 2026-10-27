@@ -50,6 +50,8 @@ error.log
 # ==============================================================================
 
 # Configuración local (no compartir)
+.env
+**/.env
 WP SYSTEM/PlayerUI/appsettings.json
 WP SYSTEM/PlayerUI/App.config
 WP SYSTEM/PlayerUI/migration.sql

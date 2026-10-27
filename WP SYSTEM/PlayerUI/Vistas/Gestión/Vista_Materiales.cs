@@ -229,63 +229,16 @@ namespace WP_Inventario.Vistas
                 }
                 else
                 {
-                    decimal stockAnterior = stockOriginalSeleccionado;
-                    datos.editarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial, idMaterialSeleccionado, idsProveedoresSeleccionados);
-
-                    // Registrar movimiento solo si el stock cambió
-                    if (stockActual != stockAnterior)
-                    {
-                        try
-                        {
-                            MovimientoDatos movDatos = new MovimientoDatos();
-                            // Delta signed: positivo si subió el stock, negativo si bajó
-                            decimal signedDelta = stockActual - stockAnterior;
-
-                            // Buscar si ya hay un remito interno de hoy
-                            int idRemitoHoy = movDatos.BuscarRemitoInternoDiario(DateTime.Today);
-
-                            if (idRemitoHoy > 0)
-                            {
-                                // Ya existe remito del día → acumular en la fila del material (o insertar si es nuevo material)
-                                movDatos.ActualizarOAgregarDetalle(idRemitoHoy, idMaterialSeleccionado, signedDelta, stockActual);
-                            }
-                            else
-                            {
-                                // No existe → crear remito nuevo con su detalle
-                                Movimiento mov = new Movimiento();
-                                mov.fecha = DateTime.Now;
-                                mov.nroremito = $"141414-{DateTime.Today:yyyyMMdd}";
-                                mov.id_tipomovimiento = 11; // Registro Interno
-                                mov.id_origen = 1; // Galpón
-                                mov.tipo_origen = "UBICACION";
-                                mov.id_destino = 1; // Galpón
-                                mov.tipo_destino = "UBICACION";
-                                mov.id_obra = 0;
-                                mov.observaciones = "Actualización interna de stock";
-
-                                List<MovimientoMaterial> detalles = new List<MovimientoMaterial>();
-                                detalles.Add(new MovimientoMaterial
-                                {
-                                    id_material = idMaterialSeleccionado,
-                                    cantidad = signedDelta,
-                                    StockActual = stockActual,
-                                    EsRecorte = false
-                                });
-
-                                movDatos.GuardarMovimiento(mov, detalles);
-                            }
-                        }
-                        catch (Exception ex)
-                        {
-                            ToastNotification.ShowError("No se pudo registrar el cambio en el historial: " + ex.Message);
-                        }
-
-                        // Refrescar el historial si está abierto
-                        var vistaGeneral = this.TopLevelControl as VistaGeneral;
-                        vistaGeneral?.RefrescarHistorialSiAbierto();
-                    }
-                    
-                    CargarMateriales();
+                    decimal stockAnterior = stockOriginalSeleccionado;
+                    datos.editarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial, idMaterialSeleccionado, idsProveedoresSeleccionados, stockAnterior);
+
+                    if (stockActual != stockAnterior)
+                    {
+                        var vistaGeneral = this.TopLevelControl as VistaGeneral;
+                        vistaGeneral?.RefrescarHistorialSiAbierto();
+                    }
+                    
+                    CargarMateriales();
                     LimpiarCampos();
                 }
               
