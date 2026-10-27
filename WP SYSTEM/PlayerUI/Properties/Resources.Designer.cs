@@ -24,6 +24,27 @@ namespace WP_Inventario.Properties {
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class Resources {
         
+        internal static System.Drawing.Bitmap SteeLogLogoLight {
+            get {
+                object obj = ResourceManager.GetObject("SteeLogLogoLight", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        internal static System.Drawing.Bitmap SteeLogBackground {
+            get {
+                object obj = ResourceManager.GetObject("SteeLogBackground", resourceCulture);
+                return ((System.Drawing.Bitmap)(obj));
+            }
+        }
+
+        internal static System.Drawing.Icon SteeLogIcon {
+            get {
+                object obj = ResourceManager.GetObject("SteeLogIcon", resourceCulture);
+                return ((System.Drawing.Icon)(obj));
+            }
+        }
+
         private static global::System.Resources.ResourceManager resourceMan;
         
         private static global::System.Globalization.CultureInfo resourceCulture;

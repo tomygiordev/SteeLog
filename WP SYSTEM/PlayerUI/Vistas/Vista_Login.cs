@@ -8,7 +8,7 @@ namespace WP_Inventario.Vistas
     public class Vista_Login : Form
     {
         private Panel panelCard;
-        private Label lblTitulo;
+        private PictureBox picLogo;
         private Label lblSubtitulo;
         private Label lblUsuario;
         private Label lblPassword;
@@ -26,6 +26,8 @@ namespace WP_Inventario.Vistas
         private void InitUI()
         {
             this.Text = "SteeLog — Iniciar sesión";
+            this.Icon = Properties.Resources.SteeLogIcon;
+
             this.Size = new Size(420, 520);
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterScreen;
@@ -41,16 +43,16 @@ namespace WP_Inventario.Vistas
                 Location = new Point(40, 60)
             };
 
-            lblTitulo = new Label
-            {
-                Text = "STEELOG",
-                Font = new Font("Bahnschrift SemiBold", 18F),
-                ForeColor = Color.FromArgb(39, 174, 96),
-                Location = new Point(0, 30),
-                Size = new Size(340, 34),
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-
+            picLogo = new PictureBox
+            {
+                Image = Properties.Resources.SteeLogLogoLight,
+                Location = new Point(40, 20),
+                Size = new Size(260, 48),
+                SizeMode = PictureBoxSizeMode.Zoom,
+                TabStop = false,
+                AccessibleName = "SteeLog"
+            };
+
             lblSubtitulo = new Label
             {
                 Text = "Iniciar sesión",
@@ -135,7 +137,7 @@ namespace WP_Inventario.Vistas
             };
 
             panelCard.Controls.AddRange(new Control[] {
-                lblTitulo, lblSubtitulo,
+                picLogo, lblSubtitulo,
                 lblUsuario, txtEmail,
                 lblPassword, txtPassword,
                 lblError, btnLogin, lblVersion

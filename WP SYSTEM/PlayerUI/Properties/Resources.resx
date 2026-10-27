@@ -136,4 +136,13 @@
   <data name="clean icon" type="System.Resources.ResXFileRef, System.Windows.Forms">
     <value>..\Resources\clean icon.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
   </data>
+  <data name="SteeLogLogoLight" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Branding\steelog-logo-light.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SteeLogBackground" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Branding\steelog-background.png;System.Drawing.Bitmap, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
+  <data name="SteeLogIcon" type="System.Resources.ResXFileRef, System.Windows.Forms">
+    <value>..\Resources\Branding\steelog.ico;System.Drawing.Icon, System.Drawing, Version=4.0.0.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a</value>
+  </data>
 </root>

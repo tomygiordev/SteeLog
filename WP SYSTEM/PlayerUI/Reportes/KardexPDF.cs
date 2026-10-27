@@ -85,30 +85,10 @@ namespace WP_Inventario.Reportes
             // ── IZQUIERDA: logo + datos empresa ───────────────────────────────
             PdfPCell cellIzq = new PdfPCell { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
-            try
-            {
-                var asm = System.Reflection.Assembly.GetExecutingAssembly();
-                string res = asm.GetManifestResourceNames().FirstOrDefault(n => n.ToLower().EndsWith("wp_horizontal.png"));
-                if (res != null)
-                {
-                    using (var stream = asm.GetManifestResourceStream(res))
-                    {
-                        if (stream != null)
-                        {
-                            byte[] buf = new byte[stream.Length];
-                            stream.Read(buf, 0, buf.Length);
-                            Image logo = Image.GetInstance(buf);
-                            logo.ScaleToFit(150, 62);
-                            logo.Alignment = Element.ALIGN_LEFT;
-                            cellIzq.AddElement(logo);
-                        }
-                    }
-                }
-            }
-            catch { }
+            cellIzq.AddElement(Branding.PdfLogo(150, 62));
 
-            cellIzq.AddElement(new Paragraph("Av. Tecnología 1000 - Parque Tecnológico", fntDir) { SpacingBefore = 8 });
-            cellIzq.AddElement(new Paragraph("CUIT: 30-75001234-9   •   Ingresos Brutos: 30-75001234-9", fntTributo) { SpacingBefore = 2 });
+            cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8 });
+            cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2 });
             cellIzq.AddElement(new Paragraph("SteeLog - Logística y Stock", fntTributo) { SpacingBefore = 1 });
             headerTable.AddCell(cellIzq);
 

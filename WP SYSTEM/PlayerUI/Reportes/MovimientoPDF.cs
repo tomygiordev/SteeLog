@@ -111,35 +111,18 @@ namespace WP_Inventario.Reportes
             PdfPCell cellIzq = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
             // Logo superpuesto (cargado de recurso embebido)
-            try {
-                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                string resourceName = assembly.GetManifestResourceNames().FirstOrDefault(n => n.ToLower().EndsWith("wp_horizontal.png"));
-                if (resourceName != null) {
-                    using (var stream = assembly.GetManifestResourceStream(resourceName)) {
-                        if (stream != null) {
-                            byte[] buffer = new byte[stream.Length];
-                            stream.Read(buffer, 0, buffer.Length);
-                            Image logo = Image.GetInstance(buffer);
-                            // Ajustamos el tamaño del logo a un punto medio (antes 120x50, original 230x95)
-                            logo.ScaleToFit(150, 62);
-                            logo.Alignment = Element.ALIGN_LEFT;
-                            cellIzq.AddElement(logo);
-                        }
-                    }
-                }
-            } catch { }
+            cellIzq.AddElement(Branding.PdfLogo(150, 62));
 
             // Datos de la empresa perfectamente apilados debajo del logo
             var fntDir = new Font(Font.FontFamily.HELVETICA, 8, Font.NORMAL, new BaseColor(80, 80, 80));
             // Mismo color que la dirección, pero un punto más chico para diferenciar jerarquía
             var fntTributo = new Font(Font.FontFamily.HELVETICA, 7, Font.NORMAL, new BaseColor(80, 80, 80));
 
-            Paragraph pDireccion = new Paragraph("Av. Tecnología 1000 - Parque Tecnológico", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT };
+            Paragraph pDireccion = new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT };
             cellIzq.AddElement(pDireccion);
 
-            // CUIT y ATER en la misma línea separados por un círculo rellenito
-            string separadorTributos = "   \u2022   "; // Tres espacios de cada lado para armonía
-            Paragraph pTributos = new Paragraph($"CUIT: 30-75001234-9{separadorTributos}Ingresos Brutos: 30-75001234-9", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT };
+            // Identificación del contexto académico
+            Paragraph pTributos = new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT };
             cellIzq.AddElement(pTributos);
 
             // Inicio Actividades en un nuevo renglón para que no se corte

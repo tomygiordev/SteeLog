@@ -543,10 +543,10 @@ namespace WP_Inventario.Vistas
                     {
                         excel.Workbook.Worksheets.Add("Stock");
                         var headerRow = new List<string[]>();
-                        
+
                         // Obtener nombres de columnas visibles
                         var visibleColumns = dgvMateriales.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
-                        
+
                         var ws = excel.Workbook.Worksheets["Stock"];
 
                         // Encabezados
@@ -581,13 +581,13 @@ namespace WP_Inventario.Vistas
                                 if (SessionManager.DebeOcultarCantidadesStockMateriales && visibleColumns[j].Name == "stockActual")
                                     cellValue = SessionManager.ObtenerEstadoStockMaterial(material.stockActual);
                                 ws.Cells[i + 2, j + 1].Value = cellValue;
-                                
+
                                 // Formato moneda si es precio
                                 if (visibleColumns[j].Name == "precioUnitario" || visibleColumns[j].Name == "valorTotal") 
                                     ws.Cells[i + 2, j + 1].Style.Numberformat.Format = "$#,##0.00";
                             }
                         }
-                        
+
                         ws.Cells.AutoFitColumns();
                         FileInfo excelFile = new FileInfo(save.FileName);
                         excel.SaveAs(excelFile);
@@ -636,6 +636,47 @@ namespace WP_Inventario.Vistas
             CargarMateriales(filtro: filtro);
         }
 
+        private static void AgregarEncabezado(Document doc)
+        {
+                    // Encabezado
+                    PdfPTable headerTable = new PdfPTable(2);
+                    headerTable.WidthPercentage = 100;
+                    headerTable.SetWidths(new float[] { 45f, 55f });
+
+                    // ======= IZQUIERDA: LOGO Y DATOS DE EMPRESA =======
+                    PdfPCell cellIzq = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
+
+                    // Logo cargado desde recurso embebido
+                    cellIzq.AddElement(Branding.PdfLogo(150, 62));
+
+                    // Datos de la empresa
+                    var fntDir = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 8, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
+                    var fntTributo = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 7, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
+
+                    cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT });
+                    cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT });
+                    cellIzq.AddElement(new Paragraph("SteeLog - Logística y Stock", fntTributo) { SpacingBefore = 1, Alignment = Element.ALIGN_LEFT });
+
+                    headerTable.AddCell(cellIzq);
+
+                    // ======= DERECHA: TÍTULO Y SUBTÍTULO =======
+                    PdfPCell cellDer = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
+                    var fntTitle = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 20, iTextSharp.text.Font.BOLD, new BaseColor(25, 50, 35));
+                    var fntSub = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 11, iTextSharp.text.Font.NORMAL, new BaseColor(100, 100, 100));
+
+                    cellDer.AddElement(new Paragraph("REPORTE DE STOCK", fntTitle) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
+                    cellDer.AddElement(new Paragraph("Inventario al " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), fntSub) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
+
+                    headerTable.AddCell(cellDer);
+
+                    doc.Add(headerTable);
+
+                    PdfPTable lineaSep = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 5, SpacingAfter = 15 };
+                    lineaSep.AddCell(new PdfPCell { Border = iTextSharp.text.Rectangle.BOTTOM_BORDER, BorderColor = new BaseColor(25, 135, 84), BorderWidth = 2, FixedHeight = 3 });
+                    doc.Add(lineaSep);
+
+        }
+
         private void btnExportarPDF_Click(object sender, EventArgs e)
         {
             if (dgvMateriales.Rows.Count == 0)
@@ -655,68 +696,12 @@ namespace WP_Inventario.Vistas
                     // Crear documento con los mismos márgenes que MovimientoPDF
                     Document doc = new Document(PageSize.A4, 40, 40, 40, 60);
                     PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(save.FileName, FileMode.Create));
-                    
+
                     writer.PageEvent = new PieReporteStock();
-                    
+
                     doc.Open();
 
-                    // Encabezado
-                    PdfPTable headerTable = new PdfPTable(2);
-                    headerTable.WidthPercentage = 100;
-                    headerTable.SetWidths(new float[] { 45f, 55f });
-
-                    // ======= IZQUIERDA: LOGO Y DATOS DE EMPRESA =======
-                    PdfPCell cellIzq = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
-
-                    // Logo cargado desde recurso embebido
-                    try
-                    {
-                        var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                        string resourceName = assembly.GetManifestResourceNames().FirstOrDefault(n => n.ToLower().EndsWith("wp_horizontal.png"));
-                        if (resourceName != null)
-                        {
-                            using (var stream = assembly.GetManifestResourceStream(resourceName))
-                            {
-                                if (stream != null)
-                                {
-                                    byte[] buffer = new byte[stream.Length];
-                                    stream.Read(buffer, 0, buffer.Length);
-                                    iTextSharp.text.Image logo = iTextSharp.text.Image.GetInstance(buffer);
-                                    logo.ScaleToFit(150, 62);
-                                    logo.Alignment = Element.ALIGN_LEFT;
-                                    cellIzq.AddElement(logo);
-                                }
-                            }
-                        }
-                    }
-                    catch { /* Silencioso si falla el logo */ }
-
-                    // Datos de la empresa
-                    var fntDir = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 8, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
-                    var fntTributo = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 7, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
-
-                    cellIzq.AddElement(new Paragraph("Av. Tecnología 1000 - Parque Tecnológico", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT });
-                    string separador = "   \u2022   ";
-                    cellIzq.AddElement(new Paragraph($"CUIT: 30-75001234-9{separador}Ingresos Brutos: 30-75001234-9", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT });
-                    cellIzq.AddElement(new Paragraph("SteeLog - Logística y Stock", fntTributo) { SpacingBefore = 1, Alignment = Element.ALIGN_LEFT });
-
-                    headerTable.AddCell(cellIzq);
-
-                    // ======= DERECHA: TÍTULO Y SUBTÍTULO =======
-                    PdfPCell cellDer = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
-                    var fntTitle = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 20, iTextSharp.text.Font.BOLD, new BaseColor(25, 50, 35));
-                    var fntSub = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 11, iTextSharp.text.Font.NORMAL, new BaseColor(100, 100, 100));
-                    
-                    cellDer.AddElement(new Paragraph("REPORTE DE STOCK", fntTitle) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
-                    cellDer.AddElement(new Paragraph("Inventario al " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), fntSub) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
-
-                    headerTable.AddCell(cellDer);
-
-                    doc.Add(headerTable);
-
-                    PdfPTable lineaSep = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 5, SpacingAfter = 15 };
-                    lineaSep.AddCell(new PdfPCell { Border = iTextSharp.text.Rectangle.BOTTOM_BORDER, BorderColor = new BaseColor(25, 135, 84), BorderWidth = 2, FixedHeight = 3 });
-                    doc.Add(lineaSep);
+                    AgregarEncabezado(doc);
 
                     // Información global
                     PdfPTable infoTable = new PdfPTable(4) { WidthPercentage = 100, SpacingAfter = 20 };
@@ -736,7 +721,7 @@ namespace WP_Inventario.Vistas
                     var visibleColumns = dgvMateriales.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
                     PdfPTable table = new PdfPTable(visibleColumns.Count);
                     table.WidthPercentage = 100;
-                    
+
                     // Ajustar anchos proporcionalmente (basado en el grid si es posible o equilibrado)
                     float[] widths = new float[visibleColumns.Count];
                     for (int i = 0; i < visibleColumns.Count; i++) widths[i] = 1f; 
@@ -789,7 +774,7 @@ namespace WP_Inventario.Vistas
                             cell.BorderColor = new BaseColor(230, 230, 230);
                             cell.BorderWidth = 0.5f;
                             cell.Padding = 5;
-                            
+
                             // Si el stock es bajo
                             if (col.Name == "stockActual")
                             {

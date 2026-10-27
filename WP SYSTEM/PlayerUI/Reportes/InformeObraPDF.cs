@@ -126,34 +126,13 @@ namespace WP_Inventario.Reportes
             // ======= IZQUIERDA: LOGO Y DATOS DE EMPRESA =======
             PdfPCell cellIzq = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
-            try
-            {
-                var assembly = System.Reflection.Assembly.GetExecutingAssembly();
-                string resourceName = assembly.GetManifestResourceNames().FirstOrDefault(n => n.ToLower().EndsWith("wp_horizontal.png"));
-                if (resourceName != null)
-                {
-                    using (var stream = assembly.GetManifestResourceStream(resourceName))
-                    {
-                        if (stream != null)
-                        {
-                            byte[] buffer = new byte[stream.Length];
-                            stream.Read(buffer, 0, buffer.Length);
-                            Image logo = Image.GetInstance(buffer);
-                            logo.ScaleToFit(140, 58);
-                            logo.Alignment = Element.ALIGN_LEFT;
-                            cellIzq.AddElement(logo);
-                        }
-                    }
-                }
-            }
-            catch { /* Silencioso si falla el logo */ }
+            cellIzq.AddElement(Branding.PdfLogo(140, 58));
 
             var fntDir    = new Font(Font.FontFamily.HELVETICA, 8, Font.NORMAL, COLOR_TEXTO_MUTED);
             var fntTributo = new Font(Font.FontFamily.HELVETICA, 7.5f, Font.NORMAL, COLOR_TEXTO_MUTED);
 
-            cellIzq.AddElement(new Paragraph("Av. Tecnología 1000 - Parque Tecnológico", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT });
-            string separador = "   \u2022   ";
-            cellIzq.AddElement(new Paragraph($"CUIT: 30-75001234-9{separador}Ingresos Brutos: 30-75001234-9", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT });
+            cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT });
+            cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT });
             cellIzq.AddElement(new Paragraph("SteeLog - Logística y Stock", fntTributo) { SpacingBefore = 1, Alignment = Element.ALIGN_LEFT });
 
             headerTable.AddCell(cellIzq);

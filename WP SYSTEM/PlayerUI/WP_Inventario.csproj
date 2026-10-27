@@ -10,7 +10,7 @@
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>WP_Inventario</RootNamespace>
     <AssemblyName>SteeLog</AssemblyName>
-    <ApplicationIcon>Resources\7953c261-974a-4135-a2ec-59c65dd31e36.ico</ApplicationIcon>
+    <ApplicationIcon>Resources\Branding\steelog.ico</ApplicationIcon>
     <TargetFrameworkVersion>v4.8</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -19,6 +19,8 @@
     <NuGetPackageImportStamp>
     </NuGetPackageImportStamp>
     <IsWebBootstrapper>false</IsWebBootstrapper>
+    <ProductName>SteeLog - Proyecto de tesis</ProductName>
+    <PublisherName>SteeLog - Proyecto de tesis</PublisherName>
     <PublishUrl>C:\Users\Gime\Downloads\</PublishUrl>
     <Install>true</Install>
     <InstallFrom>Disk</InstallFrom>
@@ -376,6 +378,7 @@
     <Compile Include="Vistas\Reportes\Vista_ReporteStock.Designer.cs">
       <DependentUpon>Vista_ReporteStock.cs</DependentUpon>
     </Compile>
+    <Compile Include="Branding.cs" />
     <Compile Include="Reportes\InformeObraPDF.cs" />
     <Compile Include="Reportes\KardexPDF.cs" />
     <Compile Include="Reportes\MovimientoPDF.cs" />
@@ -498,7 +501,7 @@
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="Resources\7953c261-974a-4135-a2ec-59c65dd31e36.ico" />
+    <None Include="Resources\Branding\README.md" />
     <None Include="Resources\app_icon.ico" />
   </ItemGroup>
   <ItemGroup>
@@ -516,7 +519,11 @@
     <Content Include="Resources\cancel_remove_close_x_icon_255948.ico" />
     <Content Include="Resources\Diseño_sin_título__1_-removebg-preview.png" />
     <Content Include="Resources\minimize_118918 - Editado.png" />
-    <EmbeddedResource Include="Resources\wp_horizontal.png" />
+    <EmbeddedResource Include="Resources\Branding\steelog-logo-dark.png" />
+    <EmbeddedResource Include="Resources\Branding\steelog-logo-light.png" />
+    <EmbeddedResource Include="Resources\Branding\steelog-symbol.png" />
+    <EmbeddedResource Include="Resources\Branding\steelog-background.png" />
+    <EmbeddedResource Include="Resources\Branding\steelog.ico" />
   </ItemGroup>
   <ItemGroup>
     <BootstrapperPackage Include=".NETFramework,Version=v4.8">
