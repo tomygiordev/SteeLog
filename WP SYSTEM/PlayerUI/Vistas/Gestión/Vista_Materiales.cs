@@ -223,19 +223,14 @@ namespace WP_Inventario.Vistas
                 MaterialDatos datos = new MaterialDatos();
                 if (idMaterialSeleccionado == -1)
                 {
-                    int nuevoId = datos.guardarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial);
-                    if (nuevoId > 0 && idsProveedoresSeleccionados != null && idsProveedoresSeleccionados.Count > 0)
-                    {
-                        datos.GuardarProveedoresMaterial(nuevoId, idsProveedoresSeleccionados);
-                    }
+                    int nuevoId = datos.guardarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial, idsProveedoresSeleccionados);
                     CargarMateriales();
                     LimpiarCampos();
                 }
                 else
                 {
                     decimal stockAnterior = stockOriginalSeleccionado;
-                    datos.editarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial, idMaterialSeleccionado);
-                    datos.GuardarProveedoresMaterial(idMaterialSeleccionado, idsProveedoresSeleccionados);
+                    datos.editarMaterial(nombre, stockActual, stockMinimo, idCategoriaMaterial, idMaterialSeleccionado, idsProveedoresSeleccionados);
 
                     // Registrar movimiento solo si el stock cambió
                     if (stockActual != stockAnterior)
@@ -259,7 +254,7 @@ namespace WP_Inventario.Vistas
                                 // No existe → crear remito nuevo con su detalle
                                 Movimiento mov = new Movimiento();
                                 mov.fecha = DateTime.Now;
-                                mov.nroremito = "141414";
+                                mov.nroremito = $"141414-{DateTime.Today:yyyyMMdd}";
                                 mov.id_tipomovimiento = 11; // Registro Interno
                                 mov.id_origen = 1; // Galpón
                                 mov.tipo_origen = "UBICACION";

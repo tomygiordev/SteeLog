@@ -175,7 +175,10 @@ namespace WP_Inventario.Vistas
             if (!email.Contains("@"))
             {
                 string norm = email.ToLower();
-                email = (norm == "galpon" || norm == "operador") ? norm + "@tesis.local" : (norm == "admin" ? "admin@tesis.local" : email + "@tesis.local");
+                if (norm == "admin")
+                    email = "admin@tesis.local";
+                else if (norm == "galpon" || norm == "operador")
+                    email = "galpon@tesis.local";
             }
 
             btnLogin.Enabled = false;

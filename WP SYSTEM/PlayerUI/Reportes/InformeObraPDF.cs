@@ -63,7 +63,7 @@ namespace WP_Inventario.Reportes
             var herramientas = datos.ObtenerHerramientasObra(idObra, nombreObra);
             var insumos = datos.ObtenerInsumosObra(idObra, nombreObra);
             var canaletasPlegados = datos.ObtenerCanaletasPlegadosObra(idObra);
-            bool mostrarValorizacion = SessionManager.Role != UserRole.Galpon ||
+            bool mostrarValorizacion = SessionManager.Role == UserRole.Admin ||
                 (!string.IsNullOrEmpty(nombreObra) && nombreObra.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0);
 
             if (desde.HasValue)

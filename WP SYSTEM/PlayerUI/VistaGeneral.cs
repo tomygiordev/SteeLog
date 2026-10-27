@@ -695,7 +695,7 @@ namespace WP_Inventario
 
         private void AplicarRol()
         {
-            if (SessionManager.Role == Servicios.UserRole.Galpon)
+            if (SessionManager.Role != Servicios.UserRole.Admin)
             {
                 btnMateriales.Visible = false;
                 btnCategorias.Visible = false;
@@ -846,7 +846,7 @@ namespace WP_Inventario
 
             try
             {
-                var update = await UpdaterService.CheckForUpdateAsync();
+                var update = await UpdaterService.CheckForUpdateAsync(throwOnError: true);
                 if (update == null)
                 {
                     ToastNotification.ShowSuccess("Ya tenés la última versión (" + AppVersion.Current + ").");

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Net.Http;
 using System.Text;
 using System.Text.Json;
@@ -14,6 +14,7 @@ namespace WP_Inventario.Servicios
         public string AccessToken { get; set; }
         public string RefreshToken { get; set; }
         public int ExpiresIn { get; set; }
+        public bool IsNetworkError { get; set; }
     }
 
     public static class SupabaseAuthService
@@ -28,16 +29,31 @@ namespace WP_Inventario.Servicios
             string pass = (password ?? "").Trim();
 
             bool esAdmin = emailLower == "admin" || emailLower == "admin@tesis.local" || emailLower == "admin@steelog.local" || emailLower == "admin@gmail.com";
-            bool esGalpon = emailLower == "galpon" || emailLower == "galpon@tesis.local" || emailLower == "operador" || emailLower == "invitado@tesis.local";
+            bool esGalpon = emailLower == "galpon" || emailLower == "galpon@tesis.local" || emailLower == "operador" || emailLower == "operador@tesis.local" || emailLower == "invitado@tesis.local";
 
-            if (esAdmin || esGalpon || emailLower.Contains("tesis"))
+            if (esAdmin || esGalpon)
             {
                 if (string.IsNullOrEmpty(pass))
                 {
                     return new AuthResult { Success = false, ErrorMessage = "Ingrese una contraseña." };
                 }
 
-                string emailFinal = emailLower.Contains("@") ? emailLower : (esAdmin ? "admin@tesis.local" : "galpon@tesis.local");
+                bool passValida = false;
+                if (esAdmin)
+                {
+                    passValida = pass == "123456" || pass == "admin";
+                }
+                else if (esGalpon)
+                {
+                    passValida = pass == "123456" || pass == "galpon" || pass == "operador";
+                }
+
+                if (!passValida)
+                {
+                    return new AuthResult { Success = false, ErrorMessage = "Usuario o contraseña incorrectos." };
+                }
+
+                string emailFinal = esAdmin ? "admin@tesis.local" : "galpon@tesis.local";
 
                 return new AuthResult
                 {
@@ -119,6 +135,7 @@ namespace WP_Inventario.Servicios
                 return new AuthResult
                 {
                     Success = false,
+                    IsNetworkError = true,
                     ErrorMessage = "No se pudo contactar el servicio de autenticación. Utilice credenciales demo locales (admin / galpon)."
                 };
             }

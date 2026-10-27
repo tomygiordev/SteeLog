@@ -9,15 +9,11 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using WP_Inventario.Datos;
+using WP_Inventario.Modelos;
 using WP_Inventario.Servicios;
 
 namespace WP_Inventario.Vistas
 {
-    // Hereda de WP_Inventario.Modelos.FiltroMaterialParams para retrocompatibilidad
-    public class FiltroMaterialParams : WP_Inventario.Modelos.FiltroMaterialParams
-    {
-    }
-
     public partial class FiltroMaterial : Form
     {
         public event EventHandler<FiltroMaterialParams> onBuscar;

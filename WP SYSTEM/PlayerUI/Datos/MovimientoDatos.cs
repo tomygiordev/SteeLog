@@ -107,7 +107,8 @@ namespace WP_Inventario.Datos
             int idMovimiento,
             Movimiento movimiento,
             string nombreTipoMovimiento,
-            List<MovimientoMaterial> detalles)
+            List<MovimientoMaterial> detalles,
+            bool esActualizacion = false)
         {
             string queryDetalle = @"
                 INSERT INTO public.movimientomaterial (
@@ -139,22 +140,25 @@ namespace WP_Inventario.Datos
                     }
                 }
 
-                ImpactoStock impactoStock = ClasificarImpactoStock(nombreTipoMovimiento, movimiento.tipo_destino, registroInternoYaAplicado: true);
+                ImpactoStock impactoStock = ClasificarImpactoStock(nombreTipoMovimiento, movimiento.tipo_destino, registroInternoYaAplicado: !esActualizacion);
                 bool sinImpactoStock = impactoStock == ImpactoStock.SinImpacto;
 
                 decimal nuevoStock = stockActualDB;
-                if (impactoStock == ImpactoStock.Entrada)
+                if (!detalle.EsRecorte)
                 {
-                    nuevoStock += detalle.cantidad;
-                }
-                else if (impactoStock == ImpactoStock.Salida)
-                {
-                    nuevoStock -= detalle.cantidad;
+                    if (impactoStock == ImpactoStock.Entrada)
+                    {
+                        nuevoStock += detalle.cantidad;
+                    }
+                    else if (impactoStock == ImpactoStock.Salida)
+                    {
+                        nuevoStock -= detalle.cantidad;
+                    }
                 }
 
                 if (!detalle.EsRecorte && !sinImpactoStock && !detalle.EsCompraEventual && detalle.id_material.HasValue && detalle.id_material > 0)
                 {
-                    if (impactoStock == ImpactoStock.Salida && nuevoStock < 0)
+                    if (nuevoStock < 0)
                     {
                         throw new Exception($"Stock insuficiente para el material '{detalle.NombreMaterial}'. Stock actual: {stockActualDB}, cantidad de salida solicitada: {detalle.cantidad}. La operación fue cancelada y no se guardaron cambios en la base de datos.");
                     }
@@ -448,7 +452,7 @@ namespace WP_Inventario.Datos
                         }
 
                         string nombreTipoNuevo = ObtenerNombreTipoMovimiento(conexion, transaction, movimiento.id_tipomovimiento);
-                        AplicarDetallesMovimiento(conexion, transaction, idMovimiento, movimiento, nombreTipoNuevo, detalles);
+                        AplicarDetallesMovimiento(conexion, transaction, idMovimiento, movimiento, nombreTipoNuevo, detalles, esActualizacion: true);
 
                         transaction.Commit();
                         return idMovimiento;

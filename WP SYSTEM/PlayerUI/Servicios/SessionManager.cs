@@ -1,4 +1,4 @@
-namespace WP_Inventario.Servicios
+﻿namespace WP_Inventario.Servicios
 {
     using System;
 
@@ -39,8 +39,8 @@ namespace WP_Inventario.Servicios
 
         public static void SetSession(string email, string accessToken, string refreshToken, int expiresIn)
         {
-            Email = email.ToLower().Trim();
-            Username = email.Contains("@") ? email.Split('@')[0] : email;
+            Email = (email ?? string.Empty).ToLower().Trim();
+            Username = Email.Contains("@") ? Email.Split('@')[0] : Email;
             Role = IsAdmin(Email) ? UserRole.Admin : UserRole.Galpon;
             IsLoggedIn = true;
             AccessToken = accessToken;

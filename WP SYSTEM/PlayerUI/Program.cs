@@ -61,7 +61,10 @@ namespace WP_Inventario
                     else
                     {
                         // Credenciales inválidas (contraseña cambiada, etc.) → limpiar y pedir login
-                        WP_Inventario.Servicios.CredentialStore.Clear();
+                        if (!result.IsNetworkError)
+                        {
+                            WP_Inventario.Servicios.CredentialStore.Clear();
+                        }
                     }
                 }
                 catch { /* Sin internet u otro error → mostrar login igual */ }

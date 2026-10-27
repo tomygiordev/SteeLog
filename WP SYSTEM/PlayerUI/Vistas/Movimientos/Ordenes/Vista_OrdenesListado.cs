@@ -169,7 +169,7 @@ namespace WP_Inventario.Vistas.Movimientos.Ordenes
 
         private bool MostrarPreviewMateriales()
         {
-            return _soloRecepcion || _soloHistorial || _rolActual == UserRole.Galpon;
+            return _soloRecepcion || _soloHistorial || _rolActual != UserRole.Admin;
         }
 
         private static DataGridViewCellStyle CrearEstiloCantidad()
@@ -219,7 +219,7 @@ namespace WP_Inventario.Vistas.Movimientos.Ordenes
 
             if (_soloHistorial)
                 items = new List<string> { "Todas", OrdenCompraEstados.RecibidaParcial, OrdenCompraEstados.RecibidaCompleta };
-            else if (_soloRecepcion || _rolActual == UserRole.Galpon)
+            else if (_soloRecepcion || _rolActual != UserRole.Admin)
                 items = new List<string> { "Todas", OrdenCompraEstados.Pendiente, OrdenCompraEstados.RecibidaParcial };
             else
                 items = new List<string> { "Todas", OrdenCompraEstados.Pendiente, OrdenCompraEstados.RecibidaParcial };
@@ -236,7 +236,7 @@ namespace WP_Inventario.Vistas.Movimientos.Ordenes
                 if (estado == "Todas")
                     estado = null;
 
-                bool soloAbiertasGalpon = _soloRecepcion || _rolActual == UserRole.Galpon;
+                bool soloAbiertasGalpon = _soloRecepcion || _rolActual != UserRole.Admin;
                 bool excluirCompletas = !_soloHistorial;
                 var lista = _ordenDatos.ObtenerOrdenes(estado, soloAbiertasGalpon, _soloHistorial, excluirCompletas);
                 _actualizandoPreview = true;

@@ -469,7 +469,7 @@ namespace WP_Inventario.Vistas.Movimientos
             dgvHistorial.Columns.Add(colEditar);
 
             // Ocultar Editar para rol Galpon
-            if (WP_Inventario.Servicios.SessionManager.Role == WP_Inventario.Servicios.UserRole.Galpon)
+            if (WP_Inventario.Servicios.SessionManager.Role != WP_Inventario.Servicios.UserRole.Admin)
             {
                 colEditar.Visible = false;
                 colEditar.Width = 0;
@@ -537,6 +537,13 @@ namespace WP_Inventario.Vistas.Movimientos
 
         private void EditarMovimiento(MovimientoGrupo mov)
         {
+            if (!string.IsNullOrEmpty(mov.tipo_movimiento) &&
+                mov.tipo_movimiento.IndexOf("registro interno", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                ToastNotification.ShowWarning("Los ajustes de Registro Interno se gestionan desde el módulo de Materiales.");
+                return;
+            }
+
             var parent = this.TopLevelControl as VistaGeneral;
             if (parent != null)
             {

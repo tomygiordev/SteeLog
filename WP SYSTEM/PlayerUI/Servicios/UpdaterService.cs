@@ -22,7 +22,7 @@ namespace WP_Inventario.Servicios
         private const string Token = "";
         private const string ApiUrl = "https://api.github.com/repos/" + Owner + "/" + Repo + "/releases/latest";
 
-        public static async Task<UpdateInfo> CheckForUpdateAsync()
+        public static async Task<UpdateInfo> CheckForUpdateAsync(bool throwOnError = false)
         {
             try
             {
@@ -74,6 +74,8 @@ namespace WP_Inventario.Servicios
             }
             catch (Exception)
             {
+                if (throwOnError)
+                    throw;
                 // Entorno offline / local de tesis
                 return null;
             }

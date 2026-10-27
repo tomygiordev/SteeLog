@@ -129,7 +129,7 @@ namespace WP_Inventario.Vistas.Reportes
                 herramientasActuales = datos.ObtenerHerramientasObra(idObra, nombreObra);
                 insumosActuales = datos.ObtenerInsumosObra(idObra, nombreObra);
                 canaletasPlegadosActuales = datos.ObtenerCanaletasPlegadosObra(idObra);
-                mostrarValorizacionActual = SessionManager.Role != UserRole.Galpon ||
+                mostrarValorizacionActual = SessionManager.Role == UserRole.Admin ||
                     nombreObra.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0;
                 decimal totalCanaletasPendientes = canaletasPlegadosActuales
                     .Where(c => !c.pagado)

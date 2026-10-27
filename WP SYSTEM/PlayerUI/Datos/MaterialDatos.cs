@@ -1,4 +1,4 @@
-﻿using Npgsql;
+using Npgsql;
 using System;
 using System.Collections.Generic;
 using System.Data.SqlClient;
@@ -14,44 +14,82 @@ namespace WP_Inventario.Datos
     {
         public MaterialDatos() { }
         public int guardarMaterial(
-            string nombre, decimal stockActual, decimal stockMinimo, int id_categoria
+            string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, List<int> idsProveedores = null
             )
         {
             ConexionDB con = new ConexionDB();
             using(var cone = con.GetConnection())
             {
-                string sql = "INSERT INTO materiales" +
-                    "(nombre,precioUnitario,stockActual,stockMinimo,id_categoria) " +
-                    "VALUES(@nom,0,@stact,@stmin,@idCat) RETURNING id";
-                using(var cmd=new NpgsqlCommand(sql,cone))
+                using (var tx = cone.BeginTransaction())
                 {
-                    cmd.Parameters.AddWithValue("@nom", nombre);
-                    cmd.Parameters.AddWithValue("@stact", stockActual);
-                    cmd.Parameters.AddWithValue("@stmin", stockMinimo);
-                    cmd.Parameters.AddWithValue("@idCat", id_categoria);
-                    object result = cmd.ExecuteScalar();
-                    return result != null && result != DBNull.Value ? Convert.ToInt32(result) : 0;
+                    try
+                    {
+                        string sql = "INSERT INTO materiales" +
+                            "(nombre,precioUnitario,stockActual,stockMinimo,id_categoria) " +
+                            "VALUES(@nom,0,@stact,@stmin,@idCat) RETURNING id";
+                        int idMaterial;
+                        using(var cmd=new NpgsqlCommand(sql,cone,tx))
+                        {
+                            cmd.Parameters.AddWithValue("@nom", nombre);
+                            cmd.Parameters.AddWithValue("@stact", stockActual);
+                            cmd.Parameters.AddWithValue("@stmin", stockMinimo);
+                            cmd.Parameters.AddWithValue("@idCat", id_categoria);
+                            object result = cmd.ExecuteScalar();
+                            idMaterial = result != null && result != DBNull.Value ? Convert.ToInt32(result) : 0;
+                        }
+
+                        if (idMaterial > 0 && idsProveedores != null && idsProveedores.Count > 0)
+                        {
+                            GuardarProveedoresMaterial(idMaterial, idsProveedores, cone, tx);
+                        }
+
+                        tx.Commit();
+                        return idMaterial;
+                    }
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
                 }
             }
         }
-        public void editarMaterial(string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, int id)
+        public void editarMaterial(string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, int id, List<int> idsProveedores = null)
         {
             ConexionDB con = new ConexionDB();
             using(var cone = con.GetConnection())
             {
-                string sql = "UPDATE materiales SET " +
-                    "nombre=@nom, stockActual=@stact," +
-                    "stockMinimo=@stmin, id_categoria=@idCat " +
-                    "WHERE id = @id_mat";
-                using(var cmd=new NpgsqlCommand(sql, cone))
+                using (var tx = cone.BeginTransaction())
                 {
-                    cmd.Parameters.AddWithValue("@nom", nombre);
-                    cmd.Parameters.AddWithValue("@stact", stockActual);
-                    cmd.Parameters.AddWithValue("@stmin", stockMinimo);
-                    cmd.Parameters.AddWithValue("@idCat", id_categoria);
-                    cmd.Parameters.AddWithValue("@id_mat", id);
+                    try
+                    {
+                        string sql = "UPDATE materiales SET " +
+                            "nombre=@nom, stockActual=@stact," +
+                            "stockMinimo=@stmin, id_categoria=@idCat " +
+                            "WHERE id = @id_mat";
+                        using(var cmd=new NpgsqlCommand(sql, cone, tx))
+                        {
+                            cmd.Parameters.AddWithValue("@nom", nombre);
+                            cmd.Parameters.AddWithValue("@stact", stockActual);
+                            cmd.Parameters.AddWithValue("@stmin", stockMinimo);
+                            cmd.Parameters.AddWithValue("@idCat", id_categoria);
+                            cmd.Parameters.AddWithValue("@id_mat", id);
 
-                    cmd.ExecuteNonQuery();
+                            cmd.ExecuteNonQuery();
+                        }
+
+                        if (idsProveedores != null)
+                        {
+                            GuardarProveedoresMaterial(id, idsProveedores, cone, tx);
+                        }
+
+                        tx.Commit();
+                    }
+                    catch
+                    {
+                        tx.Rollback();
+                        throw;
+                    }
                 }
             }
         }
@@ -264,7 +302,7 @@ namespace WP_Inventario.Datos
             // Insertar nuevas
             if (idsProveedores != null)
             {
-                foreach (int idProv in idsProveedores)
+                foreach (int idProv in idsProveedores.Distinct())
                 {
                     using (var cmd = new NpgsqlCommand(
                         "INSERT INTO materiales_proveedores(id_material, id_proveedor) VALUES(@idMat, @idProv)", cone, tx))

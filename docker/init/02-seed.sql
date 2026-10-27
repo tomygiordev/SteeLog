@@ -11,8 +11,11 @@ INSERT INTO public.tipo_movimiento (id_tipomovimiento, nombre) VALUES
 (5, 'Devolucion de obra'),
 (6, 'Aporte de cliente'),
 (7, 'Venta de material'),
-(8, 'Uso interno')
+(8, 'Uso interno'),
+(11, 'REGISTRO INTERNO')
 ON CONFLICT (id_tipomovimiento) DO NOTHING;
+
+SELECT setval('public.tipo_movimiento_id_tipomovimiento_seq', COALESCE((SELECT MAX(id_tipomovimiento) FROM public.tipo_movimiento), 1));
 
 -- Ubicaciones estándar
 INSERT INTO public.ubicacion (id_ubicacion, nombre) VALUES
