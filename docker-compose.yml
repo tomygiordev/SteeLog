@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: tesispassword123
       POSTGRES_DB: inventario_db
     ports:
-      - "5435:5432"
+      - "127.0.0.1:5435:5432"
     volumes:
       - steelog_postgres_data:/var/lib/postgresql/data
       - ./docker/init:/docker-entrypoint-initdb.d

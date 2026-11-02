@@ -24,8 +24,8 @@ La procedencia, los prompts y las variantes de la marca están en [Resources/Bra
 ## 🛠️ Requisitos Previos
 
 * **Sistema Operativo:** Windows 10 / 11
-* **Docker / Docker Engine:** En ejecución (daemon local)
-* **LazyDocker:** Instalado en `A:\lazydocker` (accesible ejecutando `lazydocker` en consola)
+* **Docker Desktop / Docker Engine y Docker Compose:** motor Linux en ejecución (daemon local)
+* **LazyDocker:** instalado y disponible en `PATH` (en este equipo: `A:\lazydocker`)
 * **.NET Framework 4.8 Runtime:** Instalado en el sistema
 * **Visual Studio 2022** (opcional, para desarrollo)
 
@@ -33,28 +33,32 @@ La procedencia, los prompts y las variantes de la marca están en [Resources/Bra
 
 ## 📦 Puesta en Marcha Rápida
 
-### 1. Iniciar la Base de Datos (Docker)
-En la raíz del proyecto, ejecuta:
-```powershell
-docker compose up -d
-```
-Esto levantará el contenedor `steelog-db` (PostgreSQL 17 en el puerto `5435`) con el esquema de tablas, constraints de stock no negativo y datos de prueba preconfigurados.
+### 1. Iniciar PostgreSQL y abrir LazyDocker
 
-Para gestionar los contenedores desde la terminal sin abrir Docker Desktop:
+Inicia Docker Desktop y espera a que su motor Linux esté disponible. Desde PowerShell, en la raíz del repositorio:
+
 ```powershell
-lazydocker
+.\docker\iniciar.ps1
+```
+
+El script valida Docker y Compose, usa explícitamente el proyecto `steelog` y este archivo Compose, inicia el servicio (límite de 120 segundos), espera hasta 60 segundos a que PostgreSQL acepte conexiones y abre LazyDocker. Si vence el límite de inicio, Docker podría continuar creando recursos: revisa su estado antes de reintentar. También se puede iniciar sin la interfaz con `.\docker\iniciar.ps1 -SinInterfaz`. Para abrir LazyDocker por separado desde la raíz, ejecuta `lazydocker --project steelog --file .\docker-compose.yml`. LazyDocker controla y monitorea contenedores; no sustituye al motor de Docker. Su vista abarca todo el daemon, no solo SteeLog: evita operar sobre contenedores o volúmenes de otros proyectos.
+
+La GUI de SteeLog es WinForms con .NET Framework 4.8: se ejecuta en Windows, no dentro del contenedor Linux. Compose ejecuta únicamente PostgreSQL 17 como `steelog-db`, publicado en `127.0.0.1:5435`, accesible solo desde el host. Si el puerto o el nombre del contenedor ya están ocupados, revisa el conflicto antes de continuar; no se detiene ni borra la instancia ajena.
+
+Los scripts de `docker/init` crean el esquema y datos iniciales **solo al crear un volumen vacío**. No actualizan bases existentes ni las reinicializan al reiniciar el contenedor. El volumen `steelog_postgres_data` conserva los datos: no uses `docker compose down -v` ni limpiezas de volúmenes si quieres conservarlos. Para verificar el estado sin modificar datos:
+
+```powershell
+docker compose -p steelog -f .\docker-compose.yml ps
+docker compose -p steelog -f .\docker-compose.yml exec -T db pg_isready -U postgres -d inventario_db
+docker compose -p steelog -f .\docker-compose.yml logs --tail 50 db
 ```
 
 ### 2. Configuración de Conexión
-El archivo `appsettings.json` contiene la cadena de conexión local:
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=localhost;Port=5435;Database=inventario_db;User Id=postgres;Password=tesispassword123;Pooling=true;"
-  }
-}
-```
-*Nota: Si se clona el repositorio desde cero, el script de compilación (MSBuild) genera automáticamente `appsettings.json` a partir de `appsettings.example.json` antes del primer build.*
+El archivo privado `SteeLog/SteeLog/appsettings.json` contiene la cadena de conexión. La configuración de ejemplo apunta a PostgreSQL local en el puerto 5435. No compartas ni subas tu archivo privado.
+
+La contraseña incluida en Compose y en el ejemplo es conocida y está destinada solo al desarrollo local; **no uses esta configuración en producción**. Cambiar una variable de Compose no rota automáticamente las credenciales de un volumen PostgreSQL existente. Para un despliegue real se necesitan credenciales propias y un procedimiento de rotación adecuado.
+
+*Nota: Si se clona el repositorio desde cero, el script de compilación (MSBuild) genera `appsettings.json` a partir de `appsettings.example.json` solo si aún no existe.*
 
 ### 3. Ejecutar la Aplicación
 Puedes iniciar directamente el ejecutable compilado:
@@ -77,7 +81,9 @@ La aplicación cuenta con credenciales locales de prueba:
 ---
 
 ## 🛑 Detener Servicios
-Para pausar la base de datos:
+Para detener la base de datos sin eliminar contenedores ni datos:
 ```powershell
-docker compose stop
+docker compose -p steelog -f .\docker-compose.yml stop
 ```
+
+Para volver a iniciarla sin abrir LazyDocker, ejecuta `.\docker\iniciar.ps1 -SinInterfaz`. El comando `stop` indicado conserva el volumen y los datos.
