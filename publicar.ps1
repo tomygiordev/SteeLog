@@ -16,8 +16,8 @@ trap {
 $token       = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } else { "" }
 $owner       = "tomygiordev"
 $repo        = "SteeLog"
-$versionFile = "$PSScriptRoot\WP SYSTEM\PlayerUI\AppVersion.cs"
-$exePath     = "$PSScriptRoot\WP SYSTEM\PlayerUI\bin\Release\app.publish\SteeLog.exe"
+$versionFile = "$PSScriptRoot\SteeLog\SteeLog\AppVersion.cs"
+$exePath     = "$PSScriptRoot\SteeLog\SteeLog\bin\Release\app.publish\SteeLog.exe"
 $assetName   = "SteeLog.exe"
 
 function Get-AppVersionFromSource {

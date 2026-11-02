@@ -4,9 +4,9 @@
 
 ## Identidad académica y compatibilidad
 
-SteeLog tiene identidad visual propia, sin la marca empresarial WP en el login, la ventana principal o las cabeceras de reportes. La carpeta `WP SYSTEM`, la solución `WP_Inventario.sln` y el namespace `WP_Inventario` se conservan como identificadores técnicos para evitar renombrados que rompan recursos, formularios o dependencias existentes. El ejecutable se llama `SteeLog.exe`.
+La solución `SteeLog/SteeLog.sln`, el proyecto `SteeLog/SteeLog/SteeLog.csproj`, los namespaces y el ejecutable `SteeLog.exe` usan la identidad SteeLog. Se conservan las dependencias de terceros y el certificado sin alterar sus contenidos.
 
-La procedencia, los prompts y las variantes de la marca están en [Resources/Branding](WP%20SYSTEM/PlayerUI/Resources/Branding/README.md). Esta separación visual no certifica la anonimización de datos de bases existentes ni del historial del repositorio.
+La procedencia, los prompts y las variantes de la marca están en [Resources/Branding](SteeLog/SteeLog/Resources/Branding/README.md). Esta separación visual no certifica la anonimización de datos de bases existentes ni del historial del repositorio.
 
 ---
 
@@ -59,9 +59,9 @@ El archivo `appsettings.json` contiene la cadena de conexión local:
 ### 3. Ejecutar la Aplicación
 Puedes iniciar directamente el ejecutable compilado:
 ```
-WP SYSTEM\PlayerUI\bin\Release\SteeLog.exe
+SteeLog\SteeLog\bin\Release\SteeLog.exe
 ```
-O abrir la solución `WP SYSTEM\WP_Inventario.sln` en Visual Studio y presionar **F5**.
+O abrir la solución `SteeLog\SteeLog.sln` en Visual Studio y presionar **F5**.
 
 ### 4. Inicio de Sesión (Modo Demostración / Tesis)
 La aplicación cuenta con credenciales locales de prueba:

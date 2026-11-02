@@ -52,16 +52,16 @@ error.log
 # Configuración local (no compartir)
 .env
 **/.env
-WP SYSTEM/PlayerUI/appsettings.json
-WP SYSTEM/PlayerUI/App.config
-WP SYSTEM/PlayerUI/migration.sql
-WP SYSTEM/PlayerUI/remitos_validacion.json
+SteeLog/SteeLog/appsettings.json
+SteeLog/SteeLog/App.config
+SteeLog/SteeLog/migration.sql
+SteeLog/SteeLog/remitos_validacion.json
 
 # Carpetas de herramientas/agentes (no compartir)
-WP SYSTEM/PlayerUI/gestionWeb/
-WP SYSTEM/PlayerUI/.agent/
-WP SYSTEM/PlayerUI/.agents/
-WP SYSTEM/PlayerUI/.claude/
+SteeLog/SteeLog/gestionWeb/
+SteeLog/SteeLog/.agent/
+SteeLog/SteeLog/.agents/
+SteeLog/SteeLog/.claude/
 skills-lock.json
 
 # Otros
