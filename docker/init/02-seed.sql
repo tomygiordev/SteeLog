@@ -25,6 +25,21 @@ INSERT INTO public.ubicacion (id_ubicacion, nombre) VALUES
 (4, 'Cliente/Consumo')
 ON CONFLICT (id_ubicacion) DO NOTHING;
 
+-- No reutilizar valores consumidos si el seed se ejecuta nuevamente.
+DO $$
+DECLARE
+    seq regclass := pg_get_serial_sequence('public.ubicacion', 'id_ubicacion')::regclass;
+    seq_value bigint;
+    seq_called boolean;
+    max_id bigint;
+BEGIN
+    SELECT MAX(id_ubicacion) INTO max_id FROM public.ubicacion;
+    EXECUTE format('SELECT last_value, is_called FROM %s', seq) INTO seq_value, seq_called;
+    IF max_id > seq_value OR (max_id = seq_value AND NOT seq_called) THEN
+        PERFORM setval(seq, max_id, true);
+    END IF;
+END $$;
+
 -- Categorías demo
 INSERT INTO public.categorias (id_categoria, nombre, recortable) VALUES
 (1, 'PERFILERIA', false),

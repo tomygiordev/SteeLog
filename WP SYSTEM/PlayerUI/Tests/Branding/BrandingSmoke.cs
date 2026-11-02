@@ -22,7 +22,20 @@ internal static class BrandingSmoke
         var asm = typeof(VistaGeneral).Assembly;
         foreach (string file in new[] { "steelog-logo-dark.png", "steelog-logo-light.png", "steelog-symbol.png", "steelog-background.png", "steelog.ico" })
             using (var stream = asm.GetManifestResourceStream("WP_Inventario.Resources.Branding." + file))
-            { Check(stream != null, "Missing " + file); if (file.EndsWith(".png")) using (var image = System.Drawing.Image.FromStream(stream)) { Check(image.Width >= 256 && image.Height >= 256, file); Console.WriteLine(file + " " + image.Width + "x" + image.Height); } }
+            {
+                Check(stream != null, "Missing " + file);
+                if (file.EndsWith(".png")) using (var image = new Bitmap(stream))
+                {
+                    Check(image.Width >= 256 && image.Height >= 256, file);
+                    Check(image.GetPixel(0, 0).A == 0 && image.GetPixel(image.Width - 1, image.Height - 1).A == 0, file + " opaque background");
+                    bool visible = false;
+                    for (int y = 0; y < image.Height && !visible; y += 5)
+                        for (int x = 0; x < image.Width; x += 5)
+                            if (image.GetPixel(x, y).A > 200) { visible = true; break; }
+                    Check(visible, file + " empty artwork");
+                    Console.WriteLine(file + " " + image.Width + "x" + image.Height + " transparent artwork");
+                }
+            }
         using (var icon = asm.GetManifestResourceStream("WP_Inventario.Resources.Branding.steelog.ico"))
         using (var reader = new BinaryReader(icon))
         {

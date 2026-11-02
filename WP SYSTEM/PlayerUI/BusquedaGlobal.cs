@@ -15,7 +15,7 @@ using System.Data;
 
 namespace WP_Inventario
 {
-    public class BusquedaGlobal
+    public class BusquedaGlobal : IDisposable
     {
         private readonly Form _parentForm;
         private readonly Panel _panelMaximizar;
@@ -23,15 +23,29 @@ namespace WP_Inventario
         private Guna.UI2.WinForms.Guna2TextBox _txtBusqueda;
         private Panel _panelResultados;
         private Timer _timerDebounce;
-        private List<Material> _cacheMateriales;
-        private List<Recorte> _cacheRecortes;
-        private List<Herramienta> _cacheHerramientas;
-        private List<Insumo> _cacheInsumos;
+        internal sealed class Snapshot
+        {
+            internal List<Material> Materiales;
+            internal List<Recorte> Recortes;
+            internal List<Herramienta> Herramientas;
+            internal List<Insumo> Insumos;
+        }
+        private readonly object _cacheGate = new object();
+        private readonly Func<Snapshot> _loader;
+        private Snapshot _cache;
         private DateTime _cacheTimestampUtc = DateTime.MinValue;
+        private Timer _timerLostFocus;
+        private bool _disposed;
         private int _searchVersion = 0;
 
         public BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
+            : this(parentForm, panelMaximizar, openChildForm, CargarSnapshot)
         {
+        }
+
+        internal BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Snapshot> loader)
+        {
+            _loader = loader ?? throw new ArgumentNullException(nameof(loader));
             _parentForm = parentForm;
             _panelMaximizar = panelMaximizar;
             _openChildForm = openChildForm;
@@ -40,6 +54,7 @@ namespace WP_Inventario
             CrearPanelResultados();
             ConfigurarDebounce();
             ConfigurarAtajo();
+            _parentForm.Disposed += ParentDisposed;
         }
 
         private void CrearTextBoxBusqueda()
@@ -70,29 +85,8 @@ namespace WP_Inventario
 
             _txtBusqueda.TextChanged += TxtBusqueda_TextChanged;
             _txtBusqueda.KeyDown += TxtBusqueda_KeyDown;
-            _txtBusqueda.LostFocus += (s, e) =>
-            {
-                // Give a small delay so clicking on results works
-                var timer = new Timer { Interval = 200 };
-                timer.Tick += (ts, te) =>
-                {
-                    timer.Stop();
-                    timer.Dispose();
-                    if (!_txtBusqueda.Focused)
-                        OcultarResultados();
-                };
-                timer.Start();
-            };
-
-            // Mantener alineación a la derecha en resize
-            _panelMaximizar.Resize += (s, e) =>
-            {
-                int mDerecho = 200;
-                _txtBusqueda.Location = new Point(
-                    _panelMaximizar.Width - _txtBusqueda.Width - mDerecho,
-                    (_panelMaximizar.Height - _txtBusqueda.Height) / 2
-                );
-            };
+            _txtBusqueda.LostFocus += TxtBusqueda_LostFocus;
+            _panelMaximizar.Resize += PanelMaximizar_Resize;
 
             _panelMaximizar.Controls.Add(_txtBusqueda);
             _txtBusqueda.BringToFront();
@@ -184,30 +178,54 @@ namespace WP_Inventario
 
         private void ConfigurarAtajo()
         {
-            // Register Ctrl+K globally on the parent form
             _parentForm.KeyPreview = true;
-            _parentForm.KeyDown += (s, e) =>
+            _parentForm.KeyDown += ParentKeyDown;
+        }
+
+        private void ParentKeyDown(object sender, KeyEventArgs e)
+        {
+            if (e.Control && e.KeyCode == Keys.K)
             {
-                if (e.Control && e.KeyCode == Keys.K)
-                {
-                    e.SuppressKeyPress = true;
-                    _txtBusqueda.Focus();
-                    _txtBusqueda.SelectAll();
-                }
-                if (e.KeyCode == Keys.Escape && _txtBusqueda.Focused)
-                {
-                    e.SuppressKeyPress = true;
-                    OcultarResultados();
-                    _txtBusqueda.Text = "";
-                    _parentForm.ActiveControl = null;
-                }
+                e.SuppressKeyPress = true;
+                _txtBusqueda.Focus();
+                _txtBusqueda.SelectAll();
+            }
+            if (e.KeyCode == Keys.Escape && _txtBusqueda.Focused)
+            {
+                e.SuppressKeyPress = true;
+                OcultarResultados();
+                _txtBusqueda.Text = "";
+                _parentForm.ActiveControl = null;
+            }
+        }
+
+        private void PanelMaximizar_Resize(object sender, EventArgs e)
+        {
+            _txtBusqueda.Location = new Point(_panelMaximizar.Width - _txtBusqueda.Width - 200,
+                (_panelMaximizar.Height - _txtBusqueda.Height) / 2);
+        }
+
+        private void TxtBusqueda_LostFocus(object sender, EventArgs e)
+        {
+            ++_searchVersion;
+            _timerDebounce.Stop();
+            if (_timerLostFocus != null) { _timerLostFocus.Stop(); _timerLostFocus.Dispose(); }
+            _timerLostFocus = new Timer { Interval = 200 };
+            _timerLostFocus.Tick += (s, args) =>
+            {
+                _timerLostFocus.Stop();
+                _timerLostFocus.Dispose();
+                _timerLostFocus = null;
+                if (!_txtBusqueda.Focused) OcultarResultados();
             };
+            _timerLostFocus.Start();
         }
 
         private void TxtBusqueda_TextChanged(object sender, EventArgs e)
         {
+            ++_searchVersion;
             _timerDebounce.Stop();
-            if (string.IsNullOrWhiteSpace(_txtBusqueda.Text))
+            if (_txtBusqueda.Text.Trim().Length < 2)
             {
                 OcultarResultados();
                 return;
@@ -238,22 +256,16 @@ namespace WP_Inventario
             int currentVersion = ++_searchVersion;
             bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
 
-            List<ResultadoBusqueda> resultados = await Task.Run(() =>
+            List<ResultadoBusqueda> resultados;
+            try
             {
-                try
+                resultados = await Task.Run(() =>
                 {
-                    if ((DateTime.UtcNow - _cacheTimestampUtc).TotalSeconds > 10 || _cacheMateriales == null)
-                    {
-                        _cacheMateriales = new MaterialDatos().obtenerMateriales() ?? new List<Material>();
-                        _cacheRecortes = new RecorteDatos().ObtenerRecortes() ?? new List<Recorte>();
-                        _cacheHerramientas = new HerramientaDatos().GetHerramientas() ?? new List<Herramienta>();
-                        _cacheInsumos = new InsumoDatos().GetInsumos() ?? new List<Insumo>();
-                        _cacheTimestampUtc = DateTime.UtcNow;
-                    }
+                    Snapshot snapshot = ObtenerSnapshot();
 
                     var candidatos = new List<(ResultadoBusqueda item, int estricto, int fuzzy)>();
 
-                    foreach (var m in _cacheMateriales)
+                    foreach (var m in snapshot.Materiales)
                     {
                         string textoBusqueda = $"material materiales {m.nombre} {m.nombre_categoria}";
                         var puntajes = CalcularPuntajes(query, m.nombre, textoBusqueda);
@@ -275,7 +287,7 @@ namespace WP_Inventario
                         }
                     }
 
-                    foreach (var r in _cacheRecortes)
+                    foreach (var r in snapshot.Recortes)
                     {
                         string dimensiones = FormatearDimensiones(r);
                         if (r.ancho > 0) dimensiones += " " + r.ancho;
@@ -298,7 +310,7 @@ namespace WP_Inventario
                         }
                     }
 
-                    foreach (var h in _cacheHerramientas)
+                    foreach (var h in snapshot.Herramientas)
                     {
                         string textoBusqueda = $"herramienta herramientas {h.nombre} {h.estado} {h.nombre_obra} {h.observaciones}";
                         var puntajes = CalcularPuntajes(query, h.nombre, textoBusqueda);
@@ -316,7 +328,7 @@ namespace WP_Inventario
                         }
                     }
 
-                    foreach (var ins in _cacheInsumos)
+                    foreach (var ins in snapshot.Insumos)
                     {
                         string textoBusqueda = $"insumo insumos {ins.nombre} {ins.nombre_obra} {ins.observaciones}";
                         var puntajes = CalcularPuntajes(query, ins.nombre, textoBusqueda);
@@ -361,16 +373,82 @@ namespace WP_Inventario
                     }
 
                     return res.OrderByDescending(r => r.Puntaje).ThenBy(r => r.Nombre).ToList();
-                }
-                catch
-                {
-                    return new List<ResultadoBusqueda>();
-                }
-            });
+                });
+            }
+            catch
+            {
+                if (!_disposed && currentVersion == _searchVersion && !_parentForm.IsDisposed)
+                    MostrarErrorBusqueda();
+                return;
+            }
 
-            if (currentVersion != _searchVersion || _parentForm == null || _parentForm.IsDisposed) return;
+            if (_disposed || currentVersion != _searchVersion || _parentForm.IsDisposed) return;
 
             MostrarResultados(resultados, query);
+        }
+
+        private static Snapshot CargarSnapshot()
+        {
+            return new Snapshot
+            {
+                Materiales = new MaterialDatos().obtenerMateriales(),
+                Recortes = new RecorteDatos().ObtenerRecortes(),
+                Herramientas = new HerramientaDatos().GetHerramientas(),
+                Insumos = new InsumoDatos().GetInsumos()
+            };
+        }
+
+        private Snapshot ObtenerSnapshot()
+        {
+            lock (_cacheGate)
+            {
+                if (_cache != null && (DateTime.UtcNow - _cacheTimestampUtc).TotalSeconds <= 10) return _cache;
+                var nuevo = _loader();
+                if (nuevo == null || nuevo.Materiales == null || nuevo.Recortes == null || nuevo.Herramientas == null || nuevo.Insumos == null)
+                    throw new InvalidOperationException("No se pudieron cargar los datos de búsqueda.");
+                _cache = nuevo;
+                _cacheTimestampUtc = DateTime.UtcNow;
+                return nuevo;
+            }
+        }
+
+        private void LimpiarResultados()
+        {
+            while (_panelResultados.Controls.Count > 0)
+            {
+                var control = _panelResultados.Controls[0];
+                _panelResultados.Controls.RemoveAt(0);
+                control.Dispose();
+            }
+        }
+
+        private void MostrarErrorBusqueda()
+        {
+            LimpiarResultados();
+            _panelResultados.Controls.Add(new Label { Text = "No se pudo realizar la búsqueda. Intente nuevamente.",
+                ForeColor = Color.White, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter });
+            _panelResultados.Size = new Size(460, 50);
+            PosicionarPanelResultados();
+            _panelResultados.Visible = true;
+        }
+
+        private void ParentDisposed(object sender, EventArgs e) { Dispose(); }
+
+        public void Dispose()
+        {
+            if (_disposed) return;
+            _disposed = true;
+            ++_searchVersion;
+            _parentForm.Disposed -= ParentDisposed;
+            _parentForm.KeyDown -= ParentKeyDown;
+            _panelMaximizar.Resize -= PanelMaximizar_Resize;
+            _txtBusqueda.TextChanged -= TxtBusqueda_TextChanged;
+            _txtBusqueda.KeyDown -= TxtBusqueda_KeyDown;
+            _txtBusqueda.LostFocus -= TxtBusqueda_LostFocus;
+            foreach (var timer in new[] { _timerDebounce, _timerLostFocus, _timerOcultarScroll })
+                if (timer != null) { timer.Stop(); timer.Dispose(); }
+            _txtBusqueda.Dispose();
+            _panelResultados.Dispose();
         }
 
         private static (int estricto, int fuzzy) CalcularPuntajes(string query, string nombre, string textoCompleto)
@@ -538,7 +616,7 @@ namespace WP_Inventario
 
         private void MostrarResultados(List<ResultadoBusqueda> resultados, string query)
         {
-            _panelResultados.Controls.Clear();
+            LimpiarResultados();
 
             if (resultados.Count == 0)
             {
@@ -691,8 +769,10 @@ namespace WP_Inventario
 
         private void OcultarResultados()
         {
+            ++_searchVersion;
+            _timerDebounce.Stop();
             _panelResultados.Visible = false;
-            _panelResultados.Controls.Clear();
+            LimpiarResultados();
         }
 
         private class ResultadoBusqueda

@@ -1,5 +1,6 @@
 ﻿using System;
-using System.Drawing;
+using System.Drawing;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using WP_Inventario.Servicios;
 
@@ -7,6 +8,10 @@ namespace WP_Inventario.Vistas
 {
     public class Vista_Login : Form
     {
+        private readonly Func<string, string, Task<AuthResult>> authenticate;
+        private bool loginInProgress;
+        private bool loginClosed;
+        private static readonly Color FocusColor = Color.FromArgb(169, 192, 177);
         private Panel panelCard;
         private PictureBox picLogo;
         private Label lblSubtitulo;
@@ -18,9 +23,24 @@ namespace WP_Inventario.Vistas
         private Label lblError;
         private Label lblVersion;
 
-        public Vista_Login()
-        {
-            InitUI();
+        public Vista_Login() : this(SupabaseAuthService.SignInAsync) { }
+
+        internal Vista_Login(Func<string, string, Task<AuthResult>> authenticate)
+        {
+            this.authenticate = authenticate ?? throw new ArgumentNullException(nameof(authenticate));
+            InitUI();
+        }
+
+        protected override bool ProcessDialogKey(Keys keyData)
+        {
+            if (loginInProgress && (keyData & Keys.KeyCode) == Keys.Enter) return true;
+            return base.ProcessDialogKey(keyData);
+        }
+
+        protected override void OnFormClosed(FormClosedEventArgs e)
+        {
+            loginClosed = true;
+            base.OnFormClosed(e);
         }
 
         private void InitUI()
@@ -32,14 +52,14 @@ namespace WP_Inventario.Vistas
             this.FormBorderStyle = FormBorderStyle.None;
             this.StartPosition = FormStartPosition.CenterScreen;
             this.BackColor = Color.FromArgb(11, 7, 17);
-            this.KeyPreview = true;
-            this.KeyDown += (s, e) => { if (e.KeyCode == Keys.Enter) BtnLogin_Click(null, null); };
+
 
             // Card central
             panelCard = new Panel
             {
                 Size = new Size(340, 400),
-                BackColor = Color.FromArgb(22, 28, 25),
+                BackColor = Color.FromArgb(22, 28, 25),
+                TabIndex = 0,
                 Location = new Point(40, 60)
             };
 
@@ -79,7 +99,9 @@ namespace WP_Inventario.Vistas
                 Font = new Font("Segoe UI", 11F),
                 BackColor = Color.FromArgb(35, 45, 40),
                 ForeColor = Color.White,
-                BorderStyle = BorderStyle.FixedSingle
+                BorderStyle = BorderStyle.FixedSingle,
+                AccessibleName = "Usuario",
+                TabIndex = 0
             };
 
             lblPassword = new Label
@@ -99,14 +121,16 @@ namespace WP_Inventario.Vistas
                 BackColor = Color.FromArgb(35, 45, 40),
                 ForeColor = Color.White,
                 BorderStyle = BorderStyle.FixedSingle,
-                UseSystemPasswordChar = true
+                UseSystemPasswordChar = true,
+                AccessibleName = "Contraseña",
+                TabIndex = 1
             };
 
             lblError = new Label
             {
                 Text = "",
                 Font = new Font("Bahnschrift Light", 9.5F),
-                ForeColor = Color.FromArgb(220, 80, 80),
+                ForeColor = Color.FromArgb(240, 128, 128),
                 Location = new Point(30, 242),
                 Size = new Size(280, 36),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -118,19 +142,23 @@ namespace WP_Inventario.Vistas
                 Text = "Ingresar",
                 FillColor = Color.FromArgb(39, 174, 96),
                 HoverState = { FillColor = Color.FromArgb(46, 196, 110) },
-                ForeColor = Color.White,
+                ForeColor = Color.FromArgb(22, 28, 25),
+                DisabledState = { FillColor = Color.FromArgb(49, 91, 67), ForeColor = Color.White },
+                AccessibleName = "Ingresar",
+                TabIndex = 2,
                 Font = new Font("Bahnschrift Light", 12F),
                 Location = new Point(30, 290),
                 Size = new Size(280, 42),
                 BorderRadius = 4
             };
-            btnLogin.Click += BtnLogin_Click;
+            btnLogin.Click += BtnLogin_Click;
+            this.AcceptButton = btnLogin;
 
             lblVersion = new Label
             {
                 Text = "v" + AppVersion.Current,
                 Font = new Font("Bahnschrift Light", 8.5F),
-                ForeColor = Color.FromArgb(60, 80, 68),
+                ForeColor = Color.FromArgb(169, 192, 177),
                 Location = new Point(0, 370),
                 Size = new Size(340, 18),
                 TextAlign = ContentAlignment.MiddleCenter
@@ -152,68 +180,93 @@ namespace WP_Inventario.Vistas
                 Size = new Size(30, 30),
                 Location = new Point(this.Width - 40, 8),
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(100, 100, 100),
+                ForeColor = Color.FromArgb(169, 192, 177),
+                AccessibleName = "Cerrar aplicación",
+                TabIndex = 1,
                 BackColor = Color.Transparent,
                 Font = new Font("Segoe UI", 10F),
                 Cursor = Cursors.Hand
             };
-            btnClose.FlatAppearance.BorderSize = 0;
+            btnClose.FlatAppearance.BorderSize = 0;
+            btnClose.FlatAppearance.MouseOverBackColor = Color.FromArgb(40, 58, 48);
+            btnClose.Paint += (sender, e) =>
+            {
+                if (btnClose.Focused)
+                    using (var pen = new Pen(FocusColor, 2))
+                        e.Graphics.DrawRectangle(pen, 1, 1, btnClose.Width - 3, btnClose.Height - 3);
+            };
+            btnClose.Enter += (sender, e) => btnClose.Invalidate();
+            btnClose.Leave += (sender, e) => btnClose.Invalidate();
             btnClose.Click += (s, e) => Application.Exit();
-            this.Controls.Add(btnClose);
+            this.Controls.Add(btnClose);
+            panelCard.Paint += (sender, e) =>
+            {
+                foreach (Control control in new Control[] { txtEmail, txtPassword, btnLogin })
+                {
+                    if (!(control is TextBox) && !control.Focused) continue;
+                    var bounds = control.Bounds;
+                    bounds.Inflate(3, 3);
+                    using (var pen = new Pen(control.Focused ? Color.White : FocusColor, control.Focused ? 2 : 1))
+                        e.Graphics.DrawRectangle(pen, bounds);
+                }
+            };
+            foreach (Control control in new Control[] { txtEmail, txtPassword, btnLogin })
+            {
+                control.Enter += (sender, e) => panelCard.Invalidate();
+                control.Leave += (sender, e) => panelCard.Invalidate();
+            }
         }
 
-        private async void BtnLogin_Click(object sender, EventArgs e)
-        {
-            string email = txtEmail.Text.Trim();
-            string password = txtPassword.Text;
-
-            if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
-            {
-                MostrarError("Completá usuario y contraseña.");
-                return;
-            }
-
-            // Normalizar usuarios locales de demostración para tesis
-            if (!email.Contains("@"))
-            {
-                string norm = email.ToLower();
-                if (norm == "admin")
-                    email = "admin@tesis.local";
-                else if (norm == "galpon" || norm == "operador")
-                    email = "galpon@tesis.local";
-            }
-
-            btnLogin.Enabled = false;
-            btnLogin.Text = "Verificando...";
-            lblError.Visible = false;
-
-            try
-            {
-                var result = await SupabaseAuthService.SignInAsync(email, password);
-
-                if (result.Success)
-                {
-                    SessionManager.SetSession(result.Email, result.AccessToken, result.RefreshToken, result.ExpiresIn);
-                    CredentialStore.Save(email, password);
-                    this.DialogResult = DialogResult.OK;
-                    this.Close();
-                }
-                else
-                {
-                    MostrarError(result.ErrorMessage);
-                }
-            }
-            catch (Exception ex)
-            {
-                MostrarError("Error de conexión: " + ex.Message);
-            }
-            finally
-            {
-                btnLogin.Enabled = true;
-                btnLogin.Text = "Ingresar";
-            }
-        }
-
+        private async void BtnLogin_Click(object sender, EventArgs e)
+        {
+            if (loginInProgress || loginClosed || IsDisposed || Disposing) return;
+            loginInProgress = true;
+            try
+            {
+                string email = txtEmail.Text.Trim();
+                string password = txtPassword.Text;
+                if (string.IsNullOrEmpty(email) || string.IsNullOrEmpty(password))
+                {
+                    MostrarError("Completá usuario y contraseña.");
+                    return;
+                }
+                if (!email.Contains("@"))
+                {
+                    string norm = email.ToLower();
+                    if (norm == "admin") email = "admin@tesis.local";
+                    else if (norm == "galpon" || norm == "operador") email = "galpon@tesis.local";
+                }
+                btnLogin.Enabled = false;
+                btnLogin.Text = "Verificando...";
+                lblError.Visible = false;
+                var result = await authenticate(email, password);
+                if (loginClosed || IsDisposed || Disposing) return;
+                if (result.Success)
+                {
+                    SessionManager.SetSession(result.Email, result.AccessToken, result.RefreshToken, result.ExpiresIn);
+                    CredentialStore.Save(email, password);
+                    DialogResult = DialogResult.OK;
+                    Close();
+                }
+                else MostrarError(result.ErrorMessage);
+            }
+            catch (Exception ex)
+            {
+                if (!loginClosed && !IsDisposed && !Disposing)
+                    MostrarError("Error de conexión: " + ex.Message);
+            }
+            finally
+            {
+                loginInProgress = false;
+                if (!loginClosed && !IsDisposed && !Disposing)
+                {
+                    btnLogin.Enabled = true;
+                    btnLogin.Text = "Ingresar";
+                }
+            }
+        }
+
+
         private void MostrarError(string mensaje)
         {
             lblError.Text = mensaje;

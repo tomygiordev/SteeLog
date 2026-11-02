@@ -243,6 +243,11 @@ namespace WP_Inventario.Vistas
                 }
               
             }
+            catch (DBConcurrencyException)
+            {
+                ToastNotification.ShowError("El stock cambió. Recargue y vuelva a seleccionar el material antes de guardar.");
+            }
+
             catch (Exception)
             {
                 ToastNotification.ShowError("El material ya existe o los datos son inválidos.");

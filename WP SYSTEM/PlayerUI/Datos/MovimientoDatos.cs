@@ -388,7 +388,7 @@ namespace WP_Inventario.Datos
                         const string queryActual = @"
                             SELECT tipo_destino, id_tipomovimiento
                             FROM public.movimientos
-                            WHERE id_movimiento = @idMovimiento;";
+                            WHERE id_movimiento = @idMovimiento FOR UPDATE;";
 
                         using (var cmdActual = new NpgsqlCommand(queryActual, conexion))
                         {
@@ -404,6 +404,9 @@ namespace WP_Inventario.Datos
                             }
                         }
 
+                        if (idTipoAnterior == 11 || movimiento.id_tipomovimiento == 11)
+                            throw new InvalidOperationException("El registro interno no puede modificarse desde movimientos.");
+
                         ValidarRemitoDuplicado(conexion, transaction, movimiento.nroremito, idMovimiento);
 
                         string nombreTipoAnterior = ObtenerNombreTipoMovimiento(conexion, transaction, idTipoAnterior);
@@ -485,23 +488,41 @@ namespace WP_Inventario.Datos
 
                 using (NpgsqlTransaction transaction = conexion.BeginTransaction())
                 {
+                    int idMovimiento;
+                    using (var cmd = new NpgsqlCommand("SELECT id_movimiento FROM public.movimientomaterial WHERE id_movimientomaterial=@id_detalle AND es_compra_eventual=true", conexion, transaction))
+                    {
+                        cmd.Parameters.AddWithValue("@id_detalle", idMovimientoMaterial);
+                        object resultado = cmd.ExecuteScalar();
+                        if (resultado == null) throw new InvalidOperationException("Solo se puede modificar el precio de un detalle eventual.");
+                        idMovimiento = Convert.ToInt32(resultado);
+                    }
+                    using (var cmd = new NpgsqlCommand("SELECT id_tipomovimiento FROM public.movimientos WHERE id_movimiento=@id FOR UPDATE", conexion, transaction))
+                    {
+                        cmd.Parameters.AddWithValue("@id", idMovimiento);
+                        object tipo = cmd.ExecuteScalar();
+                        if (tipo == null) throw new InvalidOperationException("El movimiento ya no existe.");
+                        if (Convert.ToInt32(tipo) == 11) throw new InvalidOperationException("El registro interno no puede modificarse desde movimientos.");
+                    }
+
                     const string actualizarDetalle = @"
                         UPDATE public.movimientomaterial
                         SET precio_unitario = @precio_unitario
                         WHERE id_movimientomaterial = @id_detalle
                           AND es_compra_eventual = true
+
+                          AND id_movimiento = @id_movimiento
                         RETURNING id_movimiento;";
 
-                    int idMovimiento;
+
                     using (NpgsqlCommand cmd = new NpgsqlCommand(actualizarDetalle, conexion, transaction))
                     {
                         cmd.Parameters.AddWithValue("@id_detalle", idMovimientoMaterial);
+                        cmd.Parameters.AddWithValue("@id_movimiento", idMovimiento);
                         cmd.Parameters.AddWithValue("@precio_unitario", precioUnitario);
                         object resultado = cmd.ExecuteScalar();
                         if (resultado == null)
                             throw new InvalidOperationException("Solo se puede modificar el precio de un detalle eventual.");
 
-                        idMovimiento = Convert.ToInt32(resultado);
                     }
 
                     const string recalcularTotal = @"
@@ -657,17 +678,21 @@ namespace WP_Inventario.Datos
                 {
                     try
                     {
-                        string tipoDestino = null;
-                        string queryTipoDestino = "SELECT tipo_destino FROM public.movimientos WHERE id_movimiento = @idMovimiento";
-                        using (var cmdTipoDestino = new NpgsqlCommand(queryTipoDestino, conexion))
+                        string tipoDestino;
+                        int tipoReal;
+                        using (var cmdActual = new NpgsqlCommand("SELECT tipo_destino, id_tipomovimiento FROM public.movimientos WHERE id_movimiento=@idMovimiento FOR UPDATE", conexion, transaction))
                         {
-                            cmdTipoDestino.Transaction = transaction;
-                            cmdTipoDestino.Parameters.AddWithValue("@idMovimiento", idMovimiento);
-                            object result = cmdTipoDestino.ExecuteScalar();
-                            if (result != null && result != DBNull.Value) tipoDestino = result.ToString();
+                            cmdActual.Parameters.AddWithValue("@idMovimiento", idMovimiento);
+                            using (var reader = cmdActual.ExecuteReader())
+                            {
+                                if (!reader.Read()) throw new InvalidOperationException("El movimiento ya no existe.");
+                                tipoDestino = reader.IsDBNull(0) ? null : reader.GetString(0);
+                                tipoReal = reader.GetInt32(1);
+                            }
                         }
-
-                        RevertirImpactoMovimiento(conexion, transaction, idMovimiento, tipoMovimiento, tipoDestino);
+                        if (tipoReal == 11) throw new InvalidOperationException("El registro interno no puede eliminarse desde movimientos.");
+                        string nombreTipo = ObtenerNombreTipoMovimiento(conexion, transaction, tipoReal);
+                        RevertirImpactoMovimiento(conexion, transaction, idMovimiento, nombreTipo, tipoDestino);
 
                         // 2. Eliminar detalle y movimiento
                         string deleteDetalleObj = "DELETE FROM movimientomaterial WHERE id_movimiento = @idMovimiento";
@@ -1038,6 +1063,13 @@ namespace WP_Inventario.Datos
         /// </summary>
         public void RegistrarAjusteInternoDiario(int idMaterial, decimal signedDelta, decimal stockActual, NpgsqlConnection conexion, NpgsqlTransaction transaction)
         {
+            // Serializa la creación del remito diario incluso cuando todavía no existe.
+            using (var bloqueoDia = new NpgsqlCommand("SELECT pg_advisory_xact_lock(141414, @dia)", conexion, transaction))
+            {
+                bloqueoDia.Parameters.AddWithValue("@dia", int.Parse(DateTime.Today.ToString("yyyyMMdd")));
+                bloqueoDia.ExecuteNonQuery();
+            }
+
             string queryBuscar = @"
                 SELECT id_movimiento FROM public.movimientos
                 WHERE id_tipomovimiento = 11

@@ -2,6 +2,12 @@
 
 **SteeLog** es una aplicación de escritorio desarrollada en **C# WinForms (.NET Framework 4.8)** con base de datos **PostgreSQL** encapsulada en **Docker**, diseñada para la administración integral de stock, materiales, obras, movimientos de inventario y trazabilidad logística en el sector de la construcción y steel framing.
 
+## Identidad académica y compatibilidad
+
+SteeLog tiene identidad visual propia, sin la marca empresarial WP en el login, la ventana principal o las cabeceras de reportes. La carpeta `WP SYSTEM`, la solución `WP_Inventario.sln` y el namespace `WP_Inventario` se conservan como identificadores técnicos para evitar renombrados que rompan recursos, formularios o dependencias existentes. El ejecutable se llama `SteeLog.exe`.
+
+La procedencia, los prompts y las variantes de la marca están en [Resources/Branding](WP%20SYSTEM/PlayerUI/Resources/Branding/README.md). Esta separación visual no certifica la anonimización de datos de bases existentes ni del historial del repositorio.
+
 ---
 
 ## 🚀 Características Principales

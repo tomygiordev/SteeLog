@@ -1,10 +1,8 @@
-﻿using System;
-using System.Data;
+using System;
 using System.IO;
+using System.Reflection;
 using Microsoft.Extensions.Configuration;
 using Npgsql;
-
-using System.Reflection;
 
 namespace WP_Inventario.Datos
 {
@@ -16,46 +14,61 @@ namespace WP_Inventario.Datos
         {
             var builder = new ConfigurationBuilder()
                 .SetBasePath(AppDomain.CurrentDomain.BaseDirectory);
-
-            // Cargar el appsettings.json embebido como base para que el EXE sea portable
             var assembly = Assembly.GetExecutingAssembly();
-            // El nombre del recurso suele ser Namespace.NombreArchivo.json
-            var resourceName = "WP_Inventario.appsettings.json";
 
-            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            using (var stream = assembly.GetManifestResourceStream("WP_Inventario.appsettings.json"))
             {
                 if (stream != null)
-                {
                     builder.AddJsonStream(stream);
+
+                builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: false);
+                IConfigurationRoot configuration;
+                try
+                {
+                    configuration = builder.Build();
+                }
+                catch (Exception ex) when (ex is FormatException || ex is InvalidDataException)
+                {
+                    throw new InvalidOperationException("No se pudo leer la configuración JSON de PostgreSQL (appsettings.json).");
                 }
 
-                // Permitir que un appsettings.json físico en la misma carpeta sobrescriba la configuración (opcional)
-                // Se agrega después del stream para que tenga prioridad
-                builder.AddJsonFile("appsettings.json", optional: true, reloadOnChange: true);
+                try
+                {
+                    _connectionString = configuration.GetConnectionString("DefaultConnection");
+                }
+                finally
+                {
+                    (configuration as IDisposable)?.Dispose();
+                }
+            }
 
-                // IMPORTANTE: Build() debe llamarse dentro del bloque using para que el stream no esté cerrado
-                IConfiguration configuration = builder.Build();
-                _connectionString = configuration.GetConnectionString("DefaultConnection");
+            if (string.IsNullOrWhiteSpace(_connectionString))
+                throw new InvalidOperationException("Falta la cadena ConnectionStrings:DefaultConnection de PostgreSQL en appsettings.json.");
+
+            try
+            {
+                new NpgsqlConnectionStringBuilder(_connectionString);
+            }
+            catch (ArgumentException)
+            {
+                throw new InvalidOperationException("La cadena ConnectionStrings:DefaultConnection de PostgreSQL en appsettings.json tiene un formato inválido.");
             }
         }
 
         public NpgsqlConnection GetConnection()
         {
-            var conexion = new NpgsqlConnection(_connectionString);
-
+            NpgsqlConnection conexion = null;
             try
             {
-                if (conexion.State == ConnectionState.Closed)
-                {
-                    conexion.Open();
-                }
+                conexion = new NpgsqlConnection(_connectionString);
+                conexion.Open();
+                return conexion;
             }
             catch (Exception ex)
             {
-                throw new Exception("Error de conexión a Supabase: " + ex.Message);
+                conexion?.Dispose();
+                throw new InvalidOperationException("Error al abrir la conexión PostgreSQL.", ex);
             }
-
-            return conexion;
         }
     }
 }

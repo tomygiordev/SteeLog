@@ -1,6 +1,7 @@
 using Npgsql;
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Data.SqlClient;
 using System.Linq;
 using System.Net.Mail;
@@ -17,6 +18,8 @@ namespace WP_Inventario.Datos
             string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, List<int> idsProveedores = null
             )
         {
+            if (stockActual < 0 || stockMinimo < 0) throw new ArgumentOutOfRangeException("stockActual", "El stock no puede ser negativo.");
+            if (id_categoria <= 0) throw new ArgumentOutOfRangeException("id_categoria");
             ConexionDB con = new ConexionDB();
             using(var cone = con.GetConnection())
             {
@@ -56,6 +59,8 @@ namespace WP_Inventario.Datos
         }
         public void editarMaterial(string nombre, decimal stockActual, decimal stockMinimo, int id_categoria, int id, List<int> idsProveedores = null, decimal? stockAnterior = null)
         {
+            if (id <= 0 || id_categoria <= 0) throw new ArgumentOutOfRangeException("id", "El material y la categoría deben ser válidos.");
+            if (stockActual < 0 || stockMinimo < 0) throw new ArgumentOutOfRangeException("stockActual", "El stock no puede ser negativo.");
             ConexionDB con = new ConexionDB();
             using(var cone = con.GetConnection())
             {
@@ -63,6 +68,18 @@ namespace WP_Inventario.Datos
                 {
                     try
                     {
+                        decimal stockBloqueado;
+                        using (var bloqueo = new NpgsqlCommand("SELECT stockactual FROM materiales WHERE id=@id FOR UPDATE", cone, tx))
+                        {
+                            bloqueo.Parameters.AddWithValue("@id", id);
+                            object valor = bloqueo.ExecuteScalar();
+                            if (valor == null || valor == DBNull.Value) throw new InvalidOperationException("El material ya no existe.");
+                            stockBloqueado = Convert.ToDecimal(valor);
+                        }
+                        if (stockAnterior.HasValue && stockAnterior.Value != stockBloqueado)
+                            throw new DBConcurrencyException("El stock cambió desde la selección. Recargue y vuelva a seleccionar el material.");
+                        if (!stockAnterior.HasValue && stockActual != stockBloqueado)
+                            throw new DBConcurrencyException("Para cambiar el stock debe recargar y seleccionar el material.");
                         string sql = "UPDATE materiales SET " +
                             "nombre=@nom, stockActual=@stact," +
                             "stockMinimo=@stmin, id_categoria=@idCat " +
@@ -83,9 +100,9 @@ namespace WP_Inventario.Datos
                             GuardarProveedoresMaterial(id, idsProveedores, cone, tx);
                         }
 
-                        if (stockAnterior.HasValue && stockActual != stockAnterior.Value)
+                        if (stockActual != stockBloqueado)
                         {
-                            decimal signedDelta = stockActual - stockAnterior.Value;
+                            decimal signedDelta = stockActual - stockBloqueado;
                             new MovimientoDatos().RegistrarAjusteInternoDiario(id, signedDelta, stockActual, cone, tx);
                         }
 
