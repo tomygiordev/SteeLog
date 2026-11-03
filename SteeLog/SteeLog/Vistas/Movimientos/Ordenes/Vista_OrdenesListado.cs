@@ -1,4 +1,4 @@
-﻿using Guna.UI2.WinForms;
+using Guna.UI2.WinForms;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -6,17 +6,21 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using System.Threading.Tasks;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
-using SteeLog.Reportes;
+using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesListado : Form, IRefrescable
+    public class Vista_OrdenesListado : Form, IRefrescable, IOrdenesVista
     {
-        private readonly OrdenCompraDatos _ordenDatos = new OrdenCompraDatos();
-        private readonly UserRole _rolActual = SessionManager.Role;
+        private OrdenesPresenter _presenter;
+        private readonly CargaVigente _previews = new CargaVigente();
+        private int _operacionesActivas;
+        private UserRole _rolActual;
         private readonly bool _soloRecepcion;
         private readonly bool _soloHistorial;
         private readonly bool _mostrarNuevaOrden;
@@ -46,13 +50,35 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             _onEditarOrden = onEditarOrden;
             _onRevisarOrden = onRevisarOrden;
             InitializeComponent();
-            CargarEstados();
-            Refrescar();
+            Disposed += (s, e) => _previews.Dispose();
+            Load += Vista_OrdenesListado_Load;
         }
 
+        private async void Vista_OrdenesListado_Load(object sender, EventArgs e)
+        {
+            if (DesignMode) return;
+            _rolActual = SessionManager.Role;
+            btnNuevaOrden.Visible = _rolActual == UserRole.Admin && _mostrarNuevaOrden && !_soloRecepcion;
+            dgvOrdenes.Columns["colAbrir"].Visible = _soloRecepcion || _rolActual == UserRole.Galpon || _rolActual == UserRole.Admin;
+            dgvOrdenes.Columns["colEditar"].Visible = _rolActual == UserRole.Admin;
+            dgvOrdenes.Columns["colEliminar"].Visible = _rolActual == UserRole.Admin;
+            dgvPreviewMateriales.Parent.Visible = MostrarPreviewMateriales();
+            ((TableLayoutPanel)dgvOrdenes.Parent).RowStyles[3].Height = MostrarPreviewMateriales() ? 190F : 0F;
+            CargarEstados();
+            _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
+            await CargarOrdenes();
+        }
+        public void SetOcupada(bool ocupada)
+        {
+            if (IsDisposed || Disposing) return;
+            _operacionesActivas += ocupada ? 1 : -1;
+            UseWaitCursor = _operacionesActivas > 0;
+            if (cmbEstado != null) cmbEstado.Enabled = _operacionesActivas == 0;
+        }
+        public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
         public void Refrescar()
         {
-            CargarOrdenes();
+            if (_presenter != null) _ = CargarOrdenes();
         }
 
         private void InitializeComponent()
@@ -94,12 +120,12 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             cmbEstado = OrdenesUi.CrearCombo();
             cmbEstado.Location = new Point(18, 32);
             cmbEstado.Size = new Size(260, 36);
-            cmbEstado.SelectedIndexChanged += (s, e) => CargarOrdenes();
+            cmbEstado.SelectedIndexChanged += (s, e) => { if (_presenter != null) _ = CargarOrdenes(); };
             filtros.Controls.Add(cmbEstado);
 
             var btnRefrescar = OrdenesUi.CrearBoton("Actualizar");
             btnRefrescar.Location = new Point(294, 32);
-            btnRefrescar.Click += (s, e) => CargarOrdenes();
+            btnRefrescar.Click += (s, e) => { if (_presenter != null) _ = CargarOrdenes(); };
             filtros.Controls.Add(btnRefrescar);
 
             var btnImprimirPendientes = OrdenesUi.CrearBoton("Imprimir Pendientes");
@@ -215,20 +241,20 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private void CargarEstados()
         {
             var items = new List<string> { "Todas" };
-            items.AddRange(OrdenCompraEstados.Todos);
+            items.AddRange(EstadosOrden.Todos);
 
             if (_soloHistorial)
-                items = new List<string> { "Todas", OrdenCompraEstados.RecibidaParcial, OrdenCompraEstados.RecibidaCompleta };
+                items = new List<string> { "Todas", EstadosOrden.RecibidaParcial, EstadosOrden.RecibidaCompleta };
             else if (_soloRecepcion || _rolActual != UserRole.Admin)
-                items = new List<string> { "Todas", OrdenCompraEstados.Pendiente, OrdenCompraEstados.RecibidaParcial };
+                items = new List<string> { "Todas", EstadosOrden.Pendiente, EstadosOrden.RecibidaParcial };
             else
-                items = new List<string> { "Todas", OrdenCompraEstados.Pendiente, OrdenCompraEstados.RecibidaParcial };
+                items = new List<string> { "Todas", EstadosOrden.Pendiente, EstadosOrden.RecibidaParcial };
 
             cmbEstado.DataSource = items;
             cmbEstado.SelectedIndex = 0;
         }
 
-        private void CargarOrdenes()
+        private async Task CargarOrdenes()
         {
             try
             {
@@ -238,12 +264,14 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 bool soloAbiertasGalpon = _soloRecepcion || _rolActual != UserRole.Admin;
                 bool excluirCompletas = !_soloHistorial;
-                var lista = _ordenDatos.ObtenerOrdenes(estado, soloAbiertasGalpon, _soloHistorial, excluirCompletas);
+                var resultado = await _presenter.ListarAsync(estado, soloAbiertasGalpon, _soloHistorial);
+                if (IsDisposed || Disposing || !resultado.Exitoso) return;
+                var lista = resultado.Valor.Select(OrdenesMapeo.Orden).ToList();
                 _actualizandoPreview = true;
                 dgvOrdenes.DataSource = lista;
                 _actualizandoPreview = false;
                 AplicarAccionesGrilla();
-                ActualizarPreviewMateriales();
+                await ActualizarPreviewMateriales();
             }
             catch (Exception ex)
             {
@@ -265,9 +293,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 if (orden == null)
                     continue;
 
-                row.Cells["colAbrir"].Value = OrdenCompraEstados.PermiteRecepcion(orden.estado) ? "Revisar" : "Ver";
-                row.Cells["colEditar"].Value = OrdenCompraEstados.PermiteEditarCabecera(orden.estado) ? "Editar" : "";
-                row.Cells["colEliminar"].Value = OrdenCompraEstados.EsEditable(orden.estado) ? "Eliminar" : "";
+                row.Cells["colAbrir"].Value = EstadosOrden.PermiteRecepcion(orden.estado) ? "Revisar" : "Ver";
+                row.Cells["colEditar"].Value = EstadosOrden.PermiteEditarCabecera(orden.estado) ? "Editar" : "";
+                row.Cells["colEliminar"].Value = EstadosOrden.EsEditable(orden.estado) ? "Eliminar" : "";
             }
 
             dgvOrdenes.Invalidate();
@@ -279,10 +307,10 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             if (_actualizandoPreview)
                 return;
 
-            ActualizarPreviewMateriales();
+            _ = ActualizarPreviewMateriales();
         }
 
-        private void ActualizarPreviewMateriales()
+        private async Task ActualizarPreviewMateriales()
         {
             if (dgvPreviewMateriales == null || !dgvPreviewMateriales.Visible)
                 return;
@@ -290,6 +318,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var ordenResumen = dgvOrdenes.CurrentRow == null ? null : dgvOrdenes.CurrentRow.DataBoundItem as OrdenCompra;
             if (ordenResumen == null)
             {
+                _previews.Invalidar();
                 dgvPreviewMateriales.DataSource = null;
                 lblPreviewMateriales.Text = "Materiales de la orden seleccionada";
                 return;
@@ -297,9 +326,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             try
             {
-                var orden = _ordenDatos.ObtenerOrdenPorId(ordenResumen.id_orden_compra);
+                if (_presenter == null) return;
+                using (var carga = _previews.Iniciar(this, () => IsDisposed || Disposing, false)) {
+                var previewPresenter = LocalServices.Current.CrearOrdenesPresenter(carga);
+                var resultado = await previewPresenter.ObtenerAsync(ordenResumen.id_orden_compra, carga.Token);
+                if (!carga.EsActual || !resultado.Exitoso) return;
+                var actual = dgvOrdenes.CurrentRow == null ? null : dgvOrdenes.CurrentRow.DataBoundItem as OrdenCompra;
+                if (actual == null || actual.id_orden_compra != ordenResumen.id_orden_compra) return;
+                var orden = OrdenesMapeo.Orden(resultado.Valor);
                 dgvPreviewMateriales.DataSource = orden == null ? null : orden.Detalles;
                 lblPreviewMateriales.Text = "Materiales de " + ordenResumen.nro_orden + " - " + ordenResumen.proveedor_nombre;
+                }
             }
             catch (Exception ex)
             {
@@ -342,19 +379,18 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 parent.OpenOrdenForm(0);
         }
 
-        private void BtnImprimirPendientes_Click(object sender, EventArgs e)
+        private async void BtnImprimirPendientes_Click(object sender, EventArgs e)
         {
             try
             {
-                var pdf = new OrdenesPendientesPDF();
                 
                 string directorio = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SteeLog", "Reportes");
                 if (!Directory.Exists(directorio))
                     Directory.CreateDirectory(directorio);
 
-                string rutaDestino = Path.Combine(directorio, pdf.SugerirNombreArchivo());
-                
-                pdf.Generar(rutaDestino);
+                string rutaDestino = Path.Combine(directorio, _presenter.SugerirNombrePdf());
+                var resultado = await _presenter.ExportarPendientesAsync(rutaDestino);
+                if (IsDisposed || Disposing || !resultado.Exitoso) return;
                 
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo()
                 {
@@ -368,7 +404,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
         }
 
-        private void DgvOrdenes_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private async void DgvOrdenes_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || e.ColumnIndex < 0)
                 return;
@@ -383,7 +419,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             {
                 if (_soloRecepcion || _rolActual == UserRole.Galpon || _rolActual == UserRole.Admin)
                 {
-                    if (!OrdenCompraEstados.PermiteVerRevision(orden.estado))
+                    if (!EstadosOrden.PermiteVerRevision(orden.estado))
                     {
                         ToastNotification.ShowWarning("La orden seleccionada no permite revisión.");
                         return;
@@ -407,7 +443,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
             else if (columnName == "colEditar" && _rolActual == UserRole.Admin)
             {
-                if (!OrdenCompraEstados.PermiteEditarCabecera(orden.estado))
+                if (!EstadosOrden.PermiteEditarCabecera(orden.estado))
                 {
                     ToastNotification.ShowWarning("La orden seleccionada no permite edición.");
                     return;
@@ -430,7 +466,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
             else if (columnName == "colEliminar" && _rolActual == UserRole.Admin)
             {
-                if (!OrdenCompraEstados.EsEditable(orden.estado))
+                if (!EstadosOrden.EsEditable(orden.estado))
                 {
                     ToastNotification.ShowWarning("Solo se pueden eliminar órdenes en estado Pendiente.");
                     return;
@@ -448,9 +484,10 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 try
                 {
-                    _ordenDatos.EliminarOrden(orden.id_orden_compra);
+                    var resultado = await _presenter.EliminarAsync(orden.id_orden_compra);
+                    if (IsDisposed || Disposing || !resultado.Exitoso) return;
                     ToastNotification.ShowSuccess("Orden eliminada.");
-                    CargarOrdenes();
+                    await CargarOrdenes();
                 }
                 catch (Exception ex)
                 {

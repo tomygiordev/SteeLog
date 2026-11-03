@@ -1,16 +1,18 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
-using SteeLog.Datos;
-using SteeLog.Modelos;
+using SteeLog.Core.Application.OrdenesCompra;
 
-namespace SteeLog.Reportes
+namespace SteeLog.Infrastructure.Pdf
 {
-    public class OrdenesPendientesPDF
+    public sealed class OrdenesPendientesPDF : IOrdenesPendientesPdf
     {
+        private readonly IRecursosPdf recursos;
+        public OrdenesPendientesPDF(IRecursosPdf recursos) { this.recursos = recursos ?? throw new ArgumentNullException(nameof(recursos)); }
+
         // Colores corporativos
         private static readonly BaseColor COLOR_VERDE_OSCURO = new BaseColor(25, 50, 35);
         private static readonly BaseColor COLOR_VERDE_HEADER = new BaseColor(35, 63, 43);
@@ -43,18 +45,17 @@ namespace SteeLog.Reportes
             fntEtiqueta = new Font(baseFontBold, 10, Font.NORMAL, new BaseColor(80, 80, 80));
         }
 
-        public void Generar(string rutaDestino)
+        public void Generar(string rutaDestino, IReadOnlyList<PendienteLectura> items)
         {
-            var datos = new OrdenCompraDatos();
-            var items = datos.ObtenerReporteOrdenesPendientes();
-
+            if (items == null) throw new ArgumentNullException(nameof(items));
             if (items.Count == 0) throw new Exception("No hay órdenes pendientes para imprimir.");
 
+            MarcaPdf marca = recursos.Capturar();
             Document doc = new Document(PageSize.A4, 40, 40, 40, 60);
             PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(rutaDestino, FileMode.Create));
             
             // Footer
-            writer.PageEvent = new PieMovimiento();
+            writer.PageEvent = new PieOrden(marca.Pie);
 
             doc.Open();
 
@@ -63,7 +64,7 @@ namespace SteeLog.Reportes
             writer.AddJavaScript(action);
 
             // =================== ENCABEZADO ===================
-            AgregarEncabezado(doc);
+            AgregarEncabezado(doc, marca);
 
             // =================== TABLA DE ÓRDENES ===================
             AgregarTablaOrdenes(doc, items);
@@ -73,10 +74,10 @@ namespace SteeLog.Reportes
 
         public string SugerirNombreArchivo()
         {
-            return $"Reporte_Ordenes_Pendientes_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            return $"Reporte_Ordenes_Pendientes_{recursos.Capturar().FechaLocal:yyyyMMdd_HHmmss}.pdf";
         }
 
-        private void AgregarEncabezado(Document doc)
+        private void AgregarEncabezado(Document doc, MarcaPdf marca)
         {
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -85,7 +86,10 @@ namespace SteeLog.Reportes
             // ======= IZQUIERDA: LOGO Y DATOS =======
             PdfPCell cellIzq = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
-            cellIzq.AddElement(Branding.PdfLogo(150, 62));
+            var logo = iTextSharp.text.Image.GetInstance(marca.LogoPng);
+            logo.ScaleToFit(150, 62);
+            logo.Alignment = Element.ALIGN_LEFT;
+            cellIzq.AddElement(logo);
 
             var fntDir = new Font(Font.FontFamily.HELVETICA, 8, Font.NORMAL, new BaseColor(80, 80, 80));
             var fntTributo = new Font(Font.FontFamily.HELVETICA, 7, Font.NORMAL, new BaseColor(80, 80, 80));
@@ -104,7 +108,7 @@ namespace SteeLog.Reportes
             PdfPCell cellDer = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
             
             cellDer.AddElement(new Paragraph("ÓRDENES PENDIENTES", fntTituloPrincipal) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
-            cellDer.AddElement(new Paragraph($"Fecha: {DateTime.Now:dd/MM/yyyy HH:mm}", new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, COLOR_TEXTO)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
+            cellDer.AddElement(new Paragraph($"Fecha: {marca.FechaLocal:dd/MM/yyyy HH:mm}", new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, COLOR_TEXTO)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
 
             headerTable.AddCell(cellDer);
 
@@ -116,7 +120,22 @@ namespace SteeLog.Reportes
             doc.Add(lineaSep);
         }
 
-        private void AgregarTablaOrdenes(Document doc, List<ReporteOrdenPendienteItem> items)
+        private sealed class PieOrden : PdfPageEventHelper
+        {
+            private readonly string texto;
+            public PieOrden(string texto) { this.texto = texto; }
+            public override void OnEndPage(PdfWriter writer, Document document)
+            {
+                var cb = writer.DirectContent;
+                var fuente = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
+                cb.SetColorStroke(new BaseColor(78, 91, 63)); cb.SetLineWidth(1f);
+                cb.MoveTo(document.LeftMargin, document.Bottom - 15); cb.LineTo(document.PageSize.Width - document.RightMargin, document.Bottom - 15); cb.Stroke();
+                cb.BeginText(); cb.SetFontAndSize(fuente, 8); cb.SetColorFill(new BaseColor(120, 120, 120));
+                cb.ShowTextAligned(Element.ALIGN_LEFT, texto, document.LeftMargin, document.Bottom - 28, 0); cb.EndText();
+            }
+        }
+
+        private void AgregarTablaOrdenes(Document doc, IReadOnlyList<PendienteLectura> items)
         {
             PdfPTable tabla = new PdfPTable(5);
             tabla.WidthPercentage = 100;
@@ -136,24 +155,24 @@ namespace SteeLog.Reportes
                 
                 // Nro Orden y Proveedor
                 Phrase pOrden = new Phrase();
-                pOrden.Add(new Chunk(item.nro_orden + "\n", fntCeldaBold));
-                pOrden.Add(new Chunk(item.proveedor, new Font(Font.FontFamily.HELVETICA, 7, Font.NORMAL, new BaseColor(80, 80, 80))));
+                pOrden.Add(new Chunk(item.Numero + "\n", fntCeldaBold));
+                pOrden.Add(new Chunk(item.Proveedor, new Font(Font.FontFamily.HELVETICA, 7, Font.NORMAL, new BaseColor(80, 80, 80))));
                 PdfPCell cOrden = new PdfPCell(pOrden) { BackgroundColor = bg, Padding = 6, BorderColor = COLOR_GRIS_CLARO, VerticalAlignment = Element.ALIGN_MIDDLE };
                 tabla.AddCell(cOrden);
 
                 // Material
-                Phrase pMat = new Phrase(item.material, fntCelda);
+                Phrase pMat = new Phrase(item.Material, fntCelda);
                 PdfPCell cMat = new PdfPCell(pMat) { BackgroundColor = bg, Padding = 6, BorderColor = COLOR_GRIS_CLARO, VerticalAlignment = Element.ALIGN_MIDDLE };
                 tabla.AddCell(cMat);
 
                 // Pedido
-                tabla.AddCell(new PdfPCell(new Phrase(item.cantidad_pedida.ToString(), fntCelda)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
+                tabla.AddCell(new PdfPCell(new Phrase(item.Pedida.ToString(), fntCelda)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
 
                 // Recibido
-                tabla.AddCell(new PdfPCell(new Phrase(item.cantidad_recibida.ToString(), fntCelda)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
+                tabla.AddCell(new PdfPCell(new Phrase(item.Recibida.ToString(), fntCelda)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
 
                 // Faltante
-                tabla.AddCell(new PdfPCell(new Phrase(item.cantidad_faltante.ToString(), fntCeldaBold)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
+                tabla.AddCell(new PdfPCell(new Phrase(item.Faltante.ToString(), fntCeldaBold)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, VerticalAlignment = Element.ALIGN_MIDDLE, BorderColor = COLOR_GRIS_CLARO });
 
                 alt = !alt;
             }

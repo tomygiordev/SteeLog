@@ -28,6 +28,13 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         public Vista_OrdenesModulo()
         {
             InitializeComponent();
+            Load += Vista_OrdenesModulo_Load;
+        }
+
+        private void Vista_OrdenesModulo_Load(object sender, EventArgs e)
+        {
+            if (DesignMode) return;
+            btnTabNueva.Visible = SessionManager.Role == UserRole.Admin;
             InicializarVistas();
             MostrarListado();
         }
@@ -66,7 +73,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             btnTabListado.Click += (s, e) => MostrarListado();
 
             btnTabNueva = CrearTab("Nueva orden", 216);
-            btnTabNueva.Visible = SessionManager.Role == UserRole.Admin;
+            btnTabNueva.Visible = false;
             btnTabNueva.Click += (s, e) => MostrarAlta();
 
             btnTabRecepcion = CrearTab("Recepción", 414);
@@ -257,6 +264,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         public void Refrescar()
         {
+            if (_vistaListado == null) return;
             RefrescarListas();
 
             if (_activeControl == _vistaRevision)

@@ -167,6 +167,24 @@ public class ArchitectureTests
         }
     }
     [Fact]
+    public void Ordenes_views_and_presenters_do_not_depend_on_data_infrastructure_or_pdf_library()
+    {
+        using (var host = Read(HostPath)) {
+            var offenders = Types(host.MainModule.Types)
+                .Where(t => Owner(t).StartsWith("SteeLog.Vistas.Movimientos.Ordenes.", StringComparison.Ordinal)
+                    || Owner(t).StartsWith("SteeLog.Presentation.Ordenes", StringComparison.Ordinal)
+                    || Owner(t) == "SteeLog.Presentation.CargaVigente"
+                    || Owner(t) == "SteeLog.Presentation.SolicitudCarga")
+                .SelectMany(t => References(t).Select(r => new { owner = Owner(t), dependency = r.FullName }))
+                .Where(x => x.dependency.StartsWith("SteeLog.Datos.", StringComparison.Ordinal)
+                    || x.dependency.StartsWith("SteeLog.Infrastructure.", StringComparison.Ordinal)
+                    || x.dependency.StartsWith("Npgsql.", StringComparison.Ordinal)
+                    || x.dependency.StartsWith("iTextSharp.", StringComparison.Ordinal))
+                .Select(x => x.owner + " -> " + x.dependency).Distinct().ToArray();
+            Assert.Empty(offenders);
+        }
+    }
+    [Fact]
     public void Demo_bridges_have_no_http_or_process_launch_dependencies()
     {
         var guarded = new HashSet<string> {

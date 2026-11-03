@@ -40,6 +40,15 @@ public class CompositionAndNavigationTests
             Assert.Same(configuration.GetValue(services), configuration.GetValue(services));
             Assert.Same(factory.GetValue(services), factory.GetValue(services));
                         var provider = (ServiceProvider)type.GetField("provider", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services);
+            using (var scope = provider.CreateScope()) using (var other = provider.CreateScope()) {
+                var uow = scope.ServiceProvider.GetRequiredService<SteeLog.Core.Application.Common.IUnitOfWork>();
+                var repo = scope.ServiceProvider.GetRequiredService<SteeLog.Core.Application.OrdenesCompra.IOrdenesEscritura>();
+                var stock = scope.ServiceProvider.GetRequiredService<SteeLog.Core.Application.Inventario.IInventarioEscritura>();
+                var repoField = repo.GetType().GetField("uow", BindingFlags.Instance | BindingFlags.NonPublic);
+                var stockField = stock.GetType().GetField("uow", BindingFlags.Instance | BindingFlags.NonPublic);
+                Assert.Same(uow, repoField.GetValue(repo)); Assert.Same(uow, stockField.GetValue(stock));
+                Assert.NotSame(uow, other.ServiceProvider.GetRequiredService<SteeLog.Core.Application.Common.IUnitOfWork>());
+            }
             ((IDisposable)services).Dispose();
             Assert.Throws<ObjectDisposedException>(() => provider.CreateScope());
         } finally { Directory.Delete(path, true); }

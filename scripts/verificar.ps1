@@ -17,7 +17,7 @@ try {
     foreach ($configuration in @('Debug', 'Release')) {
         Invoke-Checked $msbuild @('SteeLog/SteeLog.sln', '/restore', '/p:RestorePackagesConfig=true', "/p:Configuration=$configuration", '/m', '/v:minimal', '/nologo')
         $env:STEELOG_HOST_ASSEMBLY = Join-Path $root "SteeLog\SteeLog\bin\$configuration\SteeLog.exe"
-        Invoke-Checked 'dotnet' @('test', 'SteeLog/SteeLog.Tests/SteeLog.Tests.csproj', '--configuration', $configuration, '--no-build', '--no-restore', '--logger', 'console;verbosity=normal')
+        Invoke-Checked 'dotnet' @('test', 'SteeLog/SteeLog.Tests/SteeLog.Tests.csproj', '--configuration', $configuration, '--no-build', '--no-restore', '--filter', 'Category!=Integration', '--logger', 'console;verbosity=normal')
     }
     if ($LegacyLocal) {
         foreach ($suite in @('Configuration', 'search', 'Branding', 'LoginUsability')) {

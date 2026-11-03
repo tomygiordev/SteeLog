@@ -6,15 +6,22 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using System.Threading.Tasks;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using SteeLog.Domain.OrdenesCompra;
 using SteeLog.Modelos;
+using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesRevision : Form
+    public class Vista_OrdenesRevision : Form, IOrdenesVista
     {
-        private readonly OrdenCompraDatos _ordenDatos = new OrdenCompraDatos();
+        private OrdenesPresenter _presenter;
+        private readonly CargaVigente _cargas = new CargaVigente();
+        private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
+        private bool _permiteRecepcion;
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
         private int _idOrden;
 
@@ -40,12 +47,25 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         public Vista_OrdenesRevision()
         {
             InitializeComponent();
+            Disposed += (s, e) => _cargas.Dispose();
+            Load += Vista_OrdenesRevision_Load;
         }
+        private async void Vista_OrdenesRevision_Load(object sender, EventArgs e)
+        {
+            if (DesignMode) return;
+            _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
+            if (_idOrden > 0) await CargarOrden();
+        }
+        public void SetOcupada(bool ocupada) { if (!IsDisposed && !Disposing && btnConfirmar != null) btnConfirmar.Enabled = !ocupada && _modelo.Listo && _permiteRecepcion; }
+        public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
 
         public void SetOrder(int idOrden)
         {
             _idOrden = idOrden;
-            CargarOrden();
+            _modelo.Seleccionar(idOrden);
+            _permiteRecepcion = false;
+            if (btnConfirmar != null) btnConfirmar.Enabled = false;
+            if (_presenter != null) _ = CargarOrden();
         }
 
         private void InitializeComponent()
@@ -252,11 +272,16 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             ResumeLayout(false);
         }
 
-        private void CargarOrden()
+        private async Task CargarOrden()
         {
             try
             {
-                var orden = _ordenDatos.ObtenerOrdenPorId(_idOrden);
+                var idSolicitado = _idOrden;
+                using (var carga = _cargas.Iniciar(this, () => IsDisposed || Disposing)) {
+                var lector = LocalServices.Current.CrearOrdenesPresenter(carga);
+                var resultado = await lector.ObtenerAsync(idSolicitado, carga.Token);
+                if (!carga.EsActual || _idOrden != idSolicitado || !resultado.Exitoso) return;
+                var orden = OrdenesMapeo.Orden(resultado.Valor);
                 if (orden == null)
                     throw new Exception("La orden no existe.");
 
@@ -275,7 +300,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     _detalles.Add(detalle);
 
                 bool puedeRevisar = (SessionManager.Role == UserRole.Galpon || SessionManager.Role == UserRole.Admin)
-                    && OrdenCompraEstados.PermiteRecepcion(orden.estado);
+                    && EstadosOrden.PermiteRecepcion(orden.estado);
                 dgvDetalles.ReadOnly = !puedeRevisar;
                 dgvDetalles.Columns["colMaterial"].ReadOnly = true;
                 dgvDetalles.Columns["colPedida"].ReadOnly = true;
@@ -286,6 +311,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 // cuando se permite la revisión (fix para entregas parciales)
                 dgvDetalles.Columns["colRecibida"].ReadOnly = !puedeRevisar;
                 dgvDetalles.Columns["colObs"].ReadOnly = !puedeRevisar;
+                _permiteRecepcion = puedeRevisar;
+                _modelo.Aplicar(idSolicitado);
                 btnConfirmar.Enabled = puedeRevisar;
                 btnAplicarSiguiente.Enabled = puedeRevisar;
                 btnCompletarActual.Enabled = puedeRevisar;
@@ -293,6 +320,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 txtCantidadRapida.Enabled = puedeRevisar;
 
                 SeleccionarSiguientePendiente(0, true);
+                }
             }
             catch (Exception ex)
             {
@@ -471,8 +499,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
         }
 
-        private void BtnConfirmar_Click(object sender, EventArgs e)
+        private async void BtnConfirmar_Click(object sender, EventArgs e)
         {
+            if (!_modelo.Listo || _modelo.Id != _idOrden || !_permiteRecepcion) return;
             if (SessionManager.Role != UserRole.Galpon && SessionManager.Role != UserRole.Admin)
             {
                 ToastNotification.ShowWarning("Solo Galpón o Admin pueden confirmar la recepción.");
@@ -490,11 +519,13 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 if (!ConfirmarImpactoStock())
                     return;
 
-                string nuevoEstado = _ordenDatos.ConfirmarRecepcion(
-                    _idOrden,
-                    _detalles.ToList(),
-                    SessionManager.Username,
+                int idSolicitado = _idOrden;
+                var resultado = await _presenter.RecibirAsync(idSolicitado,
+                    _detalles.ToDictionary(x => x.id_detalle, x => x.cantidad_recibida),
+                    _detalles.ToDictionary(x => x.id_detalle, x => x.observacion_item),
                     txtObservacionesRecepcion.Text.Trim());
+                if (IsDisposed || Disposing || !resultado.Exitoso || !_modelo.Listo || _idOrden != idSolicitado) return;
+                string nuevoEstado = resultado.Valor == EstadoOrden.RecibidaCompleta ? "Recibida Completa" : "Recibida Parcial";
 
                 ToastNotification.ShowSuccess("Recepción confirmada: " + nuevoEstado + ".");
                 OnRecepcionConfirmada?.Invoke(_idOrden);

@@ -97,7 +97,6 @@ internal static class BrandingSmoke
         var now = DateTime.Today;
         var cases = new[] {
             new object[] { typeof(MovimientoPDF), new object[] { new InformeMovimientoDetalle { tipo_movimiento="ENTRADA", fecha=now } } },
-            new object[] { typeof(OrdenesPendientesPDF), new object[0] },
             new object[] { typeof(KardexPDF), new object[] { "Material demo", now, now } },
             new object[] { typeof(ConteoInventarioPDF), new object[] { new ConteoInventario { estado="DEMO" }, false, false } },
             new object[] { typeof(InformeObraPDF), new object[] { "Obra demo", 0, 0m, false, null, null } },
@@ -111,9 +110,33 @@ internal static class BrandingSmoke
             { PdfWriter.GetInstance(doc, stream); doc.Open(); var parameters = new List<object> { doc }; parameters.AddRange((object[])item[1]); method.Invoke(method.IsStatic ? null : Activator.CreateInstance(type), parameters.ToArray()); doc.Close(); }
             VerifyPdf(path);
         }
+        string ordenes = Path.Combine(output, "Ordenes-pendientes-real.pdf");
+        var servicesType = asm.GetType("SteeLog.CompositionRoot.LocalServices", true);
+        var services = servicesType.GetProperty("Current", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null, null);
+        var renderer = servicesType.GetProperty("OrdenesPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
+        var generarOrdenes = renderer.GetType().GetMethod("Generar");
+        var itemType = generarOrdenes.GetParameters()[1].ParameterType.GetGenericArguments()[0];
+        var listType = typeof(List<>).MakeGenericType(itemType);
+        var pendientes = (System.Collections.IList)Activator.CreateInstance(listType);
+        foreach (var values in new[] {
+            new object[] { "OC-101", "Proveedor A", "Chapa zinc", 12m, 5m, 7m },
+            new object[] { "OC-102", "Proveedor B", "Tornillos", 40m, 10m, 30m }
+        }) {
+            var row = Activator.CreateInstance(itemType);
+            var fields = new[] { "Numero", "Proveedor", "Material", "Pedida", "Recibida", "Faltante" };
+            for (int i = 0; i < fields.Length; i++) itemType.GetProperty(fields[i]).SetValue(row, values[i], null);
+            pendientes.Add(row);
+        }
+        generarOrdenes.Invoke(renderer, new object[] { ordenes, pendientes });
+        VerifyPdf(ordenes);
+        using (var reader = new PdfReader(ordenes)) {
+            var text = PdfTextExtractor.GetTextFromPage(reader, 1);
+            foreach (var value in new[] { "OC-101", "Proveedor A", "Chapa zinc", "12", "5", "7", "OC-102", "Proveedor B", "Tornillos", "40", "10", "30" })
+                Check(text.Contains(value), "Ordenes pendientes: falta " + value + ": " + text);
+        }
         string kardex = Path.Combine(output, "Kardex-real.pdf");
         KardexPDF.Generar(kardex, new List<KardexItem>(), "Material demo", now, now, false, false); VerifyPdf(kardex);
-        Console.WriteLine("OK: 6 headers, Kardex, resources, icon and forms");
+        Console.WriteLine("OK: 6 headers, Kardex, ordenes con datos, resources, icon and forms");
     }
     static void VerifyPdf(string path)
     {

@@ -9,5 +9,9 @@
   <ItemGroup>
     <ProjectReference Include="..\SteeLog.Application\SteeLog.Application.csproj"/>
   </ItemGroup>
-  <ItemGroup><Reference Include="System.Security" /></ItemGroup>
+  <ItemGroup>
+    <Reference Include="System.Security" />
+    <Reference Include="itextsharp"><HintPath>..\SteeLog\packages\itextsharp.dll</HintPath></Reference>
+    <Reference Include="BouncyCastle.Crypto"><HintPath>..\SteeLog\packages\BouncyCastle.Crypto.dll</HintPath></Reference>
+  </ItemGroup>
 </Project>

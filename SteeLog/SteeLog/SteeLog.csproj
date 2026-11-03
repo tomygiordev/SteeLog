@@ -192,7 +192,6 @@
     <Compile Include="Datos\RecorteDatos.cs" />
     <Compile Include="Datos\ReporteStockDatos.cs" />
     <Compile Include="Datos\InventarioDatos.cs" />
-    <Compile Include="Datos\OrdenCompraDatos.cs" />
     <Compile Include="Datos\SortableBindingList.cs" />
     <Compile Include="Modelos\Categoria.cs" />
     <Compile Include="Modelos\CanaletaPlegado.cs" />
@@ -209,7 +208,6 @@
     <Compile Include="Modelos\MovimientoMaterial.cs" />
     <Compile Include="Modelos\OrdenCompra.cs" />
     <Compile Include="Modelos\OrdenCompraDetalle.cs" />
-    <Compile Include="Modelos\OrdenCompraEstados.cs" />
     <Compile Include="Modelos\Herramienta.cs" />
     <Compile Include="Modelos\HerramientaMovimiento.cs" />
     <Compile Include="Modelos\Insumo.cs" />
@@ -382,7 +380,6 @@
     <Compile Include="Reportes\InformeObraPDF.cs" />
     <Compile Include="Reportes\KardexPDF.cs" />
     <Compile Include="Reportes\MovimientoPDF.cs" />
-    <Compile Include="Reportes\OrdenesPendientesPDF.cs" />
     <Compile Include="Reportes\ConteoInventarioPDF.cs" />
     <Compile Include="Vistas\Reportes\ModalFechasInformeObra.cs">
       <SubType>Form</SubType>
@@ -558,8 +555,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CompositionRoot\LocalServices.cs" />
+    <Compile Include="CompositionRoot\RecursosPdfLocales.cs" />
     <Compile Include="CompositionRoot\UseCaseExecutor.cs" />
     <Compile Include="Presentation\IUseCaseExecutor.cs" />
+    <Compile Include="Presentation\OrdenesPresenter.cs" />
+    <Compile Include="Presentation\OrdenesMapeo.cs" />
+    <Compile Include="Presentation\CargaVigente.cs" />
     <Compile Include="Presentation\NavigationCache.cs" />
     <Reference Include="Microsoft.Extensions.DependencyInjection"><HintPath>..\packages\Microsoft.Extensions.DependencyInjection.9.0.12\lib\net462\Microsoft.Extensions.DependencyInjection.dll</HintPath></Reference>
     <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions"><HintPath>..\packages\Microsoft.Extensions.DependencyInjection.Abstractions.9.0.12\lib\net462\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath></Reference>
