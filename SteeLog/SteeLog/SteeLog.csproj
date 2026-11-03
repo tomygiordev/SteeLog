@@ -558,6 +558,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="CompositionRoot\LocalServices.cs" />
+    <Compile Include="CompositionRoot\UseCaseExecutor.cs" />
+    <Compile Include="Presentation\IUseCaseExecutor.cs" />
+    <Compile Include="Presentation\NavigationCache.cs" />
+    <Reference Include="Microsoft.Extensions.DependencyInjection"><HintPath>..\packages\Microsoft.Extensions.DependencyInjection.9.0.12\lib\net462\Microsoft.Extensions.DependencyInjection.dll</HintPath></Reference>
+    <Reference Include="Microsoft.Extensions.DependencyInjection.Abstractions"><HintPath>..\packages\Microsoft.Extensions.DependencyInjection.Abstractions.9.0.12\lib\net462\Microsoft.Extensions.DependencyInjection.Abstractions.dll</HintPath></Reference>
+    <Content Include="..\..\demo\actualizaciones\*"><Link>demo\actualizaciones\%(Filename)%(Extension)</Link><CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory></Content>
     <ProjectReference Include="..\SteeLog.Domain\SteeLog.Domain.csproj"><Name>SteeLog.Domain</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>
     <ProjectReference Include="..\SteeLog.Application\SteeLog.Application.csproj"><Name>SteeLog.Application</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>
     <ProjectReference Include="..\SteeLog.Infrastructure\SteeLog.Infrastructure.csproj"><Name>SteeLog.Infrastructure</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>

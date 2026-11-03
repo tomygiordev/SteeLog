@@ -1,4 +1,4 @@
-﻿using Guna.UI2.WinForms; 
+using Guna.UI2.WinForms;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -127,21 +127,6 @@ namespace SteeLog
             // Pequeño retardo para que la interfaz se muestre primero y el toast se asome despues suavemente
             await Task.Delay(1000);
 
-            // 1. Chequear actualizaciones automáticamente al iniciar
-            try
-            {
-                var update = await UpdaterService.CheckForUpdateAsync();
-                if (update != null)
-                {
-                    var modal = new ModalActualizacion(update);
-                    modal.ShowDialog(this);
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Error al chequear actualizaciones al inicio: " + ex.Message);
-            }
-            
             // 2. Chequear stock bajo
             try
             {
@@ -225,7 +210,7 @@ namespace SteeLog
         #region MediaSubMenu
         private void button2_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Materiales());
+            openChildForm(() => new Vista_Materiales());
             //..
             //your codes
             //..
@@ -234,7 +219,7 @@ namespace SteeLog
 
         private void button3_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Categorias());
+            openChildForm(() => new Vista_Categorias());
             //..
             //your codes
             //..
@@ -251,7 +236,7 @@ namespace SteeLog
 
         private void button5_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Proveedores());
+            openChildForm(() => new Vista_Proveedores());
             //..
             //your codes
             //..
@@ -259,12 +244,12 @@ namespace SteeLog
         }
         private void btnRecortes_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Recortes());
+            openChildForm(() => new Vista_Recortes());
             hideSubMenu();
         }
         private void btnFletes_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Fletes());
+            openChildForm(() => new Vista_Fletes());
             hideSubMenu();
         }
         #endregion
@@ -312,19 +297,19 @@ namespace SteeLog
         #region ToolsSubMenu
         private void button13_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_ReporteStock());
+            openChildForm(() => new Vista_ReporteStock());
             hideSubMenu();
         }
 
         private void button12_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Kardex());
+            openChildForm(() => new Vista_Kardex());
             hideSubMenu();
         }
 
         private void button10_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_InformeObra());
+            openChildForm(() => new Vista_InformeObra());
             hideSubMenu();
         }
 
@@ -344,13 +329,13 @@ namespace SteeLog
 
         private void btnHelp_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Inventario());
+            openChildForm(() => new Vista_Inventario());
             hideSubMenu();
         }
 
         private void btnInventarioGeneral_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Inventario());
+            openChildForm(() => new Vista_Inventario());
             hideSubMenu();
         }
 
@@ -403,7 +388,7 @@ namespace SteeLog
             }
             else
             {
-                openChildForm(new Vista_HistorialMovimientos());
+                openChildForm(() => new Vista_HistorialMovimientos());
             }
         }
 
@@ -418,7 +403,7 @@ namespace SteeLog
             }
             else
             {
-                openChildForm(new Vista_Conteo());
+                openChildForm(() => new Vista_Conteo());
             }
         }
 
@@ -469,13 +454,19 @@ namespace SteeLog
             openChildForm(form);
         }
 
+        public void openChildForm<T>(Func<T> factory) where T : Form
+        {
+            var form = SteeLog.Presentation.NavigationCache.GetOrCreate(childFormsCache, factory, cached => cached.IsDisposed);
+            openChildForm(form);
+        }
+
         public void openChildForm(Form childForm)
         {
             try
             {
                 Type formType = childForm.GetType();
 
-                if (activeForm != null)
+                if (activeForm != null && !activeForm.IsDisposed)
                 {
                     if (activeForm.GetType() == formType)
                     {
@@ -653,43 +644,43 @@ namespace SteeLog
 
         private void btnEntrada_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Movimientos());
+            openChildForm(() => new Vista_Movimientos());
             hideSubMenu();
         }
 
         private void btnHistorial_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_HistorialMovimientos());
+            openChildForm(() => new Vista_HistorialMovimientos());
             hideSubMenu();
         }
 
         private void Fletes_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Fletes());
+            openChildForm(() => new Vista_Fletes());
             hideSubMenu();
         }
 
         private void Obras_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Obras());
+            openChildForm(() => new Vista_Obras());
             hideSubMenu();
         }
 
         private void Ubicaciones_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Ubicaciones());
+            openChildForm(() => new Vista_Ubicaciones());
             hideSubMenu();
         }
 
         private void btnHerramientas_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Herramientas());
+            openChildForm(() => new Vista_Herramientas());
             hideSubMenu();
         }
 
         private void btnInsumos_Click(object sender, EventArgs e)
         {
-            openChildForm(new Vista_Insumos());
+            openChildForm(() => new Vista_Insumos());
             hideSubMenu();
         }
 
@@ -742,7 +733,7 @@ namespace SteeLog
             btnNuevaOrden.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
             btnNuevaOrden.Click += (s, e) =>
             {
-                openChildForm(new Vista_OrdenesModulo());
+                openChildForm(() => new Vista_OrdenesModulo());
                 hideSubMenu();
             };
             panelMovimientos.Controls.Add(btnNuevaOrden);
@@ -782,7 +773,7 @@ namespace SteeLog
             btnCanaletasPlegados.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
             btnCanaletasPlegados.Click += (s, e) =>
             {
-                openChildForm(new Vista_CanaletasPlegados());
+                openChildForm(() => new Vista_CanaletasPlegados());
                 hideSubMenu();
             };
             panelGestion.Controls.Add(btnCanaletasPlegados);
@@ -849,7 +840,7 @@ namespace SteeLog
                 var update = await UpdaterService.CheckForUpdateAsync(throwOnError: true);
                 if (update == null)
                 {
-                    ToastNotification.ShowSuccess("Ya tenés la última versión (" + AppVersion.Current + ").");
+                    ToastNotification.ShowSuccess("No hay una versión demo más reciente (actual: " + AppVersion.Current + ").");
                 }
                 else
                 {

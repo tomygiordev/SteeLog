@@ -245,7 +245,7 @@ namespace SteeLog.Vistas
                 if (loginClosed || IsDisposed || Disposing) return;
                 if (result.Success)
                 {
-                    SessionManager.SetSession(result.Email, result.AccessToken, result.RefreshToken, result.ExpiresIn);
+                    SessionManager.SetSession(result.Email);
                     CredentialStore.Save(email, password);
                     DialogResult = DialogResult.OK;
                     Close();

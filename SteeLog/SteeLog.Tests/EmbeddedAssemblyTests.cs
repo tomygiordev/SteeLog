@@ -10,6 +10,8 @@ public class EmbeddedAssemblyTests
     [InlineData("SteeLog.Domain")]
     [InlineData("SteeLog.Application")]
     [InlineData("SteeLog.Infrastructure")]
+    [InlineData("Microsoft.Extensions.DependencyInjection")]
+    [InlineData("Microsoft.Extensions.DependencyInjection.Abstractions")]
     public void Costura_resource_contains_loadable_expected_assembly(string expected)
     {
         var path = Environment.GetEnvironmentVariable("STEELOG_HOST_ASSEMBLY");

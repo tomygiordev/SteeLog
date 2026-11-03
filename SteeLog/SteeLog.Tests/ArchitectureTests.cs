@@ -98,7 +98,7 @@ public class ArchitectureTests
             }
         }
     }
-    static bool Forbidden(TypeReference t) => t.Namespace == "Npgsql" || t.Namespace.StartsWith("Npgsql.") || t.Namespace == "SteeLog.Infrastructure" || t.Namespace.StartsWith("SteeLog.Infrastructure.") || t.Namespace == "SteeLog.Datos" || t.Namespace.StartsWith("SteeLog.Datos.") || t.Namespace == "iTextSharp" || t.Namespace.StartsWith("iTextSharp.");
+    static bool Forbidden(TypeReference t) => t.Namespace == "Npgsql" || t.Namespace.StartsWith("Npgsql.") || t.Namespace == "SteeLog.Infrastructure" || t.Namespace.StartsWith("SteeLog.Infrastructure.") || t.Namespace == "SteeLog.Datos" || t.Namespace.StartsWith("SteeLog.Datos.") || t.Namespace == "iTextSharp" || t.Namespace.StartsWith("iTextSharp.") || t.Namespace == "Microsoft.Extensions.DependencyInjection" || t.Namespace.StartsWith("Microsoft.Extensions.DependencyInjection.");
     static SortedSet<string> Violations(AssemblyDefinition assembly)
     {
         var result = new SortedSet<string>(StringComparer.Ordinal);
@@ -164,6 +164,31 @@ public class ArchitectureTests
             Assert.Equal(entries.Length, entries.Distinct().Count());
             var expected = entries.Select(x => x.Substring(x.IndexOf(" | ", StringComparison.Ordinal) + 3));
             Assert.Equal(expected.OrderBy(x => x, StringComparer.Ordinal), actual);
+        }
+    }
+    [Fact]
+    public void Demo_bridges_have_no_http_or_process_launch_dependencies()
+    {
+        var guarded = new HashSet<string> {
+            "SteeLog.Servicios.SupabaseAuthService", "SteeLog.Servicios.SupabaseStorageService",
+            "SteeLog.Servicios.UpdaterService", "SteeLog.CompositionRoot.LocalServices"
+        };
+        using (var host = Read(HostPath))
+        {
+            var actual = Types(host.MainModule.Types).Where(t => guarded.Contains(Owner(t)))
+                .SelectMany(References).Where(t => t.Namespace.StartsWith("System.Net.Http", StringComparison.Ordinal)
+                    || (t.Namespace == "System.Diagnostics" && t.Name == "Process"))
+                .Select(t => t.FullName).Distinct().ToArray();
+            Assert.Empty(actual);
+        }
+        var adapters = new HashSet<string> { "SteeLog.Infrastructure.Identity.DemoAuthService", "SteeLog.Infrastructure.DemoUpdates.LocalDemoUpdateSource", "SteeLog.Infrastructure.Files.LocalPhotoStorage" };
+        using (var infra = Read(typeof(SteeLog.Infrastructure.Identity.DemoAuthService).Assembly.Location))
+        {
+            var actual = Types(infra.MainModule.Types).Where(t => adapters.Contains(Owner(t)))
+                .SelectMany(References).Where(t => t.Namespace.StartsWith("System.Net.Http", StringComparison.Ordinal)
+                    || (t.Namespace == "System.Diagnostics" && t.Name == "Process"))
+                .Select(t => t.FullName).Distinct().ToArray();
+            Assert.Empty(actual);
         }
     }
     [Fact]

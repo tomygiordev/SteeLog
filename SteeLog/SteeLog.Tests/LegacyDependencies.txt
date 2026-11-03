@@ -29,7 +29,6 @@ F7 | SteeLog.Datos.ComunDatos -> Npgsql.NpgsqlParameter
 F7 | SteeLog.Datos.ComunDatos -> Npgsql.NpgsqlParameterCollection
 F7 | SteeLog.Datos.ComunDatos -> SteeLog.Datos.ConexionDB
 F8 | SteeLog.Datos.ConexionDB -> Npgsql.NpgsqlConnection
-F8 | SteeLog.Datos.ConexionDB -> Npgsql.NpgsqlConnectionStringBuilder
 F8 | SteeLog.Datos.ConexionDB -> SteeLog.Datos.ConexionDB
 F5 | SteeLog.Datos.ConteoInventarioDatos -> Npgsql.NpgsqlCommand
 F5 | SteeLog.Datos.ConteoInventarioDatos -> Npgsql.NpgsqlConnection
@@ -147,8 +146,6 @@ F8 | SteeLog.Datos.ReporteStockDatos -> SteeLog.Datos.ConexionDB
 F8 | SteeLog.Datos.ResumenInventario -> SteeLog.Datos.ResumenInventario
 F8 | SteeLog.Datos.SortableBindingList`1 -> SteeLog.Datos.SortableBindingList`1
 F8 | SteeLog.Datos.SortableBindingList`1 -> SteeLog.Datos.SortableBindingList`1<T>
-F8 | SteeLog.Program -> Npgsql.NpgsqlConnection
-F8 | SteeLog.Program -> SteeLog.Datos.ConexionDB
 F8 | SteeLog.Reportes.ConteoInventarioPDF -> SteeLog.Datos.ReporteStockDatos
 F8 | SteeLog.Reportes.ConteoInventarioPDF -> iTextSharp.text.BaseColor
 F8 | SteeLog.Reportes.ConteoInventarioPDF -> iTextSharp.text.Document

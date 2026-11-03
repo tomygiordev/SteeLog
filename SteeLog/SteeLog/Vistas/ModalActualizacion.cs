@@ -3,6 +3,8 @@ using System.Drawing;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.Servicios;
+using SteeLog.Core.Application.Actualizaciones;
+using System.Threading;
 
 namespace SteeLog.Vistas
 {
@@ -18,6 +20,7 @@ namespace SteeLog.Vistas
         private Guna.UI2.WinForms.Guna2Button btnCancelar;
 
         private readonly UpdateInfo _update;
+        private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
 
         public ModalActualizacion(UpdateInfo update)
         {
@@ -27,7 +30,7 @@ namespace SteeLog.Vistas
 
         private void InitUI()
         {
-            this.Text = "Actualización disponible";
+            this.Text = "Actualización DEMO";
             this.Size = new Size(460, 320);
             this.FormBorderStyle = FormBorderStyle.FixedDialog;
             this.MaximizeBox = false;
@@ -38,7 +41,7 @@ namespace SteeLog.Vistas
 
             lblTitulo = new Label
             {
-                Text = "Nueva versión disponible",
+                Text = "Actualización demostrativa",
                 Font = new Font("Bahnschrift SemiBold", 14F),
                 ForeColor = Color.FromArgb(39, 174, 96),
                 Location = new Point(20, 20),
@@ -100,7 +103,7 @@ namespace SteeLog.Vistas
 
             btnActualizar = new Guna.UI2.WinForms.Guna2Button
             {
-                Text = "Actualizar ahora",
+                Text = "Preparar paquete demo",
                 FillColor = Color.FromArgb(39, 174, 96),
                 ForeColor = Color.White,
                 Font = new Font("Bahnschrift Light", 11F),
@@ -111,14 +114,14 @@ namespace SteeLog.Vistas
 
             btnCancelar = new Guna.UI2.WinForms.Guna2Button
             {
-                Text = "Ahora no",
+                Text = "Cancelar",
                 FillColor = Color.FromArgb(55, 70, 62),
                 ForeColor = Color.FromArgb(180, 180, 180),
                 Font = new Font("Bahnschrift Light", 11F),
                 Location = new Point(235, 240),
                 Size = new Size(200, 36)
             };
-            btnCancelar.Click += (s, e) => this.Close();
+            btnCancelar.Click += (s, e) => { cancellation.Cancel(); this.Close(); };
 
             this.Controls.AddRange(new Control[] {
                 lblTitulo, lblVersion, lblNotas, txtNotas,
@@ -126,31 +129,44 @@ namespace SteeLog.Vistas
             });
         }
 
+        protected override void OnFormClosing(FormClosingEventArgs e)
+        {
+            cancellation.Cancel();
+            base.OnFormClosing(e);
+        }
+
         private async void BtnActualizar_Click(object sender, EventArgs e)
         {
             btnActualizar.Enabled = false;
-            btnCancelar.Enabled = false;
+            btnCancelar.Enabled = true;
             progressBar.Visible = true;
             lblProgreso.Visible = true;
-            lblProgreso.Text = "Descargando...";
+            lblProgreso.Text = "Preparando paquete...";
 
             var progress = new Progress<int>(p =>
             {
+                if (IsDisposed || Disposing) return;
                 progressBar.Value = p;
-                lblProgreso.Text = $"Descargando... {p}%";
+                lblProgreso.Text = $"Preparando paquete... {p}%";
             });
 
             try
             {
-                await UpdaterService.DownloadAndInstallAsync(_update, progress);
+                var path = await UpdaterService.PrepareAsync(_update, progress, cancellation.Token);
+                if (IsDisposed) return;
+                lblProgreso.Text = "Paquete demo preparado; no se instaló ninguna actualización.";
+                btnCancelar.Text = "Cerrar";
+                MessageBox.Show("Paquete demo preparado en:\n" + path + "\nNo se modificó ni reinició la aplicación.", "Demostración", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
+                if (IsDisposed || Disposing) return;
                 btnActualizar.Enabled = true;
                 btnCancelar.Enabled = true;
                 progressBar.Visible = false;
                 lblProgreso.Visible = false;
-                MessageBox.Show("Error al actualizar: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                MessageBox.Show("Error al preparar paquete demo: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }

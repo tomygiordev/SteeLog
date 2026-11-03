@@ -626,7 +626,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             var parent = TopLevelControl as VistaGeneral;
             if (parent != null)
-                parent.openChildForm(new Vista_OrdenesModulo());
+                parent.openChildForm(() => new Vista_OrdenesModulo());
         }
 
         private void BtnCompletarTodo_Click(object sender, EventArgs e)

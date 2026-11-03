@@ -1,0 +1,6 @@
+{
+  "version": "99.0.0",
+  "paquete": "paquete-demo.txt",
+  "sha256": "b7788a57e7ed6f8dd886c1e456e07e757582176ce68caadfeeabe1a99559ffc1",
+  "notas": "Demostración local: no instala ni modifica la aplicación."
+}

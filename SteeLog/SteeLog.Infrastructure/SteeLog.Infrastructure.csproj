@@ -9,4 +9,5 @@
   <ItemGroup>
     <ProjectReference Include="..\SteeLog.Application\SteeLog.Application.csproj"/>
   </ItemGroup>
+  <ItemGroup><Reference Include="System.Security" /></ItemGroup>
 </Project>
