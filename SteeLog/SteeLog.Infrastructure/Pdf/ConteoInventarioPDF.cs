@@ -1,18 +1,20 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
-using SteeLog.Datos;
-using SteeLog.Modelos;
-using SteeLog.Servicios;
+using SteeLog.Core.Application.Conteos;
+using SteeLog.Core.Application.Reportes;
 
-namespace SteeLog.Reportes
+
+namespace SteeLog.Infrastructure.Pdf
 {
-    public class ConteoInventarioPDF
+    public sealed class ConteoInventarioPDF : IConteoPdf
     {
+        private readonly IRecursosPdf recursos;
+        public ConteoInventarioPDF(IRecursosPdf recursos) { this.recursos = recursos ?? throw new ArgumentNullException(nameof(recursos)); }
         private static readonly BaseColor COLOR_VERDE_OSCURO  = new BaseColor(25,  50,  35);
         private static readonly BaseColor COLOR_VERDE_HEADER  = new BaseColor(35,  63,  43);
         private static readonly BaseColor COLOR_VERDE_ACCENT  = new BaseColor(78,  91,  63);
@@ -56,43 +58,44 @@ namespace SteeLog.Reportes
             fntPie         = new Font(bfn,  8, Font.NORMAL, new BaseColor(120, 120, 120));
         }
 
-        public static string SugerirNombreArchivo(ConteoInventario conteo)
+        public string SugerirNombreArchivo(ConteoLectura conteo)
         {
-            if (conteo == null) return $"Conteo_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
-            return $"Conteo_{conteo.id_conteo}_{conteo.estado}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf";
+            if (conteo == null) return $"Conteo_{recursos.Capturar().FechaLocal:yyyyMMdd_HHmmss}.pdf";
+            var estado = (conteo.Estado ?? "").ToLowerInvariant();
+            if (estado != "abierto" && estado != "finalizado" && estado != "cancelado") estado = "desconocido";
+            return $"Conteo_{conteo.Id}_{estado}_{recursos.Capturar().FechaLocal:yyyyMMdd_HHmmss}.pdf";
         }
 
-        public static void Generar(
+        public void Generar(
             string rutaDestino,
-            ConteoInventario conteo,
-            List<ConteoInventarioDiferencia> detalle)
+            ConteoLectura conteo,
+            IReadOnlyList<DetalleConteoLectura> detalles, IReadOnlyDictionary<int, SeccionConteo> secciones, bool esAdmin)
         {
             if (conteo == null) throw new ArgumentNullException(nameof(conteo));
-            detalle = detalle ?? new List<ConteoInventarioDiferencia>();
+            if (string.IsNullOrWhiteSpace(rutaDestino)) throw new ArgumentException("La ruta de destino es obligatoria.", nameof(rutaDestino));
+            var detalle = (detalles ?? Array.Empty<DetalleConteoLectura>()).ToList();
+            var marca = recursos.Capturar();
 
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
-            bool finalizado = string.Equals(conteo.estado, "finalizado", StringComparison.OrdinalIgnoreCase);
 
-            Document doc = new Document(PageSize.A4.Rotate(), 35, 35, 40, 55);
-            PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(rutaDestino, FileMode.Create));
-            writer.PageEvent = new PieConteo();
-            doc.Open();
+            bool finalizado = string.Equals(conteo.Estado, "finalizado", StringComparison.OrdinalIgnoreCase);
 
-            PdfAction action = PdfAction.JavaScript("this.print(true);", writer);
-            writer.AddJavaScript(action);
+            using (var stream = new FileStream(rutaDestino, FileMode.Create))
+            using (var doc = new Document(PageSize.A4.Rotate(), 35, 35, 40, 55))
+            {
+                PdfWriter writer = PdfWriter.GetInstance(doc, stream);
+                writer.PageEvent = new PieConteo(marca.Pie);
+                doc.Open();
+                writer.AddJavaScript(PdfAction.JavaScript("this.print(true);", writer));
 
-            AgregarEncabezado(doc, conteo, esAdmin, finalizado);
-
-            var mapeoSecciones = new ReporteStockDatos().ObtenerMapeoSecciones();
-            AgregarTablaDetalle(doc, detalle, esAdmin, finalizado, mapeoSecciones);
-
-            AgregarResumen(doc, detalle, esAdmin, finalizado);
-            AgregarObservaciones(doc, conteo);
-
-            doc.Close();
+                AgregarEncabezado(doc, conteo, marca);
+                var mapeoSecciones = secciones ?? new Dictionary<int, SeccionConteo>();
+                AgregarTablaDetalle(doc, detalle, esAdmin, finalizado, mapeoSecciones);
+                AgregarResumen(doc, detalle, esAdmin, finalizado);
+                AgregarObservaciones(doc, conteo);
+            }
         }
 
-        private static void AgregarEncabezado(Document doc, ConteoInventario conteo, bool esAdmin, bool finalizado)
+        private static void AgregarEncabezado(Document doc, ConteoLectura conteo, MarcaPdf marca)
         {
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -100,7 +103,7 @@ namespace SteeLog.Reportes
 
             PdfPCell cellIzq = new PdfPCell { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
-            cellIzq.AddElement(Branding.PdfLogo(150, 62));
+            var logo = Image.GetInstance(marca.LogoPng); logo.ScaleToFit(150, 62); logo.Alignment = Element.ALIGN_LEFT; cellIzq.AddElement(logo);
 
             cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8 });
             cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2 });
@@ -109,16 +112,16 @@ namespace SteeLog.Reportes
 
             PdfPCell cellDer = new PdfPCell { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
             cellDer.AddElement(new Paragraph("CONTEO FÍSICO DE INVENTARIO", fntTitulo) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
-            cellDer.AddElement(new Paragraph($"Comprobante de conteo N° {conteo.id_conteo.ToString("D6")}", fntSubtitulo) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
+            cellDer.AddElement(new Paragraph($"Comprobante de conteo N° {conteo.Id.ToString("D6")}", fntSubtitulo) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
 
-            string estadoLabel = (conteo.estado ?? "-").ToUpper();
+            string estadoLabel = (conteo.Estado ?? "-").ToUpper();
             cellDer.AddElement(new Paragraph(
                 $"Estado: {estadoLabel}",
                 new Font(Font.FontFamily.HELVETICA, 11, Font.BOLD, COLOR_TEXTO))
                 { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
 
             cellDer.AddElement(new Paragraph(
-                $"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}",
+                $"Generado: {marca.FechaLocal:dd/MM/yyyy HH:mm}",
                 new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL, new BaseColor(120, 120, 120)))
                 { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
             headerTable.AddCell(cellDer);
@@ -130,9 +133,9 @@ namespace SteeLog.Reportes
             doc.Add(sep);
         }
 
-        private static void AgregarTablaDetalle(Document doc, List<ConteoInventarioDiferencia> detalle, bool esAdmin, bool finalizado, Dictionary<int, ReporteStockMapeo> mapeoSecciones)
+        private static void AgregarTablaDetalle(Document doc, List<DetalleConteoLectura> detalle, bool esAdmin, bool finalizado, IReadOnlyDictionary<int, SeccionConteo> mapeoSecciones)
         {
-            int cols = esAdmin && finalizado ? 7 : 4;
+            int cols = esAdmin && finalizado ? 7 : 5;
             PdfPTable tabla = new PdfPTable(cols);
             tabla.WidthPercentage = 100;
             tabla.SpacingAfter = 12;
@@ -140,7 +143,7 @@ namespace SteeLog.Reportes
             if (esAdmin && finalizado)
                 tabla.SetWidths(new float[] { 6f, 35f, 17f, 12f, 12f, 10f, 8f });
             else
-                tabla.SetWidths(new float[] { 8f, 52f, 22f, 18f });
+                tabla.SetWidths(new float[] { 7f, 40f, 20f, 15f, 18f });
 
             PdfPCell cSec = new PdfPCell(new Phrase(finalizado ? "DETALLE DE DIFERENCIAS" : "DETALLE DE MATERIALES CARGADOS", fntSeccion))
             {
@@ -173,9 +176,9 @@ namespace SteeLog.Reportes
             int index = 1;
             foreach (var grupo in grupos)
             {
-                if (!string.IsNullOrEmpty(grupo.nombreSeccion))
+                if (!string.IsNullOrEmpty(grupo.Nombre))
                 {
-                    tabla.AddCell(new PdfPCell(new Phrase(grupo.nombreSeccion.ToUpperInvariant(), fntSeccion))
+                    tabla.AddCell(new PdfPCell(new Phrase(grupo.Nombre.ToUpperInvariant(), fntSeccion))
                     {
                         BackgroundColor = COLOR_SEPARADOR,
                         Border = Rectangle.NO_BORDER,
@@ -190,19 +193,19 @@ namespace SteeLog.Reportes
                 {
                     BaseColor bg = alt ? COLOR_FONDO_FILA : COLOR_BLANCO;
                     AgregarDato(tabla, index.ToString(), bg, Element.ALIGN_CENTER);
-                    AgregarDato(tabla, d.material_nombre_snapshot ?? "-", bg, Element.ALIGN_LEFT);
-                    AgregarDato(tabla, string.IsNullOrWhiteSpace(d.material_categoria_snapshot) ? "-" : d.material_categoria_snapshot, bg, Element.ALIGN_LEFT);
-                    AgregarDato(tabla, d.cantidad_contada.ToString("N2", culture), bg, Element.ALIGN_CENTER, fntCeldaBold);
+                    AgregarDato(tabla, d.Nombre ?? "-", bg, Element.ALIGN_LEFT);
+                    AgregarDato(tabla, string.IsNullOrWhiteSpace(d.Categoria) ? "-" : d.Categoria, bg, Element.ALIGN_LEFT);
+                    AgregarDato(tabla, d.Cantidad.ToString("N2", culture), bg, Element.ALIGN_CENTER, fntCeldaBold);
 
                     if (esAdmin && finalizado)
                     {
-                        AgregarDato(tabla, d.stock_sistema.HasValue ? d.stock_sistema.Value.ToString("N2", culture) : "-", bg, Element.ALIGN_CENTER);
+                        AgregarDato(tabla, d.Stock.HasValue ? d.Stock.Value.ToString("N2", culture) : "-", bg, Element.ALIGN_CENTER);
 
                         string difTexto = "-";
                         BaseColor difColor = COLOR_TEXTO;
-                        if (d.diferencia.HasValue)
+                        if (d.Diferencia.HasValue)
                         {
-                            decimal dif = d.diferencia.Value;
+                            decimal dif = d.Diferencia.Value;
                             difTexto = (dif > 0 ? "+" : "") + dif.ToString("N2", culture);
                             if (dif > 0) difColor = COLOR_SOBRANTE;
                             else if (dif < 0) difColor = COLOR_FALTANTE;
@@ -213,7 +216,7 @@ namespace SteeLog.Reportes
                             9, Font.NORMAL, difColor);
                         AgregarDato(tabla, difTexto, bg, Element.ALIGN_CENTER, fntDif);
 
-                        string estado = (d.estado_diferencia ?? "Sin diferencia").ToUpper();
+                        string estado = (d.EstadoDiferencia ?? "Sin diferencia").ToUpper();
                         BaseColor estadoColor = estado == "SOBRANTE" ? COLOR_SOBRANTE
                                               : estado == "FALTANTE" ? COLOR_FALTANTE
                                               : COLOR_OK;
@@ -224,7 +227,7 @@ namespace SteeLog.Reportes
                     }
                     else
                     {
-                        string hora = d.fecha_carga != default(DateTime) ? d.fecha_carga.ToString("dd/MM/yyyy HH:mm") : "-";
+                        string hora = d.FechaCarga != default(DateTime) ? d.FechaCarga.ToString("dd/MM/yyyy HH:mm") : "-";
                         AgregarDato(tabla, hora, bg, Element.ALIGN_CENTER);
                     }
 
@@ -251,31 +254,31 @@ namespace SteeLog.Reportes
 
         private class GrupoSeccion
         {
-            public string nombreSeccion;
-            public List<ConteoInventarioDiferencia> detalles;
+            public string Nombre;
+            public List<DetalleConteoLectura> detalles;
         }
 
-        private static List<GrupoSeccion> ConstruirGruposPorSeccion(List<ConteoInventarioDiferencia> detalle, Dictionary<int, ReporteStockMapeo> mapeoSecciones)
+        private static List<GrupoSeccion> ConstruirGruposPorSeccion(List<DetalleConteoLectura> detalle, IReadOnlyDictionary<int, SeccionConteo> mapeoSecciones)
         {
             var grupos = new List<GrupoSeccion>();
             if (detalle == null || detalle.Count == 0) return grupos;
 
-            mapeoSecciones = mapeoSecciones ?? new Dictionary<int, ReporteStockMapeo>();
+            mapeoSecciones = mapeoSecciones ?? new Dictionary<int, SeccionConteo>();
 
             var porSeccion = new Dictionary<string, GrupoSeccion>(StringComparer.Ordinal);
             var ordenSeccion = new Dictionary<string, int>(StringComparer.Ordinal);
-            var sinSeccion = new GrupoSeccion { nombreSeccion = null, detalles = new List<ConteoInventarioDiferencia>() };
+            var sinSeccion = new GrupoSeccion { Nombre = null, detalles = new List<DetalleConteoLectura>() };
 
             foreach (var d in detalle)
             {
-                if (mapeoSecciones.TryGetValue(d.id_material, out var mapeo))
+                if (mapeoSecciones.TryGetValue(d.MaterialId, out var mapeo))
                 {
-                    if (!porSeccion.ContainsKey(mapeo.nombreSeccion))
+                    if (!porSeccion.ContainsKey(mapeo.Nombre))
                     {
-                        porSeccion[mapeo.nombreSeccion] = new GrupoSeccion { nombreSeccion = mapeo.nombreSeccion, detalles = new List<ConteoInventarioDiferencia>() };
-                        ordenSeccion[mapeo.nombreSeccion] = mapeo.ordenSeccion;
+                        porSeccion[mapeo.Nombre] = new GrupoSeccion { Nombre = mapeo.Nombre, detalles = new List<DetalleConteoLectura>() };
+                        ordenSeccion[mapeo.Nombre] = mapeo.Orden;
                     }
-                    porSeccion[mapeo.nombreSeccion].detalles.Add(d);
+                    porSeccion[mapeo.Nombre].detalles.Add(d);
                 }
                 else
                 {
@@ -316,7 +319,7 @@ namespace SteeLog.Reportes
             });
         }
 
-        private static void AgregarResumen(Document doc, List<ConteoInventarioDiferencia> detalle, bool esAdmin, bool finalizado)
+        private static void AgregarResumen(Document doc, List<DetalleConteoLectura> detalle, bool esAdmin, bool finalizado)
         {
             if (detalle.Count == 0) return;
             if (!esAdmin || !finalizado) return;
@@ -330,11 +333,11 @@ namespace SteeLog.Reportes
 
             foreach (var d in detalle)
             {
-                totalContado += d.cantidad_contada;
-                if (d.stock_sistema.HasValue) totalSistema += d.stock_sistema.Value;
-                if (d.diferencia.HasValue)
+                totalContado += d.Cantidad;
+                if (d.Stock.HasValue) totalSistema += d.Stock.Value;
+                if (d.Diferencia.HasValue)
                 {
-                    decimal dif = d.diferencia.Value;
+                    decimal dif = d.Diferencia.Value;
                     totalDif += dif;
                     if (dif > 0) totalSobrantes++;
                     else if (dif < 0) totalFaltantes++;
@@ -392,18 +395,20 @@ namespace SteeLog.Reportes
             });
         }
 
-        private static void AgregarObservaciones(Document doc, ConteoInventario conteo)
+        private static void AgregarObservaciones(Document doc, ConteoLectura conteo)
         {
-            if (string.IsNullOrWhiteSpace(conteo.observaciones)) return;
+            if (string.IsNullOrWhiteSpace(conteo.Observaciones)) return;
 
             doc.Add(new Paragraph(" ") { SpacingBefore = 4 });
 
-            PdfPTable tituloTabla = new PdfPTable(1);
-            tituloTabla.WidthPercentage = 100;
-            tituloTabla.SpacingBefore = 6;
-            tituloTabla.SpacingAfter = 4;
+            PdfPTable tabla = new PdfPTable(1);
+            tabla.WidthPercentage = 100;
+            tabla.SpacingBefore = 6;
+            tabla.SpacingAfter = 6;
+            tabla.KeepTogether = true;
+            tabla.HeaderRows = 1;
 
-            PdfPCell tituloCell = new PdfPCell(new Phrase("OBSERVACIONES", fntSeccion))
+            PdfPCell tituloCell = new PdfPCell(new Phrase("OBSERVACIONES", fntCeldaBold))
             {
                 BackgroundColor = COLOR_FONDO_SECCION,
                 Border = Rectangle.LEFT_BORDER,
@@ -413,14 +418,9 @@ namespace SteeLog.Reportes
                 PaddingLeft = 10,
                 VerticalAlignment = Element.ALIGN_MIDDLE
             };
-            tituloTabla.AddCell(tituloCell);
-            doc.Add(tituloTabla);
+            tabla.AddCell(tituloCell);
 
-            PdfPTable tabla = new PdfPTable(1);
-            tabla.WidthPercentage = 100;
-            tabla.SpacingAfter = 6;
-
-            PdfPCell cellVal = new PdfPCell(new Phrase(conteo.observaciones, fntCelda))
+            PdfPCell cellVal = new PdfPCell(new Phrase(conteo.Observaciones, fntCelda))
             {
                 BackgroundColor = COLOR_BLANCO,
                 BorderColor = COLOR_GRIS_CLARO,
@@ -432,8 +432,10 @@ namespace SteeLog.Reportes
         }
     }
 
-    public class PieConteo : PdfPageEventHelper
+    internal sealed class PieConteo : PdfPageEventHelper
     {
+        private readonly string pie;
+        public PieConteo(string pie) { this.pie = pie; }
         public override void OnEndPage(PdfWriter writer, Document document)
         {
             PdfContentByte cb = writer.DirectContent;
@@ -449,7 +451,7 @@ namespace SteeLog.Reportes
             cb.SetFontAndSize(bf, 8);
             cb.SetColorFill(new BaseColor(120, 120, 120));
             cb.ShowTextAligned(Element.ALIGN_LEFT,
-                "SteeLog - Sistema de Gestión de Inventario — Conteo físico generado " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"),
+                pie,
                 document.LeftMargin, document.Bottom - 28, 0);
             cb.ShowTextAligned(Element.ALIGN_RIGHT,
                 "Pág. " + writer.PageNumber,

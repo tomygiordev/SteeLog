@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="14.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <Import Project="..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props" Condition="Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.props')" />
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
@@ -179,7 +179,6 @@
     <Compile Include="Datos\CanaletaPlegadoDatos.cs" />
     <Compile Include="Datos\CanaletaPlegadoFotoDatos.cs" />
     <Compile Include="Datos\ComunDatos.cs" />
-    <Compile Include="Datos\ConteoInventarioDatos.cs" />
     <Compile Include="Datos\ConexionDB.cs" />
     <Compile Include="Datos\FleteDatos.cs" />
     <Compile Include="Datos\MaterialDatos.cs" />
@@ -195,9 +194,6 @@
     <Compile Include="Modelos\Categoria.cs" />
     <Compile Include="Modelos\CanaletaPlegado.cs" />
     <Compile Include="Modelos\CanaletaPlegadoFoto.cs" />
-    <Compile Include="Modelos\ConteoInventario.cs" />
-    <Compile Include="Modelos\ConteoInventarioDetalle.cs" />
-    <Compile Include="Modelos\ConteoInventarioDiferencia.cs" />
     <Compile Include="Modelos\Flete.cs" />
     <Compile Include="Modelos\KardexItem.cs" />
     <Compile Include="Modelos\Material.cs" />
@@ -381,7 +377,6 @@
     <Compile Include="Branding.cs" />
     <Compile Include="Reportes\InformeObraPDF.cs" />
     <Compile Include="Reportes\KardexPDF.cs" />
-    <Compile Include="Reportes\ConteoInventarioPDF.cs" />
     <Compile Include="Vistas\Reportes\ModalFechasInformeObra.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -564,6 +559,7 @@
     <Compile Include="Presentation\InsumosPresenter.cs" />
     <Compile Include="Presentation\RecortesPresenter.cs" />
     <Compile Include="Presentation\MaterialesPresenter.cs" />
+    <Compile Include="Presentation\ConteosPresenter.cs" />
     <Compile Include="Presentation\InventarioPresenter.cs" />
     <Compile Include="Presentation\OrdenesMapeo.cs" />
     <Compile Include="Presentation\CargaVigente.cs" />

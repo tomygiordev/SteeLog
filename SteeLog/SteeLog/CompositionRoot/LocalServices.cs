@@ -11,6 +11,8 @@ using SteeLog.Infrastructure.Files;
 using SteeLog.Infrastructure.Configuration;
 using SteeLog.Infrastructure.Persistence;
 using SteeLog.Infrastructure.OrdenesCompra;
+using SteeLog.Infrastructure.Conteos;
+using SteeLog.Core.Application.Conteos;
 using SteeLog.Infrastructure.Inventario;
 using SteeLog.Infrastructure.Pdf;
 using SteeLog.Core.Application.Inventario;
@@ -36,6 +38,7 @@ namespace SteeLog.CompositionRoot
         internal IUseCaseExecutor Executor { get; }
         internal IOrdenesPendientesPdf OrdenesPdf { get; }
         internal IRemitoPdf RemitoPdf { get; }
+        internal IConteoPdf ConteoPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
         private readonly Lazy<LocalConfiguration> configuration;
@@ -57,11 +60,16 @@ namespace SteeLog.CompositionRoot
             var registrations = new ServiceCollection();
             OrdenesPdf = new OrdenesPendientesPDF(new RecursosPdfLocales());
             RemitoPdf = new SteeLog.Infrastructure.Pdf.MovimientoPDF(new RecursosPdfLocales());
+            ConteoPdf = new SteeLog.Infrastructure.Pdf.ConteoInventarioPDF(new RecursosPdfLocales());
             registrations.AddSingleton(Updates);
             registrations.AddSingleton(Session);
             registrations.AddSingleton<IClock>(_ => new BusinessClock(TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time"), () => DateTimeOffset.UtcNow));
             registrations.AddScoped(_ => new NpgsqlUnitOfWork(Connections));
             registrations.AddScoped<IUnitOfWork>(scope => scope.GetRequiredService<NpgsqlUnitOfWork>());
+            registrations.AddScoped<IConteosConsulta>(_ => new NpgsqlConteosConsulta(Connections));
+            registrations.AddScoped<IConteosEscritura, NpgsqlConteos>();
+            registrations.AddScoped<ConsultarConteos>();
+            registrations.AddScoped<OperacionesConteo>();
             registrations.AddScoped<IOrdenesConsulta>(_ => new NpgsqlOrdenesConsulta(Connections));
             registrations.AddScoped<ConsultarOrdenes>();
             registrations.AddScoped<NpgsqlOrdenes>();

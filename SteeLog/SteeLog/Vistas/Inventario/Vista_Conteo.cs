@@ -8,24 +8,34 @@ using System.Linq;
 using System.Windows.Forms;
 using Guna.UI2.WinForms;
 using Microsoft.VisualBasic;
-using SteeLog.Datos;
-using SteeLog.Modelos;
-using SteeLog.Reportes;
+using System.Threading;
+using System.Threading.Tasks;
+using Timer = System.Windows.Forms.Timer;
+using SteeLog.Core.Application.Conteos;
+using SteeLog.Core.Application.Inventario;
+using SteeLog.CompositionRoot;
+using SteeLog.Presentation;
+
+
 using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Inventario
 {
     public partial class Vista_Conteo : Form, IRefrescable, IMessageFilter
     {
-        private readonly ConteoInventarioDatos _datos = new ConteoInventarioDatos();
-        private readonly MaterialDatos _materialesDatos = new MaterialDatos();
-        private List<Material> _materialesFull = new List<Material>();
-        private List<ConteoInventario> _historial = new List<ConteoInventario>();
+        private ConteosPresenter presenter;
+        private IConteoPdf pdf;
+        private readonly Action<string> abrirPdf;
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private int versionEntrada, versionHistorial, versionDetalle, versionMateriales;
+        private bool ocupada, entradaLista;
+        private List<MaterialInventarioLectura> _materialesFull = new List<MaterialInventarioLectura>();
+        private List<ConteoLectura> _historial = new List<ConteoLectura>();
 
         private string _tabActual = "entrada";
-        private ConteoInventario _conteoActual;
-        private ConteoInventario _conteoSeleccionadoHistorial;
-        private Material _materialSeleccionado;
+        private ConteoLectura _conteoActual;
+        private ConteoLectura _conteoSeleccionadoHistorial;
+        private MaterialInventarioLectura _materialSeleccionado;
 
         private readonly Color colorFondo = Color.FromArgb(29, 38, 35);
         private readonly Color colorPanelOscuro = Color.FromArgb(20, 30, 25);
@@ -69,21 +79,33 @@ namespace SteeLog.Vistas.Inventario
         private Guna2Button btnImprimir;
         private Guna2Button btnEliminar;
 
-        public Vista_Conteo()
+        public Vista_Conteo() : this(null, null, null) { }
+        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer) : this(executor, renderer, null) { }
+        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf)
         {
+            this.abrirPdf = abrirPdf ?? (ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true }));
+            if (executor != null) presenter = new ConteosPresenter(executor);
+            pdf = renderer;
             InitializeComponent();
-            Application.AddMessageFilter(this);
-            FormClosed += (s, e) =>
-            {
-                Application.RemoveMessageFilter(this);
-                timerBusqueda?.Stop();
-                timerBusqueda?.Dispose();
+            CrearInterfaz(); ActualizarEstadoEntrada();
+            Shown += async (s, e) => {
+                if (presenter == null) presenter = new ConteosPresenter(LocalServices.Current.Executor);
+                if (pdf == null) pdf = LocalServices.Current.ConteoPdf;
+                Application.AddMessageFilter(this);
+                await CargarMateriales(); if (Vigente && _tabActual == "entrada") await CargarConteoActual();
             };
-
-            CargarMateriales();
-            CrearInterfaz();
-            CargarConteoActual();
+            FormClosed += (s, e) => Cerrar();
+            Disposed += (s, e) => Cerrar();
         }
+        private void Cerrar()
+        {
+            if (!cierre.IsCancellationRequested) cierre.Cancel();
+            Application.RemoveMessageFilter(this);
+            timerBusqueda?.Stop(); timerBusqueda?.Dispose();
+        }
+        private bool Vigente => !cierre.IsCancellationRequested && !IsDisposed;
+        private bool Comenzar() { if (ocupada || !Vigente) return false; ocupada = true; ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); return true; }
+        private void Terminar() { ocupada = false; if (Vigente) { ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); } }
 
         public bool PreFilterMessage(ref Message m)
         {
@@ -104,24 +126,20 @@ namespace SteeLog.Vistas.Inventario
             return false;
         }
 
-        public void Refrescar()
+        public async void Refrescar()
         {
-            CargarMateriales();
-            if (_tabActual == "entrada") CargarConteoActual();
-            else CargarHistorial();
+            if (presenter == null || !Vigente) return;
+            await CargarMateriales();
+            if (!Vigente) return;
+            if (_tabActual == "entrada") await CargarConteoActual(); else await CargarHistorial();
         }
 
-        private void CargarMateriales()
+        private async Task CargarMateriales()
         {
-            try
-            {
-                _materialesFull = _materialesDatos.obtenerMateriales();
-            }
-            catch (Exception ex)
-            {
-                _materialesFull = new List<Material>();
-                ToastNotification.ShowError("Error al cargar materiales: " + ex.Message);
-            }
+            int version = ++versionMateriales;
+            try { var datos = await presenter.MaterialesAsync(cierre.Token); if (Vigente && version == versionMateriales) _materialesFull = datos.ToList(); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente && version == versionMateriales) ToastNotification.ShowError("Error al cargar materiales: " + ex.Message); }
         }
 
         private void CrearInterfaz()
@@ -195,21 +213,24 @@ namespace SteeLog.Vistas.Inventario
             };
         }
 
-        private void CambiarTab(string tab)
+        private async void CambiarTab(string tab, int continuarId = 0)
         {
-            _tabActual = tab;
-            ActualizarTabs();
-            panelContenido.Controls.Clear();
-            if (tab == "entrada")
-            {
-                ConstruirEntrada();
-                CargarConteoActual();
+            _tabActual = tab; versionEntrada++; versionHistorial++; versionDetalle++; entradaLista = false;
+            ActualizarTabs(); panelContenido.Controls.Clear();
+            if (tab == "entrada") {
+                _conteoActual = null;
+                ConstruirEntrada(); ActualizarEstadoEntrada();
+                if (continuarId == 0) await CargarConteoActual();
+                else {
+                    int version = ++versionEntrada; entradaLista = false; ActualizarEstadoEntrada();
+                    try { var elegido = await presenter.ObtenerAsync(continuarId, cierre.Token);
+                        if (!Vigente || version != versionEntrada || _tabActual != "entrada") return;
+                        if (elegido == null || !string.Equals(elegido.Estado, "abierto", StringComparison.OrdinalIgnoreCase)) { await CargarConteoActual(); return; }
+                        _conteoActual = elegido; ActualizarEstadoEntrada(); await CargarDetallesEntrada();
+                    } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente && version == versionEntrada) ToastNotification.ShowError("Error al continuar: " + ex.Message); }
+                }
             }
-            else
-            {
-                ConstruirHistorial();
-                CargarHistorial();
-            }
+            else { ConstruirHistorial(); await CargarHistorial(); if (Vigente && _tabActual == "historial" && continuarId > 0) SeleccionarConteoEnGrid(continuarId); }
         }
 
         private void ActualizarTabs()
@@ -342,10 +363,10 @@ namespace SteeLog.Vistas.Inventario
             dgvEntrada = CrearGridBase(40);
             dgvEntrada.AutoGenerateColumns = false;
             dgvEntrada.Columns.Clear();
-            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colMaterial", HeaderText = "Material", DataPropertyName = "material_nombre_snapshot", FillWeight = 48 });
-            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCategoria", HeaderText = "Categoria", DataPropertyName = "material_categoria_snapshot", FillWeight = 24 });
-            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCantidad", HeaderText = "Contado", DataPropertyName = "cantidad_contada", FillWeight = 12 });
-            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colHora", HeaderText = "Hora", DataPropertyName = "fecha_carga", FillWeight = 10 });
+            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colMaterial", HeaderText = "Material", DataPropertyName = "Nombre", FillWeight = 48 });
+            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCategoria", HeaderText = "Categoria", DataPropertyName = "Categoria", FillWeight = 24 });
+            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCantidad", HeaderText = "Contado", DataPropertyName = "Cantidad", FillWeight = 12 });
+            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colHora", HeaderText = "Hora", DataPropertyName = "FechaCarga", FillWeight = 10 });
             dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colEditar", HeaderText = "", Text = "Editar", UseColumnTextForButtonValue = true, FillWeight = 9 });
             dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colQuitar", HeaderText = "", Text = "Quitar", UseColumnTextForButtonValue = true, FillWeight = 9 });
             dgvEntrada.Columns["colCantidad"].DefaultCellStyle.Format = "N2";
@@ -373,6 +394,7 @@ namespace SteeLog.Vistas.Inventario
 
         private void ConfigurarBusqueda()
         {
+            timerBusqueda?.Stop(); timerBusqueda?.Dispose();
             timerBusqueda = new Timer { Interval = 180 };
             timerBusqueda.Tick += (s, e) =>
             {
@@ -436,9 +458,9 @@ namespace SteeLog.Vistas.Inventario
             }
 
             var items = _materialesFull
-                .Where(m => !string.IsNullOrWhiteSpace(m.nombre) && m.nombre.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
-                .OrderByDescending(m => m.nombre.StartsWith(query, StringComparison.OrdinalIgnoreCase))
-                .ThenBy(m => m.nombre)
+                .Where(m => !string.IsNullOrWhiteSpace(m.Nombre) && m.Nombre.IndexOf(query, StringComparison.OrdinalIgnoreCase) >= 0)
+                .OrderByDescending(m => m.Nombre.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(m => m.Nombre)
                 .Take(35)
                 .ToList();
 
@@ -478,7 +500,7 @@ namespace SteeLog.Vistas.Inventario
             panelResultados.BringToFront();
         }
 
-        private Control CrearResultadoMaterial(Material material)
+        private Control CrearResultadoMaterial(MaterialInventarioLectura material)
         {
             var panel = new Panel
             {
@@ -490,7 +512,7 @@ namespace SteeLog.Vistas.Inventario
             };
             var nombre = new Label
             {
-                Text = material.nombre,
+                Text = material.Nombre,
                 Dock = DockStyle.Top,
                 Height = 24,
                 ForeColor = colorTexto,
@@ -499,7 +521,7 @@ namespace SteeLog.Vistas.Inventario
             };
             var categoria = new Label
             {
-                Text = string.IsNullOrWhiteSpace(material.nombre_categoria) ? "Material" : material.nombre_categoria,
+                Text = string.IsNullOrWhiteSpace(material.Categoria) ? "Material" : material.Categoria,
                 Dock = DockStyle.Top,
                 Height = 18,
                 ForeColor = Color.FromArgb(135, 190, 150),
@@ -519,11 +541,11 @@ namespace SteeLog.Vistas.Inventario
             return panel;
         }
 
-        private void SeleccionarMaterial(Material material)
+        private void SeleccionarMaterial(MaterialInventarioLectura material)
         {
             _suprimirBusqueda = true;
             _materialSeleccionado = material;
-            txtBuscadorMaterial.Text = material.nombre;
+            txtBuscadorMaterial.Text = material.Nombre;
             txtBuscadorMaterial.Focus();
             txtBuscadorMaterial.SelectionStart = txtBuscadorMaterial.Text.Length;
             _suprimirBusqueda = false;
@@ -547,173 +569,105 @@ namespace SteeLog.Vistas.Inventario
             panelResultados.Controls.Clear();
         }
 
-        private void CargarConteoActual()
+        private async Task CargarConteoActual()
         {
-            string usuario = SessionManager.Username ?? SessionManager.Email ?? Environment.UserName;
-            try
-            {
-                _conteoActual = _datos.ObtenerConteoAbiertoPorUsuario(usuario);
-                if (dgvEntrada == null) ConstruirEntrada();
-                ActualizarEstadoEntrada();
-                CargarDetallesEntrada();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar conteo: " + ex.Message);
-            }
+            if (presenter == null || !Vigente) return;
+            int version = ++versionEntrada;
+            entradaLista = false; _conteoActual = null; ActualizarEstadoEntrada();
+            if (dgvEntrada != null) dgvEntrada.DataSource = null;
+            try {
+                var conteo = await presenter.AbiertoAsync(cierre.Token);
+                if (!Vigente || version != versionEntrada || _tabActual != "entrada") return;
+                _conteoActual = conteo; ActualizarEstadoEntrada(); await CargarDetallesEntrada();
+            } catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente && version == versionEntrada) ToastNotification.ShowError("Error al cargar conteo: " + ex.Message); }
         }
 
         private void ActualizarEstadoEntrada()
         {
-            bool activo = _conteoActual != null;
+            bool activo = entradaLista && _conteoActual != null;
             if (lblEstadoConteo != null)
             {
                 lblEstadoConteo.Text = activo
-                    ? $"Conteo #{_conteoActual.id_conteo} abierto"
+                    ? $"Conteo #{_conteoActual.Id} abierto"
                     : "Sin conteo abierto";
             }
             if (lblResumenConteo != null)
             {
                 lblResumenConteo.Text = activo
-                    ? $"Usuario: {_conteoActual.usuario_inicio}  |  Inicio: {_conteoActual.fecha_inicio:dd/MM/yyyy HH:mm}"
+                    ? $"Usuario: {MostrarUsuario(_conteoActual.UsuarioInicio)}  |  Inicio: {_conteoActual.Inicio:dd/MM/yyyy HH:mm}"
                     : "Presiona Iniciar Conteo para habilitar la carga.";
             }
 
-            if (btnIniciarConteo != null) btnIniciarConteo.Enabled = !activo;
-            if (btnFinalizarConteo != null) btnFinalizarConteo.Enabled = activo;
-            if (btnCancelarConteo != null) btnCancelarConteo.Enabled = activo;
+            if (btnIniciarConteo != null) btnIniciarConteo.Enabled = entradaLista && !ocupada && !activo;
+            if (btnFinalizarConteo != null) btnFinalizarConteo.Enabled = !ocupada && activo;
+            if (btnCancelarConteo != null) btnCancelarConteo.Enabled = !ocupada && activo;
             if (txtBuscadorMaterial != null) txtBuscadorMaterial.Enabled = activo;
             if (txtCantidad != null) txtCantidad.Enabled = activo;
-            if (btnAgregar != null) btnAgregar.Enabled = activo;
+            if (btnAgregar != null) btnAgregar.Enabled = !ocupada && activo;
         }
 
-        private void CargarDetallesEntrada()
+        private async Task CargarDetallesEntrada()
         {
-            if (dgvEntrada == null) return;
-            if (_conteoActual == null)
-            {
-                dgvEntrada.DataSource = new List<ConteoInventarioDetalle>();
-                return;
-            }
-
-            dgvEntrada.DataSource = null;
-            dgvEntrada.DataSource = _datos.ObtenerDetallesCarga(_conteoActual.id_conteo);
+            if (!Vigente || dgvEntrada == null) return;
+            int version = ++versionEntrada; int id = _conteoActual?.Id ?? 0;
+            entradaLista = false; ActualizarEstadoEntrada();
+            if (id == 0) { dgvEntrada.DataSource = new List<DetalleConteoLectura>(); entradaLista = true; ActualizarEstadoEntrada(); return; }
+            try {
+                var detalles = await presenter.DetallesAsync(id, cierre.Token);
+                if (!Vigente || _tabActual != "entrada" || version != versionEntrada || _conteoActual?.Id != id) return;
+                dgvEntrada.DataSource = detalles.ToList(); entradaLista = true; ActualizarEstadoEntrada();
+            } catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente && version == versionEntrada) ToastNotification.ShowError("Error al cargar detalles: " + ex.Message); }
         }
 
-        private void BtnIniciarConteo_Click(object sender, EventArgs e)
+        private async void BtnIniciarConteo_Click(object sender, EventArgs e)
         {
-            try
-            {
-                string usuario = SessionManager.Username ?? SessionManager.Email ?? Environment.UserName;
-                int id = _datos.CrearConteo(usuario);
-                _conteoActual = _datos.ObtenerConteoPorId(id);
-                ToastNotification.ShowSuccess("Conteo iniciado.");
-                ActualizarEstadoEntrada();
-                CargarDetallesEntrada();
-                txtBuscadorMaterial.Focus();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo iniciar: " + ex.Message);
-            }
+            if (!entradaLista || _conteoActual != null || !Comenzar()) return; int version = versionEntrada;
+            try { int id = await presenter.CrearAsync(cierre.Token); var conteo = await presenter.ObtenerAsync(id, cierre.Token);
+                if (!Vigente || _tabActual != "entrada" || version != versionEntrada) return;
+                _conteoActual = conteo; ActualizarEstadoEntrada(); await CargarDetallesEntrada(); ToastNotification.ShowSuccess("Conteo iniciado.");
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo iniciar: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void BtnAgregar_Click(object sender, EventArgs e)
+        private async void BtnAgregar_Click(object sender, EventArgs e)
         {
-            if (_conteoActual == null)
-            {
-                ToastNotification.ShowWarning("Primero inicia un conteo.");
-                return;
-            }
-            if (_materialSeleccionado == null)
-            {
-                ToastNotification.ShowWarning("Selecciona un material del buscador.");
-                return;
-            }
-            if (!TryParseCantidad(txtCantidad.Text, out decimal cantidad))
-            {
-                ToastNotification.ShowWarning("Ingresa una cantidad valida mayor o igual a cero.");
-                txtCantidad.Focus();
-                return;
-            }
-
-            try
-            {
-                _datos.AgregarOActualizarDetalle(_conteoActual.id_conteo, _materialSeleccionado.id, cantidad);
-                _materialSeleccionado = null;
-                txtBuscadorMaterial.Clear();
-                txtCantidad.Clear();
-                OcultarResultados();
-                CargarDetallesEntrada();
-                txtBuscadorMaterial.Focus();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo agregar: " + ex.Message);
-            }
+            if (!entradaLista) return;
+            if (_conteoActual == null || _materialSeleccionado == null) { ToastNotification.ShowWarning("Inicia un conteo y selecciona un material."); return; }
+            if (!TryParseCantidad(txtCantidad.Text, out decimal cantidad)) { ToastNotification.ShowWarning("Ingresa una cantidad valida mayor o igual a cero."); return; }
+            if (!Comenzar()) return; int id = _conteoActual.Id, material = _materialSeleccionado.Id; int version = versionEntrada;
+            try { await presenter.CargarAsync(id, material, cantidad, cierre.Token);
+                if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
+                _materialSeleccionado = null; txtBuscadorMaterial.Clear(); txtCantidad.Clear(); OcultarResultados(); await CargarDetallesEntrada();
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo agregar: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void BtnFinalizar_Click(object sender, EventArgs e)
+        private async void BtnFinalizar_Click(object sender, EventArgs e)
         {
-            if (_conteoActual == null) return;
-            if (!_datos.ConteoTieneDetalles(_conteoActual.id_conteo))
-            {
-                ToastNotification.ShowWarning("No se puede finalizar un conteo sin materiales.");
-                return;
-            }
-
+            if (!entradaLista || _conteoActual == null || ocupada) return;
             string obs = Interaction.InputBox("Observaciones (opcional):", "Finalizar conteo", "");
-            var r = MessageBox.Show(
-                $"Finalizar conteo #{_conteoActual.id_conteo}?\n\nSe calcularan las diferencias contra el stock actual.",
-                "Confirmar finalizacion",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-            if (r != DialogResult.Yes) return;
-
-            try
-            {
-                string usuario = SessionManager.Username ?? SessionManager.Email ?? Environment.UserName;
-                int idConteoFinalizado = _conteoActual.id_conteo;
-                _datos.FinalizarConteo(idConteoFinalizado, usuario, string.IsNullOrWhiteSpace(obs) ? null : obs);
-                ToastNotification.ShowSuccess("Conteo finalizado.");
-                _conteoActual = null;
-                CambiarTab("historial");
-                SeleccionarConteoEnGrid(idConteoFinalizado);
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo finalizar: " + ex.Message);
-            }
+            int id = _conteoActual.Id;
+            if (MessageBox.Show($"Finalizar conteo #{id}?\n\nSe calcularan las diferencias contra el stock actual.", "Confirmar finalizacion", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes || !Comenzar()) return;
+            int version = versionEntrada;
+            try { await presenter.FinalizarAsync(id, obs, cierre.Token); if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
+                _conteoActual = null; ToastNotification.ShowSuccess("Conteo finalizado."); CambiarTab("historial", id);
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo finalizar: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void BtnCancelarConteo_Click(object sender, EventArgs e)
+        private async void BtnCancelarConteo_Click(object sender, EventArgs e)
         {
-            if (_conteoActual == null) return;
-            var r = MessageBox.Show(
-                $"Cancelar conteo #{_conteoActual.id_conteo}?",
-                "Confirmar cancelacion",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-            if (r != DialogResult.Yes) return;
-
-            try
-            {
-                _datos.CancelarConteo(_conteoActual.id_conteo);
-                _conteoActual = null;
-                ToastNotification.ShowSuccess("Conteo cancelado.");
-                ActualizarEstadoEntrada();
-                CargarDetallesEntrada();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo cancelar: " + ex.Message);
-            }
+            if (!entradaLista || _conteoActual == null || ocupada) return; int id = _conteoActual.Id;
+            if (MessageBox.Show($"Cancelar conteo #{id}?", "Confirmar cancelacion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            int version = versionEntrada;
+            try { await presenter.CancelarAsync(id, cierre.Token); if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
+                _conteoActual = null; ActualizarEstadoEntrada(); await CargarDetallesEntrada(); ToastNotification.ShowSuccess("Conteo cancelado.");
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo cancelar: " + ex.Message); } finally { Terminar(); }
         }
 
         private void DgvEntrada_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || dgvEntrada.Rows[e.RowIndex].DataBoundItem == null) return;
-            var det = dgvEntrada.Rows[e.RowIndex].DataBoundItem as ConteoInventarioDetalle;
+            var det = dgvEntrada.Rows[e.RowIndex].DataBoundItem as DetalleConteoLectura;
             if (det == null) return;
 
             string col = dgvEntrada.Columns[e.ColumnIndex].Name;
@@ -732,48 +686,21 @@ namespace SteeLog.Vistas.Inventario
             }
         }
 
-        private void EditarDetalle(ConteoInventarioDetalle det)
+        private async void EditarDetalle(DetalleConteoLectura det)
         {
-            string input = Interaction.InputBox(
-                $"Nueva cantidad contada para:\n\n{det.material_nombre_snapshot}",
-                "Editar cantidad",
-                det.cantidad_contada.ToString("0.##", CultureInfo.CurrentCulture));
-            if (string.IsNullOrWhiteSpace(input)) return;
-            if (!TryParseCantidad(input, out decimal cantidad))
-            {
-                ToastNotification.ShowWarning("Cantidad invalida.");
-                return;
-            }
-
-            try
-            {
-                _datos.ReemplazarCantidadDetalle(det.id_conteo, det.id_material, cantidad);
-                CargarDetallesEntrada();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo editar: " + ex.Message);
-            }
+            if (!entradaLista || ocupada) return; string input = Interaction.InputBox($"Nueva cantidad contada para:\n\n{det.Nombre}", "Editar cantidad", det.Cantidad.ToString("0.##", CultureInfo.CurrentCulture));
+            if (string.IsNullOrWhiteSpace(input)) return; if (!TryParseCantidad(input, out decimal cantidad)) { ToastNotification.ShowWarning("Cantidad invalida."); return; }
+            int id = det.ConteoId; if (_conteoActual?.Id != id || !Comenzar()) return; int version = versionEntrada;
+            try { await presenter.CorregirAsync(id, det.MaterialId, cantidad, cierre.Token); if (Vigente && _tabActual == "entrada" && _conteoActual?.Id == id && version == versionEntrada) await CargarDetallesEntrada(); }
+            catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo editar: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void QuitarDetalle(ConteoInventarioDetalle det)
+        private async void QuitarDetalle(DetalleConteoLectura det)
         {
-            var r = MessageBox.Show(
-                $"Quitar {det.material_nombre_snapshot} del conteo?",
-                "Confirmar",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-            if (r != DialogResult.Yes) return;
-
-            try
-            {
-                _datos.EliminarDetalle(det.id_detalle);
-                CargarDetallesEntrada();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo quitar: " + ex.Message);
-            }
+            if (!entradaLista || ocupada || MessageBox.Show($"Quitar {det.Nombre} del conteo?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            int id = det.ConteoId; if (_conteoActual?.Id != id || !Comenzar()) return; int version = versionEntrada;
+            try { await presenter.QuitarAsync(id, det.Id, cierre.Token); if (Vigente && _tabActual == "entrada" && _conteoActual?.Id == id && version == versionEntrada) await CargarDetallesEntrada(); }
+            catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo quitar: " + ex.Message); } finally { Terminar(); }
         }
 
         private void ConstruirHistorial()
@@ -837,11 +764,11 @@ namespace SteeLog.Vistas.Inventario
             dtpHasta.Value = DateTime.Now;
             txtBuscarHistorial = CrearTextBox("Buscar usuario o material...");
 
-            chkDesde.CheckedChanged += (s, e) => { dtpDesde.Enabled = chkDesde.Checked; CargarHistorial(); };
-            chkHasta.CheckedChanged += (s, e) => { dtpHasta.Enabled = chkHasta.Checked; CargarHistorial(); };
-            dtpDesde.ValueChanged += (s, e) => CargarHistorial();
-            dtpHasta.ValueChanged += (s, e) => CargarHistorial();
-            txtBuscarHistorial.TextChanged += (s, e) => CargarHistorial();
+            chkDesde.CheckedChanged += (s, e) => { dtpDesde.Enabled = chkDesde.Checked; _ = CargarHistorial(); };
+            chkHasta.CheckedChanged += (s, e) => { dtpHasta.Enabled = chkHasta.Checked; _ = CargarHistorial(); };
+            dtpDesde.ValueChanged += (s, e) => _ = CargarHistorial();
+            dtpHasta.ValueChanged += (s, e) => _ = CargarHistorial();
+            txtBuscarHistorial.TextChanged += (s, e) => _ = CargarHistorial();
 
             panel.Controls.Add(chkDesde, 0, 0);
             panel.Controls.Add(dtpDesde, 1, 0);
@@ -857,13 +784,13 @@ namespace SteeLog.Vistas.Inventario
             dgvHistorial = CrearGridBase(38);
             dgvHistorial.AutoGenerateColumns = false;
             dgvHistorial.Columns.Clear();
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colId", HeaderText = "ID", DataPropertyName = "id_conteo", FillWeight = 6 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colFecha", HeaderText = "Fecha inicio", DataPropertyName = "fecha_inicio", FillWeight = 16 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colUsuario", HeaderText = "Usuario", DataPropertyName = "usuario_inicio", FillWeight = 16 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colEstado", HeaderText = "Estado", DataPropertyName = "estado", FillWeight = 12 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colItems", HeaderText = "Items", DataPropertyName = "cantidad_materiales", FillWeight = 8 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDif", HeaderText = "Diferencias", DataPropertyName = "cantidad_diferencias", FillWeight = 10 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colObs", HeaderText = "Observaciones", DataPropertyName = "observaciones", FillWeight = 28 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colId", HeaderText = "ID", DataPropertyName = "Id", FillWeight = 6 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colFecha", HeaderText = "Fecha inicio", DataPropertyName = "Inicio", FillWeight = 16 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colUsuario", HeaderText = "Usuario", DataPropertyName = "UsuarioInicio", FillWeight = 16 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colEstado", HeaderText = "Estado", DataPropertyName = "Estado", FillWeight = 12 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colItems", HeaderText = "Items", DataPropertyName = "Materiales", FillWeight = 8 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDif", HeaderText = "Diferencias", DataPropertyName = "Diferencias", FillWeight = 10 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colObs", HeaderText = "Observaciones", DataPropertyName = "Observaciones", FillWeight = 28 });
             dgvHistorial.Columns["colFecha"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvHistorial.Columns["colItems"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvHistorial.Columns["colDif"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -890,12 +817,12 @@ namespace SteeLog.Vistas.Inventario
             dgvDetalleHistorial = CrearGridBase(36);
             dgvDetalleHistorial.AutoGenerateColumns = false;
             dgvDetalleHistorial.Columns.Clear();
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDMat", HeaderText = "Material", DataPropertyName = "material_nombre_snapshot", FillWeight = 42 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCat", HeaderText = "Categoria", DataPropertyName = "material_categoria_snapshot", FillWeight = 20 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCont", HeaderText = "Contado", DataPropertyName = "cantidad_contada", FillWeight = 12 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDStk", HeaderText = "Stock sistema", DataPropertyName = "stock_sistema", FillWeight = 14 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDDif", HeaderText = "Diferencia", DataPropertyName = "diferencia", FillWeight = 12 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDEst", HeaderText = "Estado", DataPropertyName = "estado_diferencia", FillWeight = 14 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDMat", HeaderText = "Material", DataPropertyName = "Nombre", FillWeight = 42 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCat", HeaderText = "Categoria", DataPropertyName = "Categoria", FillWeight = 20 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCont", HeaderText = "Contado", DataPropertyName = "Cantidad", FillWeight = 12 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDStk", HeaderText = "Stock sistema", DataPropertyName = "Stock", FillWeight = 14 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDDif", HeaderText = "Diferencia", DataPropertyName = "Diferencia", FillWeight = 12 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDEst", HeaderText = "Estado", DataPropertyName = "EstadoDiferencia", FillWeight = 14 });
             dgvDetalleHistorial.Columns["colDCont"].DefaultCellStyle.Format = "N2";
             dgvDetalleHistorial.Columns["colDStk"].DefaultCellStyle.Format = "N2";
             dgvDetalleHistorial.Columns["colDDif"].DefaultCellStyle.Format = "N2";
@@ -941,37 +868,19 @@ namespace SteeLog.Vistas.Inventario
             return root;
         }
 
-        private void CargarHistorial()
+        private async Task CargarHistorial()
         {
-            if (dgvHistorial == null) return;
-            try
-            {
+            if (dgvHistorial == null || presenter == null) return; int version = ++versionHistorial;
+            try {
                 DateTime? desde = chkDesde != null && chkDesde.Checked ? (DateTime?)dtpDesde.Value.Date : null;
-                DateTime? hasta = chkHasta != null && chkHasta.Checked ? (DateTime?)dtpHasta.Value.Date.AddDays(1).AddSeconds(-1) : null;
-                string busqueda = txtBuscarHistorial?.Text?.Trim();
-                _historial = _datos.ObtenerHistorial(desde, hasta, string.IsNullOrWhiteSpace(busqueda) ? null : busqueda);
-                dgvHistorial.DataSource = null;
-                dgvHistorial.DataSource = _historial;
-
-                if (_historial.Count > 0)
-                {
-                    var primerConteo = _historial[0];
-                    _conteoSeleccionadoHistorial = primerConteo;
-                    SeleccionarFilaGrid(0);
-                    CargarDetalleHistorial(primerConteo);
-                }
-                else
-                {
-                    _conteoSeleccionadoHistorial = null;
-                    if (dgvDetalleHistorial != null) dgvDetalleHistorial.DataSource = null;
-                    if (lblDetalleHistorial != null) lblDetalleHistorial.Text = "Detalle del conteo seleccionado";
-                }
+                DateTime? hasta = chkHasta != null && chkHasta.Checked ? (DateTime?)dtpHasta.Value.Date : null;
+                var datos = await presenter.HistorialAsync(desde, hasta, txtBuscarHistorial?.Text?.Trim(), cierre.Token);
+                if (!Vigente || _tabActual != "historial" || version != versionHistorial) return;
+                _historial = datos.ToList(); dgvHistorial.DataSource = null; dgvHistorial.DataSource = _historial;
+                if (_historial.Count > 0) { _conteoSeleccionadoHistorial = _historial[0]; SeleccionarFilaGrid(0); await CargarDetalleHistorial(_historial[0]); }
+                else { _conteoSeleccionadoHistorial = null; dgvDetalleHistorial.DataSource = null; lblDetalleHistorial.Text = "Detalle del conteo seleccionado"; }
                 ActualizarBotonesHistorial();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar historial: " + ex.Message);
-            }
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente && version == versionHistorial) ToastNotification.ShowError("Error al cargar historial: " + ex.Message); }
         }
 
         private void SeleccionarFilaGrid(int rowIndex)
@@ -990,11 +899,11 @@ namespace SteeLog.Vistas.Inventario
         private void SeleccionarConteoEnGrid(int idConteo)
         {
             if (dgvHistorial == null || dgvHistorial.Rows.Count == 0) return;
-            ConteoInventario conteoSel = null;
+            ConteoLectura conteoSel = null;
             int idxSel = -1;
             for (int i = 0; i < dgvHistorial.Rows.Count; i++)
             {
-                if (dgvHistorial.Rows[i].DataBoundItem is ConteoInventario c && c.id_conteo == idConteo)
+                if (dgvHistorial.Rows[i].DataBoundItem is ConteoLectura c && c.Id == idConteo)
                 {
                     conteoSel = c;
                     idxSel = i;
@@ -1005,17 +914,17 @@ namespace SteeLog.Vistas.Inventario
             {
                 _conteoSeleccionadoHistorial = conteoSel;
                 SeleccionarFilaGrid(idxSel);
-                CargarDetalleHistorial(conteoSel);
+                _ = CargarDetalleHistorial(conteoSel);
                 ActualizarBotonesHistorial();
             }
         }
 
         private void DgvHistorial_SelectionChanged(object sender, EventArgs e)
         {
-            if (dgvHistorial.CurrentRow != null && dgvHistorial.CurrentRow.DataBoundItem is ConteoInventario conteo)
+            if (dgvHistorial.CurrentRow != null && dgvHistorial.CurrentRow.DataBoundItem is ConteoLectura conteo)
             {
                 _conteoSeleccionadoHistorial = conteo;
-                CargarDetalleHistorial(conteo);
+                _ = CargarDetalleHistorial(conteo);
             }
             else
             {
@@ -1025,181 +934,96 @@ namespace SteeLog.Vistas.Inventario
             ActualizarBotonesHistorial();
         }
 
-        private void CargarDetalleHistorial(ConteoInventario conteo)
+        private async Task CargarDetalleHistorial(ConteoLectura conteo)
         {
-            if (conteo == null || dgvDetalleHistorial == null) return;
-            try
-            {
-                if ((conteo.estado ?? "").Equals("finalizado", StringComparison.OrdinalIgnoreCase))
-                {
-                    var difs = _datos.ObtenerDiferencias(conteo.id_conteo);
-                    dgvDetalleHistorial.DataSource = difs;
-                    lblDetalleHistorial.Text = $"Diferencias del conteo #{conteo.id_conteo} - {difs.Count} material(es)";
-                }
-                else
-                {
-                    var dets = _datos.ObtenerDetallesCarga(conteo.id_conteo)
-                        .Select(d => new ConteoInventarioDiferencia
-                        {
-                            id_detalle = d.id_detalle,
-                            id_conteo = d.id_conteo,
-                            id_material = d.id_material,
-                            material_nombre_snapshot = d.material_nombre_snapshot,
-                            material_categoria_snapshot = d.material_categoria_snapshot,
-                            cantidad_contada = d.cantidad_contada,
-                            fecha_carga = d.fecha_carga
-                        })
-                        .ToList();
-                    dgvDetalleHistorial.DataSource = dets;
-                    lblDetalleHistorial.Text = $"Materiales cargados en conteo #{conteo.id_conteo} - {dets.Count} material(es)";
-                }
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar detalle: " + ex.Message);
-            }
+            if (conteo == null || dgvDetalleHistorial == null) return; int version = ++versionDetalle; int id = conteo.Id;
+            try { var detalles = await presenter.DetallesAsync(id, cierre.Token);
+                if (!Vigente || _tabActual != "historial" || version != versionDetalle || _conteoSeleccionadoHistorial?.Id != id) return;
+                dgvDetalleHistorial.DataSource = detalles.ToList();
+                lblDetalleHistorial.Text = $"{(conteo.Estado == "finalizado" ? "Diferencias del" : "Materiales cargados en")} conteo #{id} - {detalles.Count} material(es)";
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente && version == versionDetalle) ToastNotification.ShowError("Error al cargar detalle: " + ex.Message); }
         }
 
         private void ActualizarBotonesHistorial()
         {
             bool hay = _conteoSeleccionadoHistorial != null;
-            string estado = hay ? (_conteoSeleccionadoHistorial.estado ?? "").ToLower() : "";
+            string estado = hay ? (_conteoSeleccionadoHistorial.Estado ?? "").ToLower() : "";
             bool esAdmin = SessionManager.Role == UserRole.Admin;
-            bool esCreador = hay && string.Equals(
-                _conteoSeleccionadoHistorial.usuario_inicio,
-                SessionManager.Username ?? SessionManager.Email,
-                StringComparison.OrdinalIgnoreCase);
+            string propietario = _conteoSeleccionadoHistorial?.UsuarioInicio?.Trim();
+            string email = SessionManager.Email?.Trim();
+            bool esCreador = hay && !string.IsNullOrWhiteSpace(email) && (string.Equals(propietario, email, StringComparison.OrdinalIgnoreCase)
+                || (string.Equals(propietario, "admin", StringComparison.OrdinalIgnoreCase) && string.Equals(email, "admin@tesis.local", StringComparison.OrdinalIgnoreCase))
+                || (string.Equals(propietario, "galpon", StringComparison.OrdinalIgnoreCase) && string.Equals(email, "galpon@tesis.local", StringComparison.OrdinalIgnoreCase)));
 
-            if (btnContinuar != null) btnContinuar.Enabled = hay && estado == "abierto" && esCreador;
-            if (btnCancelarHistorial != null) btnCancelarHistorial.Enabled = hay && estado == "abierto" && (esAdmin || esCreador);
-            if (btnImprimir != null) btnImprimir.Enabled = hay;
+            if (btnContinuar != null) btnContinuar.Enabled = !ocupada && hay && estado == "abierto" && esCreador;
+            if (btnCancelarHistorial != null) btnCancelarHistorial.Enabled = !ocupada && hay && estado == "abierto" && (esAdmin || esCreador);
+            if (btnImprimir != null) btnImprimir.Enabled = !ocupada && hay;
             if (btnEliminar != null)
             {
                 bool esFinalizadoOCancelado = estado == "finalizado" || estado == "cancelado";
                 btnEliminar.Visible = esAdmin;
-                btnEliminar.Enabled = esAdmin && hay && esFinalizadoOCancelado;
+                btnEliminar.Enabled = !ocupada && esAdmin && hay && esFinalizadoOCancelado;
             }
         }
 
         private void BtnContinuar_Click(object sender, EventArgs e)
         {
             if (_conteoSeleccionadoHistorial == null) return;
-            _conteoActual = _conteoSeleccionadoHistorial;
-            CambiarTab("entrada");
+            CambiarTab("entrada", _conteoSeleccionadoHistorial.Id);
         }
 
-        private void BtnCancelarHistorial_Click(object sender, EventArgs e)
+        private async void BtnCancelarHistorial_Click(object sender, EventArgs e)
         {
-            if (_conteoSeleccionadoHistorial == null) return;
-            var r = MessageBox.Show(
-                $"Cancelar conteo #{_conteoSeleccionadoHistorial.id_conteo}?",
-                "Confirmar cancelacion",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-            if (r != DialogResult.Yes) return;
-
-            try
-            {
-                _datos.CancelarConteo(_conteoSeleccionadoHistorial.id_conteo);
-                CargarHistorial();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo cancelar: " + ex.Message);
-            }
+            if (_conteoSeleccionadoHistorial == null || ocupada) return; int id = _conteoSeleccionadoHistorial.Id;
+            if (MessageBox.Show($"Cancelar conteo #{id}?", "Confirmar cancelacion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            int version = versionHistorial;
+            try { await presenter.CancelarAsync(id, cierre.Token); if (Vigente && _tabActual == "historial" && version == versionHistorial && _conteoSeleccionadoHistorial?.Id == id) await CargarHistorial(); }
+            catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo cancelar: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void BtnImprimir_Click(object sender, EventArgs e)
+        private async void BtnImprimir_Click(object sender, EventArgs e)
         {
-            if (_conteoSeleccionadoHistorial == null) return;
-
-            try
-            {
-                List<ConteoInventarioDiferencia> detalle;
-                string estado = (_conteoSeleccionadoHistorial.estado ?? "").ToLower();
-                if (estado == "finalizado")
-                {
-                    detalle = _datos.ObtenerDiferencias(_conteoSeleccionadoHistorial.id_conteo);
-                }
-                else
-                {
-                    detalle = _datos.ObtenerDetallesCarga(_conteoSeleccionadoHistorial.id_conteo)
-                        .Select(d => new ConteoInventarioDiferencia
-                        {
-                            id_detalle = d.id_detalle,
-                            id_conteo = d.id_conteo,
-                            id_material = d.id_material,
-                            material_nombre_snapshot = d.material_nombre_snapshot,
-                            material_categoria_snapshot = d.material_categoria_snapshot,
-                            cantidad_contada = d.cantidad_contada,
-                            fecha_carga = d.fecha_carga
-                        })
-                        .ToList();
-                }
-
-                string nombre = ConteoInventarioPDF.SugerirNombreArchivo(_conteoSeleccionadoHistorial);
-                string ruta = Path.Combine(Path.GetTempPath(), nombre);
-
-                if (File.Exists(ruta)) File.Delete(ruta);
-
-                ConteoInventarioPDF.Generar(ruta, _conteoSeleccionadoHistorial, detalle);
-                Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
-                ToastNotification.ShowSuccess("PDF generado correctamente.");
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo generar el PDF: " + ex.Message);
-            }
+            var conteo = _conteoSeleccionadoHistorial; if (conteo == null || !Comenzar()) return; int id = conteo.Id, version = versionHistorial;
+            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            try { var detalles = await presenter.DetallesAsync(id, cierre.Token); var secciones = await presenter.SeccionesAsync(cierre.Token);
+                if (!Vigente || _tabActual != "historial" || version != versionHistorial || _conteoSeleccionadoHistorial?.Id != id) return;
+                string ruta = Path.Combine(Path.GetTempPath(), pdf.SugerirNombreArchivo(conteo));
+                await Task.Run(() => { cierre.Token.ThrowIfCancellationRequested(); pdf.Generar(ruta, conteo, detalles, secciones, esAdmin); }, cierre.Token);
+                if (!Vigente || _tabActual != "historial" || version != versionHistorial || _conteoSeleccionadoHistorial?.Id != id) return;
+                abrirPdf(ruta); ToastNotification.ShowSuccess("PDF generado correctamente.");
+            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo generar el PDF: " + ex.Message); } finally { Terminar(); }
         }
 
-        private void BtnEliminarHistorial_Click(object sender, EventArgs e)
+        private async void BtnEliminarHistorial_Click(object sender, EventArgs e)
         {
-            if (_conteoSeleccionadoHistorial == null) return;
-            if (SessionManager.Role != UserRole.Admin)
-            {
-                ToastNotification.ShowWarning("Solo los administradores pueden eliminar conteos.");
-                return;
-            }
+            var conteo = _conteoSeleccionadoHistorial; if (conteo == null || ocupada) return;
+            if (SessionManager.Role != UserRole.Admin) { ToastNotification.ShowWarning("Solo los administradores pueden eliminar conteos."); return; }
+            int id = conteo.Id; if (MessageBox.Show($"Eliminar definitivamente el conteo #{id}?\n\nSe borrarán la cabecera y todos los detalles asociados.", "Confirmar eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            int version = versionHistorial;
+            try { await presenter.EliminarAsync(id, cierre.Token); if (Vigente && _tabActual == "historial" && version == versionHistorial && _conteoSeleccionadoHistorial?.Id == id) await CargarHistorial(); }
+            catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo eliminar: " + ex.Message); } finally { Terminar(); }
+        }
 
-            string estado = (_conteoSeleccionadoHistorial.estado ?? "").ToLower();
-            if (estado == "abierto")
-            {
-                ToastNotification.ShowWarning("El conteo está abierto. Cancelalo antes de eliminarlo.");
-                return;
-            }
-
-            var r = MessageBox.Show(
-                $"Eliminar definitivamente el conteo #{_conteoSeleccionadoHistorial.id_conteo}?\n\n" +
-                "Se borrarán la cabecera y todos los detalles asociados. Esta acción no se puede deshacer.",
-                "Confirmar eliminación",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning);
-            if (r != DialogResult.Yes) return;
-
-            try
-            {
-                _datos.EliminarConteo(_conteoSeleccionadoHistorial.id_conteo);
-                ToastNotification.ShowSuccess("Conteo eliminado correctamente.");
-                CargarHistorial();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo eliminar: " + ex.Message);
-            }
+        private static string MostrarUsuario(string usuario)
+        {
+            if (string.Equals(usuario, "admin@tesis.local", StringComparison.OrdinalIgnoreCase)) return "admin";
+            if (string.Equals(usuario, "galpon@tesis.local", StringComparison.OrdinalIgnoreCase)) return "galpon";
+            return usuario;
         }
 
         private void DgvHistorial_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (e.RowIndex < 0 || !(dgvHistorial.Rows[e.RowIndex].DataBoundItem is ConteoInventario conteo)) return;
+            if (e.RowIndex < 0 || !(dgvHistorial.Rows[e.RowIndex].DataBoundItem is ConteoLectura conteo)) return;
             string col = dgvHistorial.Columns[e.ColumnIndex].Name;
-            if (col == "colFecha")
+            if (col == "colUsuario") { e.Value = MostrarUsuario(conteo.UsuarioInicio); e.FormattingApplied = true; }
+            else if (col == "colFecha")
             {
-                e.Value = conteo.fecha_inicio.ToString("dd/MM/yyyy HH:mm");
+                e.Value = conteo.Inicio.ToString("dd/MM/yyyy HH:mm");
                 e.FormattingApplied = true;
             }
             else if (col == "colEstado")
             {
-                string estado = (conteo.estado ?? "").ToLower();
+                string estado = (conteo.Estado ?? "").ToLower();
                 if (estado == "abierto") e.CellStyle.ForeColor = Color.FromArgb(255, 200, 100);
                 else if (estado == "finalizado") e.CellStyle.ForeColor = Color.FromArgb(115, 210, 130);
                 else if (estado == "cancelado") e.CellStyle.ForeColor = Color.FromArgb(230, 110, 100);
@@ -1209,11 +1033,11 @@ namespace SteeLog.Vistas.Inventario
 
         private void DgvDetalleHistorial_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
         {
-            if (e.RowIndex < 0 || !(dgvDetalleHistorial.Rows[e.RowIndex].DataBoundItem is ConteoInventarioDiferencia det)) return;
+            if (e.RowIndex < 0 || !(dgvDetalleHistorial.Rows[e.RowIndex].DataBoundItem is DetalleConteoLectura det)) return;
             string col = dgvDetalleHistorial.Columns[e.ColumnIndex].Name;
             if (col == "colDEst")
             {
-                string estado = det.estado_diferencia;
+                string estado = det.EstadoDiferencia;
                 if (estado == "Sobrante") e.CellStyle.ForeColor = Color.FromArgb(255, 200, 100);
                 else if (estado == "Faltante") e.CellStyle.ForeColor = Color.FromArgb(255, 100, 100);
                 else e.CellStyle.ForeColor = Color.FromArgb(170, 185, 175);

@@ -97,7 +97,6 @@ internal static class BrandingSmoke
         var now = DateTime.Today;
         var cases = new[] {
             new object[] { typeof(KardexPDF), new object[] { "Material demo", now, now } },
-            new object[] { typeof(ConteoInventarioPDF), new object[] { new ConteoInventario { estado="DEMO" }, false, false } },
             new object[] { typeof(InformeObraPDF), new object[] { "Obra demo", 0, 0m, false, null, null } },
             new object[] { asm.GetType("SteeLog.Vistas.Vista_ReporteStock", true), new object[0] }
         };
@@ -133,6 +132,27 @@ internal static class BrandingSmoke
             foreach (var value in new[] { "OC-101", "Proveedor A", "Chapa zinc", "12", "5", "7", "OC-102", "Proveedor B", "Tornillos", "40", "10", "30" })
                 Check(text.Contains(value), "Ordenes pendientes: falta " + value + ": " + text);
         }
+        string conteo = Path.Combine(output, "Conteo-real.pdf");
+        var rendererConteo = servicesType.GetProperty("ConteoPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
+        var generarConteo = rendererConteo.GetType().GetMethod("Generar");
+        var parametrosConteo = generarConteo.GetParameters();
+        var cabecera = Activator.CreateInstance(parametrosConteo[1].ParameterType);
+        parametrosConteo[1].ParameterType.GetProperty("Id").SetValue(cabecera, 123, null);
+        parametrosConteo[1].ParameterType.GetProperty("Estado").SetValue(cabecera, "finalizado", null);
+        var tipoDetalle = parametrosConteo[2].ParameterType.GetGenericArguments()[0];
+        var detalles = (System.Collections.IList)Activator.CreateInstance(typeof(List<>).MakeGenericType(tipoDetalle));
+        var detalle = Activator.CreateInstance(tipoDetalle);
+        tipoDetalle.GetProperty("Nombre").SetValue(detalle, "Material demo", null);
+        tipoDetalle.GetProperty("Cantidad").SetValue(detalle, 3m, null);
+        tipoDetalle.GetProperty("Stock").SetValue(detalle, 5m, null);
+        tipoDetalle.GetProperty("Diferencia").SetValue(detalle, -2m, null);
+        detalles.Add(detalle);
+        generarConteo.Invoke(rendererConteo, new object[] { conteo, cabecera, detalles, null, true });
+        VerifyPdf(conteo);
+        using (var reader = new PdfReader(conteo)) {
+            string texto = PdfTextExtractor.GetTextFromPage(reader, 1);
+            Check(texto.Contains("Material demo") && texto.Contains("DIFERENCIAS"), "Conteo sin detalle esperado: " + texto);
+        }
         string remito = Path.Combine(output, "Remito-real.pdf");
         var rendererRemito = servicesType.GetProperty("RemitoPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
         var generarRemito = rendererRemito.GetType().GetMethod("Generar");
@@ -158,7 +178,7 @@ internal static class BrandingSmoke
         }
         string kardex = Path.Combine(output, "Kardex-real.pdf");
         KardexPDF.Generar(kardex, new List<KardexItem>(), "Material demo", now, now, false, false); VerifyPdf(kardex);
-        Console.WriteLine("OK: headers, Kardex, remito y ordenes con datos, resources, icon and forms");
+        Console.WriteLine("OK: headers, Kardex, conteo, remito y ordenes con datos, resources, icon and forms");
     }
     static void VerifyPdf(string path)
     {
