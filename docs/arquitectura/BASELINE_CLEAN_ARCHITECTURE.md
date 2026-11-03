@@ -67,6 +67,8 @@ Se reprodujo `docker exec steelog-db echo HELLO` sin salida y `docker exec steel
 
 ## Pendientes para completar la caracterización
 
+Contraste del orquestador: se revisaron los logs de las seis familias, los launchers SQL temporales y el shim de transporte; además se inspeccionaron visualmente las capturas de login/principal. El orquestador reprodujo de forma independiente el falso exit 0 del CLI y el exit 5 real por API para el mismo comando de prueba. Esto no reemplaza las verificaciones manuales pendientes. Los hashes SHA-256 de los cambios previos se conservaron: `README.md` = `90E113DAC3B2806F37F0C04963D1FB0A7DFBE84F34C180D4369FE507EE8EB9E1`; `docker/iniciar.ps1` = `27A92887208DF3A0DA4F986645CB8AEF574593A48606FC22D7EA18D4F665DC0F`.
+
 1. Incorporar al runner un transporte Docker confiable y probado con salida y exit no cero; caracterizar diferencias de fecha de negocio y repetir integración en zonas distintas.
 2. Recorrer manualmente ambos perfiles, permisos por operación, datos y fotos sobre copia segura; capturar ejemplos PDF con datos representativos y comparar cifras.
 3. Comprobar Designer de Visual Studio, carga de ensamblados y empaquetado/ejecución local por separado. Los smoke de formularios no sustituyen esas pruebas.
