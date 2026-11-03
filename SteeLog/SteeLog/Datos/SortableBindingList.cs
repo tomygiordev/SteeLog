@@ -5,7 +5,7 @@ using System.ComponentModel;
 using System.Linq;
 using System.Linq.Expressions;
 
-namespace SteeLog.Datos 
+namespace SteeLog.Presentation
 {
     public class SortableBindingList<T> : BindingList<T>
     {

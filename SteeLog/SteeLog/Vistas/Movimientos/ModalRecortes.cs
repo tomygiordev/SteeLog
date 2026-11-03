@@ -4,7 +4,9 @@ using System.Data;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using System.Threading;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using SteeLog;
 
@@ -14,7 +16,10 @@ namespace SteeLog.Vistas.Movimientos
     {
         private int _idMaterial;
         private string _nombreMaterial;
-        private RecorteDatos _recorteDatos = new RecorteDatos();
+        private readonly RecortesPresenter _presenter = new RecortesPresenter(LocalServices.Current.Executor);
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private int _versionCarga;
+        private bool _guardando;
         public Recorte RecorteSeleccionado { get; private set; }
         public decimal CantidadSeleccionada { get; private set; } = 1;
 
@@ -24,8 +29,10 @@ namespace SteeLog.Vistas.Movimientos
             _idMaterial = idMaterial;
             _nombreMaterial = nombreMaterial;
             lblMaterial.Text = $"Material: {_nombreMaterial}";
-            
-            CargarRecortes();
+
+            Shown += (s, e) => CargarRecortes();
+            FormClosed += (s, e) => { _cierre.Cancel(); };
+            Disposed += (s, e) => _cierre.Cancel();
             txtAnchoBuscado.TextChanged += TxtFiltro_TextChanged;
             txtAlturaBuscada.TextChanged += TxtFiltro_TextChanged;
             txtAnchoBuscado.KeyPress += TxtDimension_KeyPress;
@@ -35,10 +42,18 @@ namespace SteeLog.Vistas.Movimientos
             dgvRecortesDisponibles.SelectionChanged += DgvRecortesDisponibles_SelectionChanged;
         }
 
-        private void CargarRecortes(decimal? ancho = null, decimal? altura = null)
+        private async void CargarRecortes(decimal? ancho = null, decimal? altura = null)
         {
-            dgvRecortesDisponibles.DataSource = _recorteDatos.ObtenerRecortes(_idMaterial, ancho, altura);
-            
+            int version = ++_versionCarga;
+            try
+            {
+                var lista = await _presenter.ListarAsync(_idMaterial, ancho, altura, null, _cierre.Token);
+                if (_cierre.IsCancellationRequested || version != _versionCarga || IsDisposed) return;
+                dgvRecortesDisponibles.DataSource = lista.Select(r => new Recorte { id = r.Id, id_material = r.MaterialId, nombre_material = r.Material, nombre_categoria = r.Categoria, ancho = r.Ancho, altura = r.Altura, medida = r.Medida, cantidad = r.Cantidad, estado = r.Estado, fecha_creacion = r.FechaCreacion }).ToList();
+            }
+            catch (OperationCanceledException) { return; }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested && version == _versionCarga) ToastNotification.ShowError("Error al cargar recortes: " + ex.Message); return; }
+
             if (dgvRecortesDisponibles.Columns["id"] != null) dgvRecortesDisponibles.Columns["id"].Visible = false;
             if (dgvRecortesDisponibles.Columns["id_material"] != null) dgvRecortesDisponibles.Columns["id_material"].Visible = false;
             if (dgvRecortesDisponibles.Columns["nombre_material"] != null) dgvRecortesDisponibles.Columns["nombre_material"].Visible = false;
@@ -157,7 +172,7 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
-        private void btnCrearNuevo_Click(object sender, EventArgs e)
+        private async void btnCrearNuevo_Click(object sender, EventArgs e)
         {
             string inputAncho = txtAnchoBuscado.Text.Replace(',', '.');
             string inputAltura = txtAlturaBuscada.Text.Replace(',', '.');
@@ -187,34 +202,25 @@ namespace SteeLog.Vistas.Movimientos
                 medida = 0; // Ambos fueron ingresados
             }
 
+            if (_guardando) return;
+            _guardando = true;
             try
             {
                 string inputCantCrear = txtCantidad.Text.Replace(',', '.');
                 decimal.TryParse(inputCantCrear, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantidadCrear);
-
-                Recorte nuevo = new Recorte
-                {
-                    id_material = _idMaterial,
-                    ancho = ancho,
-                    altura = altura,
-                    medida = medida,
-                    cantidad = 0,
-                    estado = null
-                };
-
-                int id = _recorteDatos.GuardarRecorte(nuevo);
-
-                var lista = _recorteDatos.ObtenerRecortes(_idMaterial, ancho, altura, medida);
-                RecorteSeleccionado = lista.Count > 0 ? lista[0] : new Recorte { id = id, id_material = _idMaterial, nombre_material = _nombreMaterial, ancho = ancho, altura = altura, medida = medida, estado = null };
-
+                int id = await _presenter.AgregarAsync(_idMaterial, ancho, altura, medida, 0, null, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
+                var lista = await _presenter.ListarAsync(_idMaterial, ancho, altura, medida, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
+                var existente = lista.FirstOrDefault(r => r.Id == id);
+                RecorteSeleccionado = existente == null ? new Recorte { id = id, id_material = _idMaterial, nombre_material = _nombreMaterial, ancho = ancho, altura = altura, medida = medida, estado = null } : new Recorte { id = existente.Id, id_material = existente.MaterialId, nombre_material = existente.Material, nombre_categoria = existente.Categoria, ancho = existente.Ancho, altura = existente.Altura, medida = existente.Medida, cantidad = existente.Cantidad, estado = existente.Estado, fecha_creacion = existente.FechaCreacion };
                 CantidadSeleccionada = cantidadCrear > 0 ? cantidadCrear : 1m;
-                this.DialogResult = DialogResult.OK;
-                this.Close();
+                DialogResult = DialogResult.OK;
+                Close();
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al gestionar el recorte: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al gestionar el recorte: " + ex.Message); }
+            finally { _guardando = false; }
         }
 
         private void btnCancelar_Click(object sender, EventArgs e)

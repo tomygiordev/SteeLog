@@ -96,7 +96,6 @@ internal static class BrandingSmoke
         }
         var now = DateTime.Today;
         var cases = new[] {
-            new object[] { typeof(MovimientoPDF), new object[] { new InformeMovimientoDetalle { tipo_movimiento="ENTRADA", fecha=now } } },
             new object[] { typeof(KardexPDF), new object[] { "Material demo", now, now } },
             new object[] { typeof(ConteoInventarioPDF), new object[] { new ConteoInventario { estado="DEMO" }, false, false } },
             new object[] { typeof(InformeObraPDF), new object[] { "Obra demo", 0, 0m, false, null, null } },
@@ -134,9 +133,32 @@ internal static class BrandingSmoke
             foreach (var value in new[] { "OC-101", "Proveedor A", "Chapa zinc", "12", "5", "7", "OC-102", "Proveedor B", "Tornillos", "40", "10", "30" })
                 Check(text.Contains(value), "Ordenes pendientes: falta " + value + ": " + text);
         }
+        string remito = Path.Combine(output, "Remito-real.pdf");
+        var rendererRemito = servicesType.GetProperty("RemitoPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
+        var generarRemito = rendererRemito.GetType().GetMethod("Generar");
+        var remitoType = generarRemito.GetParameters()[1].ParameterType;
+        var remitoDto = Activator.CreateInstance(remitoType);
+        remitoType.GetProperty("Fecha").SetValue(remitoDto, now, null);
+        remitoType.GetProperty("FechaArchivo").SetValue(remitoDto, now, null);
+        remitoType.GetProperty("NroRemito").SetValue(remitoDto, "R-123", null);
+        remitoType.GetProperty("TipoMovimiento").SetValue(remitoDto, "Salida", null);
+        remitoType.GetProperty("Origen").SetValue(remitoDto, "Galpón", null);
+        remitoType.GetProperty("Destino").SetValue(remitoDto, "Obra demo", null);
+        var lineas = (System.Collections.IList)remitoType.GetProperty("Lineas").GetValue(remitoDto, null);
+        var linea = Activator.CreateInstance(lineas.GetType().GetGenericArguments()[0]);
+        linea.GetType().GetProperty("Material").SetValue(linea, "Insumo demo", null);
+        linea.GetType().GetProperty("Cantidad").SetValue(linea, 1m, null);
+        linea.GetType().GetProperty("EsInsumo").SetValue(linea, true, null);
+        lineas.Add(linea);
+        generarRemito.Invoke(rendererRemito, new object[] { remito, remitoDto });
+        VerifyPdf(remito);
+        using (var reader = new PdfReader(remito)) {
+            var texto = PdfTextExtractor.GetTextFromPage(reader, 1);
+            Check(texto.Contains("Insumo demo") && texto.Contains("R-123"), "Remito sin datos esperados: " + texto);
+        }
         string kardex = Path.Combine(output, "Kardex-real.pdf");
         KardexPDF.Generar(kardex, new List<KardexItem>(), "Material demo", now, now, false, false); VerifyPdf(kardex);
-        Console.WriteLine("OK: 6 headers, Kardex, ordenes con datos, resources, icon and forms");
+        Console.WriteLine("OK: headers, Kardex, remito y ordenes con datos, resources, icon and forms");
     }
     static void VerifyPdf(string path)
     {

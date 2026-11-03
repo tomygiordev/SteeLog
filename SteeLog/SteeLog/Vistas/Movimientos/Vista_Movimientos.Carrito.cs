@@ -1,0 +1,593 @@
+using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.Data;
+using System.Drawing;
+using System.Globalization;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+using System.Threading;
+using Timer = System.Windows.Forms.Timer;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using SteeLog.Core.Application.Movimientos;
+using System.Windows.Forms;
+using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
+using ClasificadorMovimiento = SteeLog.Domain.Inventario.ClasificadorMovimiento;
+using SteeLog.Modelos;
+using SteeLog.Reportes;
+using SteeLog.Servicios;
+using System.IO;
+// using static System.Windows.Forms.VisualStyles.VisualStyleElement;
+
+namespace SteeLog.Vistas.Movimientos
+{
+    public partial class Vista_Movimientos
+    {
+        private void btnRecorte_Click(object sender, EventArgs e)
+        {
+            if (_materialSeleccionado == null) return;
+
+            int idMat = _materialSeleccionado.id;
+            string nomMat = _materialSeleccionado.nombre;
+
+            using (var modal = new ModalRecortes(idMat, nomMat))
+            {
+                if (modal.ShowDialog() == DialogResult.OK)
+                {
+                    // Extraer selección del modal
+                    var recorte = modal.RecorteSeleccionado;
+                    decimal cantidad = modal.CantidadSeleccionada;
+
+                    // Verificar si ya existe para acumular
+                    var existente = materialesLista.FirstOrDefault(m =>
+                        m.id_material == idMat &&
+                        m.EsRecorte == true &&
+                        m.IdRecorte == recorte.id);
+
+                    if (existente != null)
+                    {
+                        existente.cantidad += cantidad;
+                        ActualizarCantidadEnUI(existente);
+                    }
+                    else
+                    {
+                        MovimientoMaterial nuevoItem = new MovimientoMaterial
+                        {
+                            id_material = idMat,
+                            NombreMaterial = nomMat + $" (R: {recorte.ancho}x{recorte.altura})",
+                            cantidad = cantidad,
+                            EsRecorte = true,
+                            IdRecorte = recorte.id,
+                            MedidaRecorte = recorte.ancho
+                        };
+
+                        materialesLista.Add(nuevoItem);
+                        AgregarItemLista(nuevoItem);
+                    }
+
+                    // Limpiar selección de material y cantidad
+                    _materialSeleccionado = null;
+                    isProgrammaticChange = true;
+                    txtBuscadorMaterial.Text = "";
+                    isProgrammaticChange = false;
+                    cantMatMov.Text = "";
+                    _recorteSeleccionado = null;
+                    btnRecorte.Enabled = false;
+                }
+            }
+        }
+
+        private void btnInsumo_Click(object sender, EventArgs e)
+        {
+            using (var modal = new ModalInsumos())
+            {
+                if (modal.ShowDialog() == DialogResult.OK)
+                {
+                    var insumo = modal.InsumoSeleccionado;
+
+                    // Buscar si ya existe para acumular
+                    var existente = materialesLista.FirstOrDefault(m => m.EsInsumo && m.IdInsumo == insumo.id);
+                    if (existente != null)
+                    {
+                        existente.cantidad += 1;
+                        ActualizarCantidadEnUI(existente);
+                    }
+                    else
+                    {
+                        MovimientoMaterial nuevoItem = new MovimientoMaterial
+                        {
+                            id_material = 0,
+                            NombreMaterial = insumo.nombre,
+                            cantidad = 1,
+                            EsInsumo = true,
+                            IdInsumo = insumo.id
+                        };
+
+                        materialesLista.Add(nuevoItem);
+                        AgregarItemLista(nuevoItem);
+                    }
+                }
+            }
+        }
+
+        private void ActualizarCantidadEnUI(MovimientoMaterial item)
+        {
+            foreach (Control ctrl in flpMateriales.Controls)
+            {
+                if (ctrl is Panel p && p.Tag == item)
+                {
+                    TableLayoutPanel tbl = p.Controls.OfType<TableLayoutPanel>().FirstOrDefault();
+                    if (tbl != null)
+                    {
+                        Label lblCant = tbl.GetControlFromPosition(2, 0) as Label;
+                        if (lblCant != null) lblCant.Text = item.cantidad.ToString("G29", CultureInfo.InvariantCulture);
+                    }
+                    break;
+                }
+            }
+        }
+
+        /// <summary>
+        /// Calcula el stock disponible real para agregar al movimiento actual.
+        /// En modo edición, se suman las cantidades ya cargadas en la lista porque
+        /// esas cantidades serán revertidas al guardar (el movimiento original se elimina primero).
+        /// </summary>
+        private decimal StockDisponibleMaterial(int idMaterial)
+        {
+            decimal stockBase = _materialSeleccionado?.stockActual ?? 0;
+            if (_idMovimientoAEditar > 0)
+            {
+                // Las cantidades ya en la lista se van a revertir → las sumamos al disponible
+                decimal yaEnLista = materialesLista
+                    .Where(m => m.id_material == idMaterial && !m.EsRecorte)
+                    .Sum(m => m.cantidad);
+                stockBase += yaEnLista;
+            }
+            return stockBase;
+        }
+
+        private decimal StockDisponibleRecorte(int idRecorte)
+        {
+            decimal stockBase = _recorteSeleccionado?.cantidad ?? 0;
+            if (_idMovimientoAEditar > 0)
+            {
+                decimal yaEnLista = materialesLista
+                    .Where(m => m.EsRecorte && m.IdRecorte == idRecorte)
+                    .Sum(m => m.cantidad);
+                stockBase += yaEnLista;
+            }
+            return stockBase;
+        }
+
+        private void chkCompraEventual_CheckedChanged(object sender, EventArgs e)
+        {
+            if (chkCompraEventual.Checked)
+            {
+                // Visual feedback for Eventual Purchase
+                txtBuscadorMaterial.BorderColor = Color.FromArgb(255, 165, 0); // Orange/Amber
+                txtBuscadorMaterial.PlaceholderText = "Escribir nombre de material eventual...";
+                txtBuscadorMaterial.FillColor = Color.FromArgb(45, 40, 30);
+                txtBuscadorMaterial.ForeColor = Color.FromArgb(255, 200, 100);
+
+                // Disable search behavior (if implemented via autocomplete or similar)
+                if (!isProgrammaticChange)
+                {
+                    _materialSeleccionado = null;
+                    _recorteSeleccionado = null;
+                }
+                btnRecorte.Enabled = false;
+            }
+            else
+            {
+                // Restore standard look
+                txtBuscadorMaterial.BorderColor = Color.FromArgb(60, 60, 65);
+                txtBuscadorMaterial.PlaceholderText = "🔍 Buscar material...";
+                txtBuscadorMaterial.FillColor = Color.FromArgb(25, 30, 28);
+                txtBuscadorMaterial.ForeColor = Color.FromArgb(200, 200, 200);
+            }
+
+            if (!isProgrammaticChange && chkCompraEventual.Checked && _idMovimientoAEditar == 0 && panelSeleccionado != null)
+                DeseleccionarItem();
+
+            ActualizarVisibilidadPrecios();
+        }
+
+        private void btnAgregarMaterial_Click(object sender, EventArgs e)
+        {
+            decimal cantidadVal = 0;
+            // Acepta tanto "1.5" como "1,5" normalizando a InvariantCulture
+            string cantTexto = (cantMatMov.Text ?? "").Trim().Replace(',', '.');
+            decimal.TryParse(cantTexto, NumberStyles.Any, CultureInfo.InvariantCulture, out cantidadVal);
+
+            bool esCompraEventual = chkCompraEventual.Checked;
+            string materialTexto = txtBuscadorMaterial.Text.Trim();
+
+            if (cantidadVal <= 0)
+            {
+                ToastNotification.ShowWarning("Ingrese una cantidad válida.");
+                return;
+            }
+
+            // Evitar pérdida silenciosa: la columna cantidad es entera en la base para materiales normales.
+            // Si el usuario ingresa un decimal (ej: 2,75) se perdería la parte fraccional.
+            // Los recortes y compras eventuales aceptan decimales (ej: 0.5, 1.25).
+            if (_recorteSeleccionado == null && !esCompraEventual && cantidadVal != Math.Floor(cantidadVal))
+            {
+                var resp = MessageBox.Show(
+                    $"La cantidad '{cantidadVal.ToString(CultureInfo.InvariantCulture)}' tiene decimales y se guardará redondeada a {Math.Round(cantidadVal, MidpointRounding.AwayFromZero)}.\n\n¿Continuar?",
+                    "Cantidad con decimales",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+                if (resp != DialogResult.Yes) return;
+                cantidadVal = Math.Round(cantidadVal, MidpointRounding.AwayFromZero);
+            }
+
+            if (esCompraEventual && string.IsNullOrEmpty(materialTexto))
+            {
+                ToastNotification.ShowWarning("Ingrese el nombre del material eventual.");
+                return;
+            }
+            if (!esCompraEventual && _materialSeleccionado == null)
+            {
+                ToastNotification.ShowWarning("Seleccione material de la lista desde el buscador.");
+                return;
+            }
+
+            int? idMaterial = _materialSeleccionado?.id;
+            Material materialInfo = _materialSeleccionado;
+            decimal cantidad = cantidadVal;
+
+            MovimientoMaterial itemAnterior = null;
+            if (panelSeleccionado != null && panelSeleccionado.Tag is MovimientoMaterial)
+            {
+                itemAnterior = (MovimientoMaterial)panelSeleccionado.Tag;
+                var confirmEdit = MessageBox.Show(
+                    "¿Estás seguro que querés editar este material?",
+                    "Confirmar edición",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question,
+                    MessageBoxDefaultButton.Button2);
+                if (confirmEdit != DialogResult.Yes) return;
+            }
+
+            if (_recorteSeleccionado == null && materialInfo != null)
+            {
+                // En modo edición el stock disponible incluye lo ya cargado (será revertido)
+                decimal stockDisponible = idMaterial.HasValue ? StockDisponibleMaterial(idMaterial.Value) : 0;
+                decimal yaEnLista = materialesLista.Where(m => m.id_material == idMaterial && !m.EsRecorte).Sum(m => m.cantidad);
+
+                // Si estamos modificando el mismo ítem, restamos su cantidad anterior para no duplicarla en la suma
+                if (itemAnterior != null && itemAnterior.id_material == idMaterial && !itemAnterior.EsRecorte)
+                {
+                    yaEnLista -= itemAnterior.cantidad;
+                }
+
+                decimal totalSolicitado = yaEnLista + cantidad;
+
+                string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
+                bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
+
+                if (consumeStock && totalSolicitado > stockDisponible)
+                {
+                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                        ? "Stock insuficiente para agregar ese material."
+                        : $"Stock insuficiente. Disponible: {stockDisponible}";
+                    ToastNotification.ShowWarning(mensaje);
+                    return;
+                }
+            }
+            else if (_recorteSeleccionado != null)
+            {
+                decimal stockDisponibleRec = StockDisponibleRecorte(_recorteSeleccionado.id);
+                decimal yaEnLista = materialesLista.Where(m => m.EsRecorte && m.IdRecorte == _recorteSeleccionado.id).Sum(m => m.cantidad);
+
+                if (itemAnterior != null && itemAnterior.EsRecorte && itemAnterior.IdRecorte == _recorteSeleccionado.id)
+                {
+                    yaEnLista -= itemAnterior.cantidad;
+                }
+
+                decimal totalSolicitado = yaEnLista + cantidad;
+
+                string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
+                bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
+                if (consumeStock && totalSolicitado > stockDisponibleRec)
+                {
+                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                        ? "Stock de recorte insuficiente."
+                        : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
+                    ToastNotification.ShowWarning(mensaje);
+                    return;
+                }
+            }
+
+            idMaterial = esCompraEventual ? (int?)null : _materialSeleccionado?.id;
+            string nombreMaterial = materialInfo?.nombre ?? materialTexto;
+
+            decimal precioUnitario = 0;
+            if (esCompraEventual && txtPrecioMaterial != null)
+            {
+                decimal.TryParse(txtPrecioMaterial.Text.Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out precioUnitario);
+            }
+
+            MovimientoMaterial nuevoItem = new MovimientoMaterial
+            {
+                id_material = idMaterial,
+                NombreMaterial = nombreMaterial + (_recorteSeleccionado != null ? $" (R: {_recorteSeleccionado.ancho}x{_recorteSeleccionado.altura})" : ""),
+                NombreMaterialEventual = esCompraEventual ? materialTexto : null,
+                cantidad = cantidad,
+                EsRecorte = _recorteSeleccionado != null,
+                IdRecorte = _recorteSeleccionado?.id,
+                MedidaRecorte = _recorteSeleccionado?.ancho,
+                EsCompraEventual = esCompraEventual,
+                precio_unitario = precioUnitario
+            };
+
+            if (itemAnterior != null)
+            {
+                // Estamos editando un material existente en la lista
+                int idx = materialesLista.IndexOf(itemAnterior);
+                if (idx >= 0) materialesLista[idx] = nuevoItem;
+
+                panelSeleccionado.Tag = nuevoItem;
+                TableLayoutPanel tbl = panelSeleccionado.Controls.OfType<TableLayoutPanel>().FirstOrDefault();
+                if (tbl != null)
+                {
+                    Label lblMat = tbl.GetControlFromPosition(0, 0) as Label;
+                    if (lblMat != null)
+                    {
+                        string textoPrecio = "";
+                        if (nuevoItem.EsCompraEventual && nuevoItem.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
+                        {
+                            textoPrecio = $" (${nuevoItem.precio_unitario:N2})";
+                        }
+                        lblMat.Text = nuevoItem.NombreMaterial + textoPrecio;
+                    }
+
+                    Label lblTip = tbl.GetControlFromPosition(1, 0) as Label;
+                    if (lblTip != null)
+                    {
+                        if (nuevoItem.EsRecorte) { lblTip.Text = "RECORTE"; lblTip.ForeColor = Color.Orange; }
+                        else if (nuevoItem.EsInsumo) { lblTip.Text = "INSUMO"; lblTip.ForeColor = Color.FromArgb(0, 188, 212); }
+                        else if (nuevoItem.EsCompraEventual) { lblTip.Text = "EVENTUAL"; lblTip.ForeColor = Color.FromArgb(255, 165, 0); }
+                        else { lblTip.Text = ""; }
+                    }
+
+                    Label lblCant = tbl.GetControlFromPosition(2, 0) as Label;
+                    if (lblCant != null) lblCant.Text = nuevoItem.cantidad.ToString("G29", CultureInfo.InvariantCulture);
+                }
+
+                DeseleccionarItem();
+            }
+            else
+            {
+                // Es uno nuevo - Verificar si ya existe en la lista para acumular
+                var existente = materialesLista.FirstOrDefault(m =>
+                    m.id_material == nuevoItem.id_material &&
+                    m.NombreMaterialEventual == nuevoItem.NombreMaterialEventual &&
+                    m.EsRecorte == nuevoItem.EsRecorte &&
+                    m.IdRecorte == nuevoItem.IdRecorte &&
+                    m.EsInsumo == nuevoItem.EsInsumo &&
+                    m.EsCompraEventual == nuevoItem.EsCompraEventual &&
+                    m.precio_unitario == nuevoItem.precio_unitario);
+
+                if (existente != null)
+                {
+                    existente.cantidad += nuevoItem.cantidad;
+                    ActualizarCantidadEnUI(existente);
+                }
+                else
+                {
+                    materialesLista.Add(nuevoItem);
+                    AgregarItemLista(nuevoItem);
+                }
+
+                DeseleccionarItem();
+                GuardarBorrador();
+            }
+        }
+
+        private void DeseleccionarItem()
+        {
+            if (panelSeleccionado != null)
+                panelSeleccionado.BackColor = Color.Transparent;
+            panelSeleccionado = null;
+
+            isProgrammaticChange = true;
+            _materialSeleccionado = null;
+            _recorteSeleccionado = null;
+            txtBuscadorMaterial.Text = "";
+            cantMatMov.Text = "";
+            chkCompraEventual.Checked = cmbMovimientos.Text.ToUpper().Contains("COMPRA EVENTUAL");
+            btnRecorte.Enabled = false;
+            guna2Button1.Text = "Agregar Material";
+            isProgrammaticChange = false;
+
+            ActualizarVisibilidadPrecios();
+
+            // Regresar foco al buscador de materiales para agilizar el flujo de entrada
+            txtBuscadorMaterial.Focus();
+        }
+
+        private void AgregarItemLista(MovimientoMaterial item)
+        {
+            // ⚠️ Los hijos de FlowLayoutPanel NO deben usar Dock: el FLP controla su posición.
+            // Usamos Width explícito y un TableLayoutPanel interno para el layout de columnas.
+            Panel pnlItem = new Panel();
+            pnlItem.Margin = new Padding(0, 0, 0, 4);
+            // Tomar el ancho actual del FLP; si aún es 0 (carga inicial), usamos 600 como fallback
+            pnlItem.Width = flpMateriales.ClientSize.Width > 5
+                ? flpMateriales.ClientSize.Width - 5
+                : 600;
+            pnlItem.Height = 40;
+            pnlItem.Tag = item;
+            pnlItem.Cursor = Cursors.Hand;
+            pnlItem.BackColor = Color.Transparent;
+
+            // Tabla interna: [nombre | etiqueta tipo | cantidad]
+            TableLayoutPanel tbl = new TableLayoutPanel();
+            tbl.Dock = DockStyle.Fill;
+            tbl.ColumnCount = 3;
+            tbl.RowCount = 1;
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // nombre
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));       // etiqueta RECORTE/INSUMO
+            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80f));  // cantidad
+            tbl.Padding = new Padding(8, 0, 8, 0);
+            tbl.BackColor = Color.Transparent;
+
+            Label lblMaterial = new Label();
+            string textoPrecio = "";
+            if (item.EsCompraEventual && item.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
+            {
+                textoPrecio = $" (${item.precio_unitario:N2})";
+            }
+            lblMaterial.Text = item.NombreMaterial + textoPrecio;
+            lblMaterial.Font = new Font("Bahnschrift SemiLight", 12.5f);
+            lblMaterial.ForeColor = Color.White;
+            lblMaterial.Dock = DockStyle.Fill;
+            lblMaterial.TextAlign = ContentAlignment.MiddleLeft;
+            lblMaterial.AutoEllipsis = true;
+            tbl.Controls.Add(lblMaterial, 0, 0);
+
+            Label lblTipo = new Label();
+            lblTipo.Dock = DockStyle.Fill;
+            lblTipo.TextAlign = ContentAlignment.MiddleCenter;
+            lblTipo.Font = new Font("Bahnschrift SemiBold", 9.5f);
+            lblTipo.Padding = new Padding(4, 0, 4, 0);
+            if (item.EsRecorte)       { lblTipo.Text = "RECORTE"; lblTipo.ForeColor = Color.Orange; }
+            else if (item.EsInsumo)   { lblTipo.Text = "INSUMO";  lblTipo.ForeColor = Color.FromArgb(0, 188, 212); }
+            else if (item.EsCompraEventual) { lblTipo.Text = "EVENTUAL"; lblTipo.ForeColor = Color.FromArgb(255, 165, 0); }
+            tbl.Controls.Add(lblTipo, 1, 0);
+
+            Label lblCantidad = new Label();
+            lblCantidad.Text = item.cantidad.ToString("G29", CultureInfo.InvariantCulture);
+            lblCantidad.Font = new Font("Bahnschrift SemiBold", 12.5f);
+            lblCantidad.ForeColor = Color.FromArgb(150, 220, 150);
+            lblCantidad.Dock = DockStyle.Fill;
+            lblCantidad.TextAlign = ContentAlignment.MiddleRight;
+            tbl.Controls.Add(lblCantidad, 2, 0);
+
+            pnlItem.Controls.Add(tbl);
+
+            pnlItem.Click += (s, ev) => Item_Click(pnlItem, ev);
+            tbl.Click      += (s, ev) => Item_Click(pnlItem, ev);
+            lblMaterial.Click += (s, ev) => Item_Click(pnlItem, ev);
+            lblTipo.Click     += (s, ev) => Item_Click(pnlItem, ev);
+            lblCantidad.Click += (s, ev) => Item_Click(pnlItem, ev);
+
+            flpMateriales.Controls.Add(pnlItem);
+        }
+
+        private void Item_Click(object sender, EventArgs e)
+        {
+            Panel clickedPanel = (Panel)sender;
+
+            // Si clicamos el mismo que ya está seleccionado, lo deseleccionamos (cancelamos edición)
+            if (panelSeleccionado == clickedPanel)
+            {
+                DeseleccionarItem();
+                return;
+            }
+
+            // Deseleccionar el previo
+            if (panelSeleccionado != null)
+                panelSeleccionado.BackColor = Color.Transparent;
+
+            panelSeleccionado = clickedPanel;
+            panelSeleccionado.BackColor = Color.FromArgb(75, 145, 90);
+            guna2Button1.Text = "Editar Material";
+
+            // Cargar el material y cantidad en los campos del selector
+            if (panelSeleccionado.Tag is MovimientoMaterial itemSel)
+            {
+                isProgrammaticChange = true;
+                chkCompraEventual.Checked = itemSel.EsCompraEventual;
+
+                // Buscar el material en la lista completa para tener el objeto completo
+                var mat = itemSel.id_material.HasValue ? materialesFull.FirstOrDefault(m => m.id == itemSel.id_material) : null;
+
+                _materialSeleccionado = mat;
+
+                if (itemSel.EsCompraEventual)
+                {
+                    txtBuscadorMaterial.Text = itemSel.NombreMaterialEventual ?? itemSel.NombreMaterial;
+                    btnRecorte.Enabled = false;
+                    _recorteSeleccionado = null;
+                }
+                else if (mat != null)
+                {
+
+                    if (itemSel.EsRecorte && itemSel.IdRecorte.HasValue)
+                    {
+                        // Para recortes mostramos el nombre con medida
+                        txtBuscadorMaterial.Text = itemSel.NombreMaterial;
+                    }
+                    else
+                    {
+                        txtBuscadorMaterial.Text = mat.nombre;
+                        // Refrescar categoría desde DB en tiempo real para reflejar cambios inmediatos
+                        var cat = _categorias.FirstOrDefault(c => c.id == mat.id_categoria);
+                        btnRecorte.Enabled = (cat != null && cat.recortable);
+                    }
+
+                }
+                else
+                {
+                    // Caso material eventual antiguo sin boolean
+                    txtBuscadorMaterial.Text = itemSel.NombreMaterial;
+                    btnRecorte.Enabled = false;
+                    _recorteSeleccionado = null;
+                }
+
+                cantMatMov.Text = itemSel.cantidad.ToString("G29", CultureInfo.InvariantCulture);
+
+                if (itemSel.EsCompraEventual && txtPrecioMaterial != null)
+                {
+                    txtPrecioMaterial.Text = itemSel.precio_unitario > 0 ? itemSel.precio_unitario.ToString("0.##").Replace('.', ',') : "";
+                }
+
+                isProgrammaticChange = false;
+
+                // Enfocar el campo de cantidad para edición inmediata
+                cantMatMov.Focus();
+                cantMatMov.SelectAll();
+            }
+        }
+
+        private void EliminarMaterial_Click(object sender, EventArgs e)
+        {
+            if (panelSeleccionado != null)
+            {
+                MovimientoMaterial item = (MovimientoMaterial)panelSeleccionado.Tag;
+                materialesLista.Remove(item);
+                flpMateriales.Controls.Remove(panelSeleccionado);
+                panelSeleccionado.Dispose();
+
+                DeseleccionarItem();
+                GuardarBorrador();
+            }
+            else
+            {
+                ToastNotification.ShowWarning("Seleccione un ítem para eliminar.");
+            }
+        }
+
+        private decimal CalcularPrecioTotalMateriales()
+        {
+            decimal total = 0;
+            foreach (var detalle in materialesLista.Where(m => !m.EsInsumo))
+            {
+                decimal precioUnitario = detalle.EsCompraEventual
+                    ? detalle.precio_unitario
+                    : materialesFull.FirstOrDefault(m => detalle.id_material.HasValue && m.id == detalle.id_material.Value)?.precioUnitario ?? 0;
+
+                total += detalle.cantidad * precioUnitario;
+            }
+
+            return total;
+        }
+
+    }
+}

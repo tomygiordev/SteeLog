@@ -14,6 +14,11 @@ using SteeLog.Infrastructure.OrdenesCompra;
 using SteeLog.Infrastructure.Inventario;
 using SteeLog.Infrastructure.Pdf;
 using SteeLog.Core.Application.Inventario;
+using SteeLog.Core.Application.Borradores;
+using SteeLog.Core.Application.Movimientos;
+using SteeLog.Infrastructure.Movimientos;
+using SteeLog.Core.Application.Activos;
+using SteeLog.Infrastructure.Activos;
 using SteeLog.Core.Application.OrdenesCompra;
 namespace SteeLog.CompositionRoot
 {
@@ -25,9 +30,12 @@ namespace SteeLog.CompositionRoot
         internal Session Session { get; } = new Session();
         internal ICredentialStore Credentials { get; }
         internal IPhotoStorage Photos { get; }
+        internal IDraftStore MovimientoDrafts { get; }
+        internal BorradorMovimiento BorradorMovimiento { get; }
         internal IDemoUpdateSource Updates { get; }
         internal IUseCaseExecutor Executor { get; }
         internal IOrdenesPendientesPdf OrdenesPdf { get; }
+        internal IRemitoPdf RemitoPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
         private readonly Lazy<LocalConfiguration> configuration;
@@ -35,15 +43,20 @@ namespace SteeLog.CompositionRoot
         internal LocalConfiguration Configuration => configuration.Value;
         internal PostgresConnectionFactory Connections => connections.Value;
         internal LocalServices(string executableDirectory, string localApplicationData)
+            : this(executableDirectory, localApplicationData, localApplicationData) { }
+        internal LocalServices(string executableDirectory, string localApplicationData, string roamingApplicationData)
         {
             Paths = new LocalPaths(executableDirectory, localApplicationData);
             Photos = new LocalPhotoStorage(Paths.StorageDirectory);
+            MovimientoDrafts = new LocalDraftStore(Path.Combine(roamingApplicationData, "SteeLog", "movimiento_draft.json"));
+            BorradorMovimiento = new BorradorMovimiento(MovimientoDrafts, () => DateTime.Now);
             Credentials = new OptionalCredentialStore(new DpapiCredentialStore(Path.Combine(localApplicationData, "SteeLog", "session.dat")));
             Updates = new LocalDemoUpdateSource(Path.Combine(executableDirectory, "demo", "actualizaciones"), Path.Combine(localApplicationData, "SteeLog", "ActualizacionesDemo"));
             configuration = new Lazy<LocalConfiguration>(() => LocalConfiguration.Load(Paths.ExecutableDirectory, () => typeof(LocalServices).Assembly.GetManifestResourceStream("SteeLog.appsettings.json")));
             connections = new Lazy<PostgresConnectionFactory>(() => new PostgresConnectionFactory(Configuration.ConnectionString));
             var registrations = new ServiceCollection();
             OrdenesPdf = new OrdenesPendientesPDF(new RecursosPdfLocales());
+            RemitoPdf = new SteeLog.Infrastructure.Pdf.MovimientoPDF(new RecursosPdfLocales());
             registrations.AddSingleton(Updates);
             registrations.AddSingleton(Session);
             registrations.AddSingleton<IClock>(_ => new BusinessClock(TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time"), () => DateTimeOffset.UtcNow));
@@ -54,6 +67,39 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<NpgsqlOrdenes>();
             registrations.AddScoped<IOrdenesEscritura>(scope => scope.GetRequiredService<NpgsqlOrdenes>());
             registrations.AddScoped<IInventarioEscritura, NpgsqlInventario>();
+            registrations.AddScoped<IInventarioConsulta>(_ => new NpgsqlInventarioConsulta(Connections));
+            registrations.AddScoped<ConsultarInventario>();
+            registrations.AddScoped<IMaterialesEscritura, NpgsqlMateriales>();
+            registrations.AddScoped<IRecortesEscritura, NpgsqlRecortes>();
+            registrations.AddScoped<IRecortesConsulta>(_ => new NpgsqlRecortesConsulta(Connections));
+            registrations.AddScoped<CrearMaterial>();
+            registrations.AddScoped<EditarMaterial>();
+            registrations.AddScoped<EliminarMaterial>();
+            registrations.AddScoped<AgregarRecorte>();
+            registrations.AddScoped<EliminarRecorte>();
+            registrations.AddScoped<ConsultarRecortes>();
+            registrations.AddScoped<IInsumosEscritura, NpgsqlInsumos>();
+            registrations.AddScoped<IInsumosConsulta, NpgsqlInsumosConsulta>();
+            registrations.AddScoped<ConsultarInsumos>();
+            registrations.AddScoped<IHistorialMovimientoConsulta>(_ => new NpgsqlHistorialMovimientoConsulta(Connections));
+            registrations.AddScoped<ConsultarHistorialMovimientos>();
+            registrations.AddScoped<GestionarInsumos>();
+            registrations.AddScoped<IRemitoConsulta>(_ => new NpgsqlRemitoConsulta(Connections));
+            registrations.AddScoped<ConsultarRemito>();
+            registrations.AddScoped<ICatalogosMovimientoConsulta>(_ => new NpgsqlCatalogosMovimientoConsulta(Connections));
+            registrations.AddScoped<ConsultarCatalogosMovimiento>();
+            registrations.AddScoped<IMaterialesConsulta>(_ => new NpgsqlMaterialesConsulta(Connections));
+            registrations.AddScoped<ConsultarMateriales>();
+            registrations.AddScoped<IMovimientoEdicionConsulta>(_ => new NpgsqlMovimientoEdicionConsulta(Connections));
+            registrations.AddScoped<ConsultarMovimientoEdicion>();
+            registrations.AddScoped<IFletesEscritura, NpgsqlFletes>();
+            registrations.AddScoped<GestionarFletes>();
+            registrations.AddScoped<IPrecioEventualEscritura, NpgsqlPrecioEventual>();
+            registrations.AddScoped<ActualizarPrecioEventual>();
+            registrations.AddScoped<IMovimientosEscritura, NpgsqlMovimientos>();
+            registrations.AddScoped<RegistrarMovimiento>();
+            registrations.AddScoped<EditarMovimiento>();
+            registrations.AddScoped<EliminarMovimiento>();
             registrations.AddScoped<CrearOrden>();
             registrations.AddScoped<EditarOrden>();
             registrations.AddScoped<CambiarMaterialOrden>();
@@ -64,11 +110,13 @@ namespace SteeLog.CompositionRoot
             provider = registrations.BuildServiceProvider();
             Executor = new UseCaseExecutor(provider.GetRequiredService<IServiceScopeFactory>());
         }
+        internal InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
+        internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;
         internal void EnsureConnectionFactory() { var unused = Connections; }
         internal Npgsql.NpgsqlConnection CreateConnection() => Connections.Create();
         public void Dispose() => provider.Dispose();
-        internal static LocalServices Create() => new LocalServices(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData));
+        internal static LocalServices Create() => new LocalServices(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     }
 }

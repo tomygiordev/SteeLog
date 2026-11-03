@@ -1,15 +1,20 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using System.Threading;
+using SteeLog.Core.Application.Inventario;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Inventario
 {
     public class ModalStockBajo : Form
     {
+        private readonly MaterialesPresenter _presenter = new MaterialesPresenter(LocalServices.Current.Executor);
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private Guna.UI2.WinForms.Guna2DataGridView dgvMateriales;
         private Guna.UI2.WinForms.Guna2Button btnCerrar;
         private Label lblTitulo;
@@ -19,7 +24,9 @@ namespace SteeLog.Vistas.Inventario
         {
             InitializeComponent();
             ConfigurarFormulario();
-            CargarDatos();
+            Shown += (s, e) => CargarDatos();
+            FormClosed += (s, e) => _cierre.Cancel();
+            Disposed += (s, e) => _cierre.Cancel();
         }
 
         private void InitializeComponent()
@@ -100,21 +107,22 @@ namespace SteeLog.Vistas.Inventario
             // Opcional: sombrear el fondo y permitir drag
         }
 
-        private void CargarDatos()
+        private async void CargarDatos()
         {
             try
             {
-                var bajoStock = new MaterialDatos().ObtenerMaterialesStockBajoPriorizados();
+                var bajoStock = await _presenter.ListarAsync(new FiltroMaterialLectura { Priorizados = true }, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
                 bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
 
                 var source = bajoStock.Select(m => new
                 {
-                    Codigo = m.id,
-                    Material = m.nombre,
-                    Categoria = m.nombre_categoria,
-                    StockActual = ocultarCantidades ? SessionManager.ObtenerEstadoStockMaterial(m.stockActual) : m.stockActual.ToString("N0"),
-                    StockMinimo = ocultarCantidades ? string.Empty : m.stockMinimo.ToString("N0"),
-                    Movimientos = m.cantidadMovimientos
+                    Codigo = m.Id,
+                    Material = m.Nombre,
+                    Categoria = m.Categoria,
+                    StockActual = ocultarCantidades ? SessionManager.ObtenerEstadoStockMaterial(m.Stock) : m.Stock.ToString("N0"),
+                    StockMinimo = ocultarCantidades ? string.Empty : m.Minimo.ToString("N0"),
+                    Movimientos = m.CantidadMovimientos
                 }).ToList();
 
                 dgvMateriales.DataSource = source;
@@ -131,10 +139,8 @@ namespace SteeLog.Vistas.Inventario
                     dgvMateriales.Columns["Movimientos"].Width = 70;
                 }
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error cargando vista de bajo stock: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("Error cargando vista de bajo stock: " + ex.Message); }
         }
 
         private void btnCerrar_Click(object sender, EventArgs e)

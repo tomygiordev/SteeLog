@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
@@ -6,23 +6,28 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using System.Threading;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 
 namespace SteeLog.Vistas
 {
     public partial class Vista_Recortes : Form
     {
-        private RecorteDatos _recorteDatos = new RecorteDatos();
-        private ComunDatos _comunDatos = new ComunDatos();
+        private readonly RecortesPresenter _presenter = new RecortesPresenter(LocalServices.Current.Executor);
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private int _versionRecortes, _versionMateriales;
+        private bool _guardando;
         private List<Recorte> _recortes = new List<Recorte>();
 
         public Vista_Recortes()
         {
             InitializeComponent();
             CargarEstadosRecorte();
-            CargarCategoriasRecortables();
-            CargarRecortes();
+            Shown += (s, e) => { CargarCategoriasRecortables(); CargarRecortes(); };
+            FormClosed += (s, e) => _cierre.Cancel();
+            Disposed += (s, e) => _cierre.Cancel();
             
             cmbCategorias.SelectedIndexChanged += CmbCategorias_SelectedIndexChanged;
             cmbMateriales.SelectedIndexChanged += CmbMateriales_SelectedIndexChanged;
@@ -47,58 +52,64 @@ namespace SteeLog.Vistas
             }
         }
 
-        private void CargarCategoriasRecortables()
+        private async void CargarCategoriasRecortables()
         {
-            DataTable dt = _comunDatos.ObtenerListaGenerica("categorias");
-            var categorasRecortables = dt.AsEnumerable()
-                .Where(row => row.Field<bool>("recortable") == true)
-                .Select(row => new { 
-                    id = row.Table.Columns.Contains("id_categoria") ? row.Field<int>("id_categoria") : row.Field<int>("id"), 
-                    nombre = row.Field<string>("nombre") 
-                })
-                .ToList();
-
-            cmbCategorias.DataSource = categorasRecortables;
-            cmbCategorias.DisplayMember = "nombre";
-            cmbCategorias.ValueMember = "id";
-            cmbCategorias.SelectedIndex = -1;
+            try
+            {
+                var categorias = await _presenter.CategoriasAsync(_cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
+                cmbCategorias.DataSource = categorias.ToList();
+                cmbCategorias.DisplayMember = "Nombre"; cmbCategorias.ValueMember = "Id";
+                cmbCategorias.SelectedIndex = -1;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al cargar categorías: " + ex.Message); }
         }
 
         private void CmbCategorias_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (cmbCategorias.SelectedIndex != -1)
             {
-                int idCat = (int)cmbCategorias.SelectedValue;
-                CargarMaterialesPorCategoria(idCat);
+                if (cmbCategorias.SelectedValue is int idCat) CargarMaterialesPorCategoria(idCat);
             }
             else
             {
+                _versionMateriales++;
                 cmbMateriales.DataSource = null;
             }
         }
 
-        private void CargarMaterialesPorCategoria(int idCategoria)
+        private async void CargarMaterialesPorCategoria(int idCategoria)
         {
-            DataTable dt = _comunDatos.ObtenerListaGenerica("materiales");
-            var materiales = dt.AsEnumerable()
-                .Where(row => row.Field<int>("id_categoria") == idCategoria)
-                .Select(row => new { id = row.Field<int>("id"), nombre = row.Field<string>("nombre") })
-                .ToList();
-
-            cmbMateriales.DataSource = materiales;
-            cmbMateriales.DisplayMember = "nombre";
-            cmbMateriales.ValueMember = "id";
-            cmbMateriales.SelectedIndex = -1;
+            int version = ++_versionMateriales;
+            try
+            {
+                var materiales = await _presenter.MaterialesAsync(idCategoria, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionMateriales) return;
+                cmbMateriales.DataSource = materiales.ToList();
+                cmbMateriales.DisplayMember = "Nombre"; cmbMateriales.ValueMember = "Id";
+                cmbMateriales.SelectedIndex = -1;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested && version == _versionMateriales) ToastNotification.ShowError("Error al cargar materiales: " + ex.Message); }
         }
 
         private void CmbMateriales_SelectedIndexChanged(object sender, EventArgs e)
         {
         }
 
-        private void CargarRecortes()
+        private async void CargarRecortes()
         {
-            _recortes = _recorteDatos.ObtenerRecortes();
-            AplicarFiltroBusqueda();
+            int version = ++_versionRecortes;
+            try
+            {
+                var lista = await _presenter.ListarAsync(null, null, null, null, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionRecortes) return;
+                _recortes = lista.Select(r => new Recorte { id=r.Id, id_material=r.MaterialId, nombre_material=r.Material, nombre_categoria=r.Categoria, ancho=r.Ancho, altura=r.Altura, medida=r.Medida, cantidad=r.Cantidad, estado=r.Estado, fecha_creacion=r.FechaCreacion }).ToList();
+                AplicarFiltroBusqueda();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested && version == _versionRecortes) ToastNotification.ShowError("Error al cargar recortes: " + ex.Message); }
         }
 
         private void AplicarFiltroBusqueda()
@@ -239,7 +250,7 @@ namespace SteeLog.Vistas
             }
         }
 
-        private void btnGuardar_Click(object sender, EventArgs e)
+        private async void btnGuardar_Click(object sender, EventArgs e)
         {
             if (cmbMateriales.SelectedIndex == -1)
             {
@@ -282,6 +293,8 @@ namespace SteeLog.Vistas
 
             if (MessageBox.Show("¿Guardar este recorte?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
 
+            if (_guardando) return;
+            _guardando = true;
             try
             {
                 int idMat = (int)cmbMateriales.SelectedValue;
@@ -294,7 +307,8 @@ namespace SteeLog.Vistas
                     cantidad = cantidad,
                     estado = cmbEstado.SelectedItem?.ToString()
                 };
-                _recorteDatos.GuardarRecorte(nuevo);
+                await _presenter.AgregarAsync(nuevo.id_material, nuevo.ancho, nuevo.altura, nuevo.medida, nuevo.cantidad, nuevo.estado, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
                 ToastNotification.ShowSuccess("Recorte guardado correctamente.");
                 txtAncho.Clear();
                 txtAltura.Clear();
@@ -302,28 +316,29 @@ namespace SteeLog.Vistas
                 cmbEstado.SelectedIndex = -1;
                 CargarRecortes();
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al guardar: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al guardar: " + ex.Message); }
+            finally { _guardando = false; }
         }
 
-        private void btnEliminar_Click(object sender, EventArgs e)
+        private async void btnEliminar_Click(object sender, EventArgs e)
         {
             if (dgvRecortes.SelectedRows.Count == 0) return;
 
-            int id = (int)dgvRecortes.SelectedRows[0].Cells["id"].Value;
+            var recorte = (Recorte)dgvRecortes.SelectedRows[0].DataBoundItem;
+            int id = recorte.id;
             if (MessageBox.Show("¿Seguro que desea eliminar este recorte?", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
+                if (_guardando) return;
+                _guardando = true;
                 try
                 {
-                    _recorteDatos.EliminarRecorte(id);
-                    CargarRecortes();
+                    await _presenter.EliminarAsync(id, recorte.id_material, _cierre.Token);
+                    if (!_cierre.IsCancellationRequested && !IsDisposed) CargarRecortes();
                 }
-                catch (Exception)
-                {
-                    ToastNotification.ShowError("No se puede eliminar el recorte (posiblemente esté en uso).");
-                }
+                catch (OperationCanceledException) { }
+                catch (Exception) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("No se puede eliminar el recorte (posiblemente esté en uso)."); }
+                finally { _guardando = false; }
             }
         }
 

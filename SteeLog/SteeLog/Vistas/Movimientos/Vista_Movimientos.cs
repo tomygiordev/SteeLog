@@ -7,8 +7,14 @@ using System.Globalization;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
+using Timer = System.Windows.Forms.Timer;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using SteeLog.Core.Application.Movimientos;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
+using ClasificadorMovimiento = SteeLog.Domain.Inventario.ClasificadorMovimiento;
 using SteeLog.Modelos;
 using SteeLog.Reportes;
 using SteeLog.Servicios;
@@ -17,7 +23,7 @@ using System.IO;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class Vista_Movimientos : Form, IMessageFilter
+    public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista
     {
         private List<MovimientoMaterial> materialesLista = new List<MovimientoMaterial>();
         private FlowLayoutPanel flpMateriales;
@@ -26,7 +32,24 @@ namespace SteeLog.Vistas.Movimientos
         private List<Categoria> _categorias = new List<Categoria>();
         private List<Material> materialesFull = new List<Material>();
         private Recorte _recorteSeleccionado = null;
+        internal Func<DialogResult> ConfirmarGuardado = () => MessageBox.Show(
+            "¿Estás seguro que querés guardar este remito?", "Confirmar guardado",
+            MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
         private int _idMovimientoAEditar = 0;
+        private bool modeloListo = false;
+        private bool catalogosListos;
+        private CatalogosMovimiento catalogos = new CatalogosMovimiento();
+        private List<Recorte> recortesDisponibles = new List<Recorte>();
+        private int versionCatalogos;
+        private CancellationTokenSource cargaCatalogos;
+        private bool ocupada;
+        private int versionCarga;
+        private CancellationTokenSource cargaEdicion;
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private MovimientosPresenter presenter;
+        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        public void SetOcupada(bool valor) { ocupada = valor; if (!IsDisposed && guna2Button2 != null) guna2Button2.Enabled = !valor && modeloListo && catalogosListos; }
+        public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         private Label lblPrecioMaterial;
         private Guna.UI2.WinForms.Guna2TextBox txtPrecioMaterial;
         private Label lblPrecioGeneral;
@@ -58,85 +81,14 @@ namespace SteeLog.Vistas.Movimientos
         public Vista_Movimientos()
         {
             InitializeComponent();
+            if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             guna2DateTimePicker1.Value = DateTime.Now;
             
             Application.AddMessageFilter(this);
-            this.FormClosed += (s, e) =>
-            {
-                Application.RemoveMessageFilter(this);
-                // Limpiar timer de borrador
-                _timerDraft?.Stop();
-                _timerDraft?.Dispose();
-                _timerDraft = null;
-                // Solo eliminar el borrador si el guardado fue exitoso
-                if (_guardadoExitoso)
-                    MovimientoDraftService.Eliminar();
-            };
+            FormClosed += (s, e) => CerrarRecursos();
+            Disposed += (s, e) => CerrarRecursos();
 
-            ComunDatos datos = new ComunDatos();
-            var dtTipos = datos.ObtenerListaGenerica("tipo_movimiento");
-            // Reordenar: Envío a Obra primero, excluir Ajuste Positivo y Registro Interno
-            DataTable dtTiposOrden = dtTipos.Clone();
-            DataRow envioRow = null;
-
-            // Tipos que NO se muestran en el selector manual
-            var tiposOcultos = new[] { "ajuste positivo", "registro interno" };
-
-            foreach (DataRow row in dtTipos.Rows)
-            {
-                string nombre = row["nombre"]?.ToString() ?? "";
-                if (tiposOcultos.Any(t => nombre.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
-                    continue; // Saltar los ocultos
-
-                if (nombre.IndexOf("Envío", StringComparison.OrdinalIgnoreCase) >= 0
-                    || nombre.IndexOf("Envio", StringComparison.OrdinalIgnoreCase) >= 0)
-                {
-                    envioRow = row;
-                    // No importar todavía, lo ponemos primero luego
-                }
-            }
-
-            if (envioRow != null) dtTiposOrden.ImportRow(envioRow);
-            foreach (DataRow row in dtTipos.Rows)
-            {
-                string nombre = row["nombre"]?.ToString() ?? "";
-                if (tiposOcultos.Any(t => nombre.IndexOf(t, StringComparison.OrdinalIgnoreCase) >= 0))
-                    continue;
-                if (row != envioRow) dtTiposOrden.ImportRow(row);
-            }
-
-            // cmbMovimientos
-            cmbMovimientos.DataSource = dtTiposOrden;
-            cmbMovimientos.DisplayMember = "nombre";
-            cmbMovimientos.ValueMember = "id_tipomovimiento";
-            cmbMovimientos.SelectedIndex = -1;
-            cmbMovimientos.SelectedIndex = -1;
-
-            // cmbObras
-            DataTable dtObras = datos.ObtenerListaGenerica("obras", "nombre", true);
-            cmbObras.DataSource = dtObras;
-            cmbObras.DisplayMember = "nombre";
-            cmbObras.ValueMember = "id";
-            cmbObras.SelectedIndex = -1;
-            cmbObras.SelectedIndex = -1;
-
-            // cmbFlete
-            List<Flete> fletes = new FleteDatos().GetFletes(soloActivos: true);
-            fletes.Insert(0, new Flete { id = 0, nombre = "-" });
-            cmbFlete.DataSource = fletes;
-            cmbFlete.DisplayMember = "nombre";
-            cmbFlete.ValueMember = "id";
-            cmbFlete.SelectedIndex = 0;
-
-            materialesFull = new MaterialDatos().obtenerMateriales();
-
-            cmbMovimientos.SelectedIndex = -1;
-            cmbMovimientos.SelectedIndex = -1;
-            cmbObras.SelectedIndex = -1;
-            cmbObras.SelectedIndex = -1;
-
-            _categorias = new CategoriaDatos().GetCategorias();
-
+            SetOcupada(false);
             CrearPanelResultados();
             ConfigurarDebounce();
 
@@ -191,11 +143,23 @@ namespace SteeLog.Vistas.Movimientos
             _timerDraft.Tick += (s, ev) => GuardarBorrador();
             _timerDraft.Start();
 
-            // ── Verificar borrador al iniciar (solo si no es modo edición) ──
-            if (_idMovimientoAEditar <= 0)
-            {
-                this.Load += (s, ev) => IntentarRecuperarBorrador();
-            }
+            Load += async (s, ev) => {
+                await CargarCatalogosAsync();
+                if (!IsDisposed && catalogosListos && _idMovimientoAEditar <= 0) IntentarRecuperarBorrador();
+                else if (!IsDisposed && catalogosListos && _idMovimientoAEditar > 0) CargarMovimientoParaEdicion();
+            };
+        }
+
+        private bool recursosCerrados;
+        private void CerrarRecursos()
+        {
+            if (recursosCerrados) return;
+            recursosCerrados = true;
+            cierre.Cancel(); cargaEdicion?.Cancel(); cargaCatalogos?.Cancel();
+            Application.RemoveMessageFilter(this);
+            _timerDraft?.Stop(); _timerDraft?.Dispose(); _timerDraft = null;
+            _timerDebounce?.Stop(); _timerDebounce?.Dispose(); _timerDebounce = null;
+            if (_guardadoExitoso) MovimientoDraftService.Eliminar();
         }
 
         public bool PreFilterMessage(ref Message m)
@@ -231,77 +195,89 @@ namespace SteeLog.Vistas.Movimientos
             return false;
         }
 
-        private void RefrescarDatos()
+        private async void RefrescarDatos()
         {
+            await CargarCatalogosAsync();
+            if (IsDisposed || cierre.IsCancellationRequested || !catalogosListos) return;
+            if (_idMovimientoAEditar > 0 && !modeloListo) CargarMovimientoParaEdicion();
+            ToastNotification.ShowSuccess("Datos actualizados (F5)");
+        }
+
+        private async Task CargarCatalogosAsync()
+        {
+            int version = ++versionCatalogos;
+            cargaCatalogos?.Cancel();
+            cargaCatalogos = CancellationTokenSource.CreateLinkedTokenSource(cierre.Token);
+            var token = cargaCatalogos.Token;
+            catalogosListos = false; SetOcupada(ocupada);
             try
             {
-                isProgrammaticChange = true;
-                var origenSel = cmbOrigen.SelectedItem as ItemCombo;
-                var destinoSel = cmbDestino.SelectedItem as ItemCombo;
-                int idTipoMov = cmbMovimientos.SelectedIndex;
-                int idObra = cmbObras.SelectedIndex >= 0 ? Convert.ToInt32(cmbObras.SelectedValue) : -1;
-                int idFlete = cmbFlete.SelectedValue != null ? Convert.ToInt32(cmbFlete.SelectedValue) : 0;
-                materialesFull = new MaterialDatos().obtenerMateriales();
-                CargarOrigen();
-                CargarDestino();
-
-                List<Flete> fletesRef = new FleteDatos().GetFletes(soloActivos: true, incluirId: idFlete);
-                fletesRef.Insert(0, new Flete { id = 0, nombre = "-" });
-                cmbFlete.DataSource = fletesRef;
-                cmbFlete.DisplayMember = "nombre";
-                cmbFlete.ValueMember = "id";
-                if (idFlete > 0) cmbFlete.SelectedValue = idFlete;
-                else cmbFlete.SelectedIndex = 0;
-                cmbMovimientos.SelectedIndex = idTipoMov;
-                if (origenSel != null)
+                var cat = Presenter.CatalogosAsync(token); var materiales = Presenter.MaterialesAsync(token);
+                var categorias = Presenter.CategoriasAsync(token); var recortes = Presenter.RecortesAsync(token);
+                await Task.WhenAll(cat, materiales, categorias, recortes);
+                if (IsDisposed || token.IsCancellationRequested || version != versionCatalogos) return;
+                catalogos = cat.Result;
+                materialesFull = materiales.Result.Select(x => new Material { id=x.Id, nombre=x.Nombre, id_categoria=x.CategoriaId, nombre_categoria=x.Categoria, precioUnitario=x.Precio, stockActual=x.Stock, stockMinimo=x.Minimo, cantidadUsada=x.CantidadUsada, cantidadMovimientos=x.CantidadMovimientos }).ToList();
+                _categorias = categorias.Result.Select(x => new Categoria { id=x.Id, nombre=x.Nombre, recortable=x.Recortable }).ToList();
+                recortesDisponibles = recortes.Result.Select(x => new Recorte { id=x.Id, id_material=x.MaterialId, nombre_material=x.Material, nombre_categoria=x.Categoria, ancho=x.Ancho, altura=x.Altura, medida=x.Medida, cantidad=x.Cantidad, estado=x.Estado, fecha_creacion=x.FechaCreacion }).ToList();
+                int? tipoSeleccionado = cmbMovimientos.SelectedValue is int tipoActual ? (int?)tipoActual : null;
+                int? obraSeleccionada = cmbObras.SelectedValue is int obraActual ? (int?)obraActual : null;
+                int? fleteSeleccionado = cmbFlete.SelectedValue is int fleteActual ? (int?)fleteActual : null;
+                var origenSeleccionado = cmbOrigen.SelectedItem as ItemCombo;
+                var destinoSeleccionado = cmbDestino.SelectedItem as ItemCombo;
+                var tipos = new DataTable(); tipos.Columns.Add("id_tipomovimiento", typeof(int)); tipos.Columns.Add("nombre", typeof(string));
+                var disponibles = catalogos.Tipos.Where(x => x.Nombre.IndexOf("ajuste positivo",StringComparison.OrdinalIgnoreCase)<0 && x.Nombre.IndexOf("registro interno",StringComparison.OrdinalIgnoreCase)<0).OrderByDescending(x => x.Nombre.IndexOf("envío",StringComparison.OrdinalIgnoreCase)>=0 || x.Nombre.IndexOf("envio",StringComparison.OrdinalIgnoreCase)>=0);
+                foreach(var tipo in disponibles) tipos.Rows.Add(tipo.Id,tipo.Nombre);
+                var obras = new DataTable(); obras.Columns.Add("id",typeof(int)); obras.Columns.Add("nombre",typeof(string));
+                foreach(var obra in catalogos.Destinos.Where(x => x.Tipo=="OBRA").OrderBy(x=>x.Nombre)) obras.Rows.Add(obra.Id,obra.Nombre);
+                bool anteriorProgramatico = isProgrammaticChange; isProgrammaticChange = true;
+                try
                 {
-                    foreach (var item in cmbOrigen.Items)
-                    {
-                        if (item is ItemCombo ic && ic.IdReal == origenSel.IdReal && ic.Tipo == origenSel.Tipo)
-                        { cmbOrigen.SelectedItem = item; break; }
-                    }
+                    cmbMovimientos.DataSource=tipos; cmbMovimientos.DisplayMember="nombre"; cmbMovimientos.ValueMember="id_tipomovimiento"; cmbMovimientos.SelectedIndex=-1;
+                    cmbObras.DataSource=obras; cmbObras.DisplayMember="nombre"; cmbObras.ValueMember="id"; cmbObras.SelectedIndex=-1;
+                    EstablecerFletes(fleteSeleccionado); CargarOrigen(); CargarDestino();
+                    if (tipoSeleccionado.HasValue) cmbMovimientos.SelectedValue=tipoSeleccionado.Value;
+                    if (obraSeleccionada.HasValue) cmbObras.SelectedValue=obraSeleccionada.Value;
+                    if (origenSeleccionado != null) cmbOrigen.SelectedItem = cmbOrigen.Items.Cast<ItemCombo>().FirstOrDefault(x => x.IdReal == origenSeleccionado.IdReal && x.Tipo == origenSeleccionado.Tipo);
+                    if (destinoSeleccionado != null) cmbDestino.SelectedItem = cmbDestino.Items.Cast<ItemCombo>().FirstOrDefault(x => x.IdReal == destinoSeleccionado.IdReal && x.Tipo == destinoSeleccionado.Tipo);
                 }
-                if (destinoSel != null)
-                {
-                    foreach (var item in cmbDestino.Items)
-                    {
-                        if (item is ItemCombo ic && ic.IdReal == destinoSel.IdReal && ic.Tipo == destinoSel.Tipo)
-                        { cmbDestino.SelectedItem = item; break; }
-                    }
-                }
-                if (idObra > 0) cmbObras.SelectedValue = idObra;
-                ToastNotification.ShowSuccess("Datos actualizados (F5)");
+                finally { isProgrammaticChange=anteriorProgramatico; }
+                catalogosListos=true; if (_idMovimientoAEditar<=0) modeloListo=true; SetOcupada(ocupada);
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al refrescar: " + ex.Message);
-            }
-            finally
-            {
-                isProgrammaticChange = false;
-            }
+            catch(OperationCanceledException) { }
+            catch(Exception ex) { if (!IsDisposed && version==versionCatalogos) ToastNotification.ShowError("Error al cargar catálogos: "+ex.Message); }
+        }
+        private void EstablecerFletes(int? incluirId)
+        {
+            var fletes=catalogos.Fletes.Where(x => x.Activo || x.Id==incluirId).Select(x => new Flete { id=x.Id,nombre=x.Nombre,activo=x.Activo }).ToList();
+            fletes.Insert(0,new Flete { id=0,nombre="-" });
+            cmbFlete.DataSource=fletes; cmbFlete.DisplayMember="nombre"; cmbFlete.ValueMember="id"; cmbFlete.SelectedValue=incluirId ?? 0;
         }
 
         public void SetEditMode(int idMovimiento)
         {
             LimpiarFormulario();
             _idMovimientoAEditar = idMovimiento;
+            modeloListo = false;
+            SetOcupada(ocupada);
             ActualizarModoEdicion();
             // Diferir la carga hasta que el handle del formulario exista y tenga tamaño real
-            if (this.IsHandleCreated)
-                CargarMovimientoParaEdicion();
-            else
-                this.HandleCreated += (s, e) => CargarMovimientoParaEdicion();
+            if (this.IsHandleCreated && catalogosListos) CargarMovimientoParaEdicion();
         }
 
-        private void CargarMovimientoParaEdicion()
+        private async void CargarMovimientoParaEdicion()
         {
             if (_idMovimientoAEditar <= 0) return;
-
+            int id = _idMovimientoAEditar, version = ++versionCarga;
+            cargaEdicion?.Cancel();
+            cargaEdicion = CancellationTokenSource.CreateLinkedTokenSource(cierre.Token);
+            modeloListo = false; SetOcupada(ocupada);
             try
             {
-                MovimientoDatos datos = new MovimientoDatos();
-                var mov = datos.ObtenerMovimientoPorId(_idMovimientoAEditar);
+                var edicion = await Presenter.ObtenerEdicionAsync(id, cargaEdicion.Token);
+                if (IsDisposed || cierre.IsCancellationRequested || version != versionCarga || _idMovimientoAEditar != id) return;
+                var c = edicion?.Cabecera;
+                var mov = c == null ? null : new Movimiento { fecha=c.Fecha, nroremito=c.Remito, id_origen=c.OrigenId, tipo_origen=c.TipoOrigen, id_destino=c.DestinoId, tipo_destino=c.TipoDestino, id_tipomovimiento=c.TipoMovimientoId, id_obra=c.ObraId ?? 0, costoflete=c.CostoFlete, id_flete=c.FleteId, observaciones=c.Observaciones, precio_total=c.PrecioTotal };
                 if (mov == null)
                 {
                     ToastNotification.ShowWarning("Movimiento no encontrado.");
@@ -339,10 +315,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (mov.id_flete.HasValue && mov.id_flete.Value > 0)
                 {
-                    List<Flete> fletesEdicion = new FleteDatos().GetFletes(soloActivos: true, incluirId: mov.id_flete.Value);
-                    fletesEdicion.Insert(0, new Flete { id = 0, nombre = "-" });
-                    cmbFlete.DataSource = fletesEdicion;
-                    cmbFlete.SelectedValue = mov.id_flete.Value;
+                    EstablecerFletes(mov.id_flete.Value);
                 }
                 else
                 {
@@ -357,18 +330,22 @@ namespace SteeLog.Vistas.Movimientos
                 txtCategoria.Text = mov.observaciones;
 
                 // Detalles
-                var detalles = datos.ObtenerDetallesPorMovimiento(_idMovimientoAEditar);
-                foreach (var d in detalles)
+                foreach (var item in edicion.Lineas)
                 {
+                    var l = item.Linea;
+                    var d = item.InsumoId.HasValue
+                        ? new MovimientoMaterial { EsInsumo=true, IdInsumo=item.InsumoId, NombreMaterial=item.Nombre, cantidad=1 }
+                        : new MovimientoMaterial { id_material=l.MaterialId, IdRecorte=l.RecorteId, EsRecorte=l.RecorteId.HasValue, MedidaRecorte=l.MedidaRecorte, cantidad=l.Cantidad, NombreMaterial=item.Nombre, NombreMaterialEventual=l.MaterialEventual, EsCompraEventual=l.CompraEventual, precio_unitario=l.PrecioUnitario };
                     materialesLista.Add(d);
                     AgregarItemLista(d);
                 }
-
+                modeloListo = true; SetOcupada(ocupada);
                 ActualizarModoEdicion();
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error al cargar para edición: " + ex.Message);
+                if (!IsDisposed && version == versionCarga && _idMovimientoAEditar == id) ToastNotification.ShowError("Error al cargar para edición: " + ex.Message);
             }
         }
 
@@ -614,95 +591,14 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
+        private List<ItemCombo> OpcionesDestino() => catalogos.Destinos.Select(x => new ItemCombo { TextoDisplay=x.Nombre, IdReal=x.Id, Tipo=x.Tipo }).ToList();
         public void CargarOrigen()
         {
-            ComunDatos datos = new ComunDatos();
-            List<ItemCombo> listaUnificada = new List<ItemCombo>();
-
-            DataTable dtObras = datos.ObtenerListaGenerica("obras", "nombre", true);
-            foreach (DataRow row in dtObras.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id"]),
-                    Tipo = "OBRA"
-                });
-            }
-
-            DataTable dtUbis = datos.ObtenerListaGenerica("ubicacion");
-            foreach (DataRow row in dtUbis.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id_ubicacion"]),
-                    Tipo = "UBICACION"
-                });
-            }
-
-            DataTable dtProv = datos.ObtenerListaGenerica("proveedores");
-            foreach (DataRow row in dtProv.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id_proveedores"]),
-                    Tipo = "PROVEEDOR"
-                });
-            }
-
-            cmbOrigen.DataSource = listaUnificada;
-            cmbOrigen.DisplayMember = "TextoDisplay";
-            cmbOrigen.ValueMember = "IdReal";
-            cmbOrigen.SelectedIndex = -1;
-            cmbOrigen.SelectedIndex = -1;
+            cmbOrigen.DataSource=OpcionesDestino(); cmbOrigen.DisplayMember="TextoDisplay"; cmbOrigen.ValueMember="IdReal"; cmbOrigen.SelectedIndex=-1;
         }
-
         public void CargarDestino()
         {
-            ComunDatos datos = new ComunDatos();
-            List<ItemCombo> listaUnificada = new List<ItemCombo>();
-
-            DataTable dtObras = datos.ObtenerListaGenerica("obras", "nombre", true);
-            foreach (DataRow row in dtObras.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id"]),
-                    Tipo = "OBRA"
-                });
-            }
-
-            DataTable dtUbis = datos.ObtenerListaGenerica("ubicacion");
-            foreach (DataRow row in dtUbis.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id_ubicacion"]),
-                    Tipo = "UBICACION"
-                });
-            }
-
-            DataTable dtProv = datos.ObtenerListaGenerica("proveedores");
-            foreach (DataRow row in dtProv.Rows)
-            {
-                listaUnificada.Add(new ItemCombo
-                {
-                    TextoDisplay = row["nombre"].ToString(),
-                    IdReal = Convert.ToInt32(row["id_proveedores"]),
-                    Tipo = "PROVEEDOR"
-                });
-            }
-
-            // Fix for WinForms CurrencyManager auto-selecting index 0 on bound lists
-            cmbDestino.DataSource = listaUnificada;
-            cmbDestino.DisplayMember = "TextoDisplay";
-            cmbDestino.ValueMember = "IdReal";
-            cmbDestino.SelectedIndex = -1;
-            cmbDestino.SelectedIndex = -1;
+            cmbDestino.DataSource=OpcionesDestino(); cmbDestino.DisplayMember="TextoDisplay"; cmbDestino.ValueMember="IdReal"; cmbDestino.SelectedIndex=-1;
         }
 
         private void CmbObras_SelectedIndexChanged(object sender, EventArgs e)
@@ -899,895 +795,16 @@ namespace SteeLog.Vistas.Movimientos
         {
 
         }
-        private void CrearPanelResultados()
+        private async void GuardarMovimiento_Click(object sender, EventArgs e)
         {
-            _panelResultados = new Panel
-            {
-                Size = new Size(516, 0),
-                BackColor = Color.FromArgb(25, 30, 28),
-                Visible = false,
-                AutoScroll = true
-            };
-
-            this.Controls.Add(_panelResultados);
-            _panelResultados.BringToFront();
-        }
-
-        private void PosicionarPanelResultados()
-        {
-            var screenPoint = txtBuscadorMaterial.PointToScreen(Point.Empty);
-            var parentPoint = this.PointToClient(screenPoint);
-
-            _panelResultados.Location = new Point(
-                parentPoint.X,
-                parentPoint.Y + txtBuscadorMaterial.Height + 5
-            );
-        }
-
-        private void ConfigurarDebounce()
-        {
-            _timerDebounce = new Timer { Interval = 300 };
-            _timerDebounce.Tick += (s, e) =>
-            {
-                _timerDebounce.Stop();
-                EjecutarBusqueda(txtBuscadorMaterial.Text.Trim());
-            };
-        }
-
-        private void TxtBuscadorMaterial_TextChanged(object sender, EventArgs e)
-        {
-            if (isProgrammaticChange) return;
-
-            _timerDebounce.Stop();
-            string nombreEsperado = _materialSeleccionado != null ? _materialSeleccionado.nombre : "";
-            if (_recorteSeleccionado != null)
-            {
-                nombreEsperado = $"{_recorteSeleccionado.nombre_material} (Recorte: {_recorteSeleccionado.ancho}x{_recorteSeleccionado.altura})";
-            }
-
-            // Si estaba editando pero borro algo, deselecciono el material/recorte
-            if (_materialSeleccionado != null && txtBuscadorMaterial.Text != nombreEsperado)
-            {
-                _materialSeleccionado = null;
-                _recorteSeleccionado = null;
-                btnRecorte.Enabled = false;
-            }
-
-            if (txtBuscadorMaterial.Text.Trim().Length < 2)
-            {
-                // Mostrar indicación en vez de buscar si hay menos de 2 caracteres
-                EjecutarBusqueda("");
-                return;
-            }
-            _timerDebounce.Start();
-        }
-
-        private void TxtBuscadorMaterial_KeyDown(object sender, KeyEventArgs e)
-        {
-            if (e.KeyCode == Keys.Escape)
-            {
-                OcultarResultados();
-                e.SuppressKeyPress = true;
-            }
-            else if (e.KeyCode == Keys.Down && _panelResultados.Visible && _panelResultados.Controls.Count > 0)
-            {
-                _panelResultados.Controls[0].Focus();
-                e.SuppressKeyPress = true;
-            }
-            else if (e.KeyCode == Keys.Enter && _materialSeleccionado != null)
-            {
-                cantMatMov.Focus();
-                e.SuppressKeyPress = true;
-            }
-        }
-
-        private class ItemBuscador
-        {
-            public bool EsMaterial { get; set; }
-            public Material Mat { get; set; }
-            public Recorte Rec { get; set; }
-            public string NombreMostrar { get; set; }
-            public string InfoMostrar { get; set; }
-            public Color ColorAcento { get; set; }
-            public string Icono { get; set; }
-        }
-
-        private void EjecutarBusqueda(string query)
-        {
-            string qLower = query?.ToLower() ?? "";
-
-            if (qLower.Length < 2)
-            {
-                // Menos de 2 caracteres: pasar un mensaje especial a MostrarResultados
-                var vacio = new List<ItemBuscador>();
-                MostrarResultados(vacio, "MIN_CHARS");
-                return;
-            }
-
-            var itemsCandidatos = new List<ItemBuscador>();
-            var recDatos = new RecorteDatos();
-            var listaRec = recDatos.ObtenerRecortes();
-
-            // Filtrar materiales (requiere al menos 2 caracteres minimo)
-            var mats = materialesFull
-                .Where(m => m.nombre != null && m.nombre.ToLower().Contains(qLower))
-                .OrderByDescending(m => m.nombre.ToLower().StartsWith(qLower))
-                .ThenBy(m => m.nombre)
-                .Take(50) // Limitar a 50 resultados para evitar colapso de UI
-                .ToList();
-
-            foreach (var m in mats)
-            {
-                string infoStockMaterial = SessionManager.DebeOcultarCantidadesStockMateriales
-                    ? $"Material • {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
-                    : $"Material • Stock: {m.stockActual:N0}";
-
-                itemsCandidatos.Add(new ItemBuscador
-                {
-                    EsMaterial = true,
-                    Mat = m,
-                    NombreMostrar = m.nombre,
-                    InfoMostrar = infoStockMaterial,
-                    ColorAcento = Color.FromArgb(39, 174, 96),
-                    Icono = "📦"
-                });
-
-                if (listaRec != null)
-                {
-                    var recortesHijos = listaRec.Where(r => r.id_material == m.id && r.cantidad > 0).ToList();
-                    foreach (var r in recortesHijos)
-                    {
-                        itemsCandidatos.Add(new ItemBuscador
-                        {
-                            EsMaterial = false,
-                            Rec = r,
-                            NombreMostrar = $"{r.nombre_material} (Recorte: {r.ancho}x{r.altura})",
-                            InfoMostrar = $"Recorte • Cantidad disponible: {r.cantidad:N0}",
-                            ColorAcento = Color.Orange,
-                            Icono = "✂️"
-                        });
-                    }
-                }
-            }
-
-            MostrarResultados(itemsCandidatos, query);
-        }
-
-        private void MostrarResultados(List<ItemBuscador> resultados, string query)
-        {
-            _panelResultados.Controls.Clear();
-
-            const int MAX_PANEL_HEIGHT = 260;
-            const int ITEM_HEIGHT = 48;
-
-            if (resultados.Count == 0)
-            {
-                string mensaje = "";
-                if (query == "MIN_CHARS")
-                    mensaje = "Escribí al menos 2 letras para buscar...";
-                else if (string.IsNullOrEmpty(query))
-                    mensaje = "No hay materiales disponibles.";
-                else
-                    mensaje = $"Sin resultados para \"{query}\"";
-
-                var lblNoResults = new Label
-                {
-                    Text = mensaje,
-                    Font = new Font("Bahnschrift Light", 10f),
-                    ForeColor = Color.FromArgb(120, 120, 120),
-                    Size = new Size(516, 45),
-                    TextAlign = ContentAlignment.MiddleCenter,
-                    BackColor = Color.Transparent,
-                    Dock = DockStyle.Top
-                };
-                _panelResultados.Controls.Add(lblNoResults);
-                _panelResultados.Size = new Size(516, 50);
-                PosicionarPanelResultados();
-                _panelResultados.BringToFront();
-                _panelResultados.Visible = true;
-                return;
-            }
-
-            // Sin limite de items - el scroll se encarga
-            int totalContentHeight = resultados.Count * ITEM_HEIGHT;
-            int panelHeight = Math.Min(totalContentHeight, MAX_PANEL_HEIGHT);
-
-            // Agregar items en orden (Dock Top apila al revés, invertimos)
-            for (int i = resultados.Count - 1; i >= 0; i--)
-            {
-                var item = resultados[i];
-                var panel = CrearItemResultado(item);
-                _panelResultados.Controls.Add(panel);
-            }
-
-            _panelResultados.Size = new Size(516, panelHeight);
-            PosicionarPanelResultados();
-            _panelResultados.BringToFront();
-            _panelResultados.Visible = true;
-        }
-
-        private Panel CrearItemResultado(ItemBuscador item)
-        {
-            var panel = new Panel
-            {
-                Size = new Size(496, 48),
-                BackColor = Color.FromArgb(25, 30, 28),
-                Dock = DockStyle.Top,
-                Cursor = Cursors.Hand,
-                Padding = new Padding(10, 0, 10, 0)
-            };
-
-            var accentBar = new Panel
-            {
-                Size = new Size(3, 30),
-                BackColor = item.ColorAcento,
-                Location = new Point(5, 9)
-            };
-
-            var lblIcon = new Label
-            {
-                Text = item.Icono,
-                Font = new Font("Segoe UI", 14f),
-                Size = new Size(35, 48),
-                Location = new Point(15, 0),
-                TextAlign = ContentAlignment.MiddleCenter,
-                BackColor = Color.Transparent
-            };
-
-            var lblName = new Label
-            {
-                Text = item.NombreMostrar,
-                Font = new Font("Bahnschrift", 11f),
-                ForeColor = Color.FromArgb(220, 220, 220),
-                Size = new Size(400, 28),
-                Location = new Point(55, 3),
-                TextAlign = ContentAlignment.BottomLeft,
-                BackColor = Color.Transparent,
-                AutoEllipsis = true
-            };
-
-            var lblType = new Label
-            {
-                Text = item.InfoMostrar,
-                Font = new Font("Bahnschrift Light", 8.5f),
-                ForeColor = item.ColorAcento,
-                Size = new Size(400, 18),
-                Location = new Point(55, 28),
-                TextAlign = ContentAlignment.TopLeft,
-                BackColor = Color.Transparent
-            };
-
-            var allControls = new Control[] { panel, lblIcon, lblName, lblType, accentBar };
-            foreach (var ctrl in allControls)
-            {
-                ctrl.MouseEnter += (s, e) => panel.BackColor = Color.FromArgb(35, 45, 40);
-                ctrl.MouseLeave += (s, e) => panel.BackColor = Color.FromArgb(25, 30, 28);
-                ctrl.Click += (s, e) => ItemClicked(item);
-            }
-
-            panel.Controls.Add(accentBar);
-            panel.Controls.Add(lblIcon);
-            panel.Controls.Add(lblName);
-            panel.Controls.Add(lblType);
-
-            return panel;
-        }
-
-        private void ItemClicked(ItemBuscador item)
-        {
-            OcultarResultados();
-
-            isProgrammaticChange = true;
-            if (item.EsMaterial)
-            {
-                _materialSeleccionado = item.Mat;
-                txtBuscadorMaterial.Text = item.Mat.nombre;
-                _recorteSeleccionado = null;
-
-                int idCat = item.Mat.id_categoria;
-                // Refrescar categoría desde DB en tiempo real para reflejar cambios inmediatos
-                var cat = new CategoriaDatos().GetCategorias().FirstOrDefault(c => c.id == idCat);
-                btnRecorte.Enabled = (cat != null && cat.recortable);
-            }
-            else
-            {
-                _materialSeleccionado = materialesFull.FirstOrDefault(m => m.id == item.Rec.id_material);
-                txtBuscadorMaterial.Text = $"{item.Rec.nombre_material} (Recorte: {item.Rec.ancho}x{item.Rec.altura})";
-                _recorteSeleccionado = item.Rec;
-                btnRecorte.Enabled = false;
-            }
-            isProgrammaticChange = false;
-
-            cantMatMov.Focus();
-        }
-
-        private void OcultarResultados()
-        {
-            if (_panelResultados != null)
-            {
-                _panelResultados.Visible = false;
-                _panelResultados.Controls.Clear();
-            }
-        }
-
-        private void btnRecorte_Click(object sender, EventArgs e)
-        {
-            if (_materialSeleccionado == null) return;
-
-            int idMat = _materialSeleccionado.id;
-            string nomMat = _materialSeleccionado.nombre;
-
-            using (var modal = new ModalRecortes(idMat, nomMat))
-            {
-                if (modal.ShowDialog() == DialogResult.OK)
-                {
-                    // Extraer selección del modal
-                    var recorte = modal.RecorteSeleccionado;
-                    decimal cantidad = modal.CantidadSeleccionada;
-
-                    // Verificar si ya existe para acumular
-                    var existente = materialesLista.FirstOrDefault(m =>
-                        m.id_material == idMat &&
-                        m.EsRecorte == true &&
-                        m.IdRecorte == recorte.id);
-
-                    if (existente != null)
-                    {
-                        existente.cantidad += cantidad;
-                        ActualizarCantidadEnUI(existente);
-                    }
-                    else
-                    {
-                        MovimientoMaterial nuevoItem = new MovimientoMaterial
-                        {
-                            id_material = idMat,
-                            NombreMaterial = nomMat + $" (R: {recorte.ancho}x{recorte.altura})",
-                            cantidad = cantidad,
-                            EsRecorte = true,
-                            IdRecorte = recorte.id,
-                            MedidaRecorte = recorte.ancho
-                        };
-
-                        materialesLista.Add(nuevoItem);
-                        AgregarItemLista(nuevoItem);
-                    }
-
-                    // Limpiar selección de material y cantidad
-                    _materialSeleccionado = null;
-                    isProgrammaticChange = true;
-                    txtBuscadorMaterial.Text = "";
-                    isProgrammaticChange = false;
-                    cantMatMov.Text = "";
-                    _recorteSeleccionado = null;
-                    btnRecorte.Enabled = false;
-                }
-            }
-        }
-
-        private void btnInsumo_Click(object sender, EventArgs e)
-        {
-            using (var modal = new ModalInsumos())
-            {
-                if (modal.ShowDialog() == DialogResult.OK)
-                {
-                    var insumo = modal.InsumoSeleccionado;
-
-                    // Buscar si ya existe para acumular
-                    var existente = materialesLista.FirstOrDefault(m => m.EsInsumo && m.IdInsumo == insumo.id);
-                    if (existente != null)
-                    {
-                        existente.cantidad += 1;
-                        ActualizarCantidadEnUI(existente);
-                    }
-                    else
-                    {
-                        MovimientoMaterial nuevoItem = new MovimientoMaterial
-                        {
-                            id_material = 0,
-                            NombreMaterial = insumo.nombre,
-                            cantidad = 1,
-                            EsInsumo = true,
-                            IdInsumo = insumo.id
-                        };
-
-                        materialesLista.Add(nuevoItem);
-                        AgregarItemLista(nuevoItem);
-                    }
-                }
-            }
-        }
-
-        private void ActualizarCantidadEnUI(MovimientoMaterial item)
-        {
-            foreach (Control ctrl in flpMateriales.Controls)
-            {
-                if (ctrl is Panel p && p.Tag == item)
-                {
-                    TableLayoutPanel tbl = p.Controls.OfType<TableLayoutPanel>().FirstOrDefault();
-                    if (tbl != null)
-                    {
-                        Label lblCant = tbl.GetControlFromPosition(2, 0) as Label;
-                        if (lblCant != null) lblCant.Text = item.cantidad.ToString("G29", CultureInfo.InvariantCulture);
-                    }
-                    break;
-                }
-            }
-        }
-
-        /// <summary>
-        /// Calcula el stock disponible real para agregar al movimiento actual.
-        /// En modo edición, se suman las cantidades ya cargadas en la lista porque
-        /// esas cantidades serán revertidas al guardar (el movimiento original se elimina primero).
-        /// </summary>
-        private decimal StockDisponibleMaterial(int idMaterial)
-        {
-            decimal stockBase = _materialSeleccionado?.stockActual ?? 0;
-            if (_idMovimientoAEditar > 0)
-            {
-                // Las cantidades ya en la lista se van a revertir → las sumamos al disponible
-                decimal yaEnLista = materialesLista
-                    .Where(m => m.id_material == idMaterial && !m.EsRecorte)
-                    .Sum(m => m.cantidad);
-                stockBase += yaEnLista;
-            }
-            return stockBase;
-        }
-
-        private decimal StockDisponibleRecorte(int idRecorte)
-        {
-            decimal stockBase = _recorteSeleccionado?.cantidad ?? 0;
-            if (_idMovimientoAEditar > 0)
-            {
-                decimal yaEnLista = materialesLista
-                    .Where(m => m.EsRecorte && m.IdRecorte == idRecorte)
-                    .Sum(m => m.cantidad);
-                stockBase += yaEnLista;
-            }
-            return stockBase;
-        }
-
-        private void chkCompraEventual_CheckedChanged(object sender, EventArgs e)
-        {
-            if (chkCompraEventual.Checked)
-            {
-                // Visual feedback for Eventual Purchase
-                txtBuscadorMaterial.BorderColor = Color.FromArgb(255, 165, 0); // Orange/Amber
-                txtBuscadorMaterial.PlaceholderText = "Escribir nombre de material eventual...";
-                txtBuscadorMaterial.FillColor = Color.FromArgb(45, 40, 30);
-                txtBuscadorMaterial.ForeColor = Color.FromArgb(255, 200, 100);
-                
-                // Disable search behavior (if implemented via autocomplete or similar)
-                if (!isProgrammaticChange)
-                {
-                    _materialSeleccionado = null;
-                    _recorteSeleccionado = null;
-                }
-                btnRecorte.Enabled = false;
-            }
-            else
-            {
-                // Restore standard look
-                txtBuscadorMaterial.BorderColor = Color.FromArgb(60, 60, 65);
-                txtBuscadorMaterial.PlaceholderText = "🔍 Buscar material...";
-                txtBuscadorMaterial.FillColor = Color.FromArgb(25, 30, 28);
-                txtBuscadorMaterial.ForeColor = Color.FromArgb(200, 200, 200);
-            }
-
-            if (!isProgrammaticChange && chkCompraEventual.Checked && _idMovimientoAEditar == 0 && panelSeleccionado != null) 
-                DeseleccionarItem();
-
-            ActualizarVisibilidadPrecios();
-        }
-
-        private void btnAgregarMaterial_Click(object sender, EventArgs e)
-        {
-            decimal cantidadVal = 0;
-            // Acepta tanto "1.5" como "1,5" normalizando a InvariantCulture
-            string cantTexto = (cantMatMov.Text ?? "").Trim().Replace(',', '.');
-            decimal.TryParse(cantTexto, NumberStyles.Any, CultureInfo.InvariantCulture, out cantidadVal);
-
-            bool esCompraEventual = chkCompraEventual.Checked;
-            string materialTexto = txtBuscadorMaterial.Text.Trim();
-
-            if (cantidadVal <= 0)
-            {
-                ToastNotification.ShowWarning("Ingrese una cantidad válida.");
-                return;
-            }
-
-            // Evitar pérdida silenciosa: la columna cantidad es entera en la base para materiales normales.
-            // Si el usuario ingresa un decimal (ej: 2,75) se perdería la parte fraccional.
-            // Los recortes y compras eventuales aceptan decimales (ej: 0.5, 1.25).
-            if (_recorteSeleccionado == null && !esCompraEventual && cantidadVal != Math.Floor(cantidadVal))
-            {
-                var resp = MessageBox.Show(
-                    $"La cantidad '{cantidadVal.ToString(CultureInfo.InvariantCulture)}' tiene decimales y se guardará redondeada a {Math.Round(cantidadVal, MidpointRounding.AwayFromZero)}.\n\n¿Continuar?",
-                    "Cantidad con decimales",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button2);
-                if (resp != DialogResult.Yes) return;
-                cantidadVal = Math.Round(cantidadVal, MidpointRounding.AwayFromZero);
-            }
-
-            if (esCompraEventual && string.IsNullOrEmpty(materialTexto))
-            {
-                ToastNotification.ShowWarning("Ingrese el nombre del material eventual.");
-                return;
-            }
-            if (!esCompraEventual && _materialSeleccionado == null)
-            {
-                ToastNotification.ShowWarning("Seleccione material de la lista desde el buscador.");
-                return;
-            }
-
-            int? idMaterial = _materialSeleccionado?.id;
-            Material materialInfo = _materialSeleccionado;
-            decimal cantidad = cantidadVal;
-
-            MovimientoMaterial itemAnterior = null;
-            if (panelSeleccionado != null && panelSeleccionado.Tag is MovimientoMaterial)
-            {
-                itemAnterior = (MovimientoMaterial)panelSeleccionado.Tag;
-                var confirmEdit = MessageBox.Show(
-                    "¿Estás seguro que querés editar este material?",
-                    "Confirmar edición",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question,
-                    MessageBoxDefaultButton.Button2);
-                if (confirmEdit != DialogResult.Yes) return;
-            }
-
-            if (_recorteSeleccionado == null && materialInfo != null)
-            {
-                // En modo edición el stock disponible incluye lo ya cargado (será revertido)
-                decimal stockDisponible = idMaterial.HasValue ? StockDisponibleMaterial(idMaterial.Value) : 0;
-                decimal yaEnLista = materialesLista.Where(m => m.id_material == idMaterial && !m.EsRecorte).Sum(m => m.cantidad);
-
-                // Si estamos modificando el mismo ítem, restamos su cantidad anterior para no duplicarla en la suma
-                if (itemAnterior != null && itemAnterior.id_material == idMaterial && !itemAnterior.EsRecorte)
-                {
-                    yaEnLista -= itemAnterior.cantidad;
-                }
-
-                decimal totalSolicitado = yaEnLista + cantidad;
-
-                string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
-                bool consumeStock = MovimientoDatos.TipoMovimientoConsumeStock(cmbMovimientos.Text, tipoDestino);
-
-                if (consumeStock && totalSolicitado > stockDisponible)
-                {
-                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
-                        ? "Stock insuficiente para agregar ese material."
-                        : $"Stock insuficiente. Disponible: {stockDisponible}";
-                    ToastNotification.ShowWarning(mensaje);
-                    return;
-                }
-            }
-            else if (_recorteSeleccionado != null)
-            {
-                decimal stockDisponibleRec = StockDisponibleRecorte(_recorteSeleccionado.id);
-                decimal yaEnLista = materialesLista.Where(m => m.EsRecorte && m.IdRecorte == _recorteSeleccionado.id).Sum(m => m.cantidad);
-
-                if (itemAnterior != null && itemAnterior.EsRecorte && itemAnterior.IdRecorte == _recorteSeleccionado.id)
-                {
-                    yaEnLista -= itemAnterior.cantidad;
-                }
-
-                decimal totalSolicitado = yaEnLista + cantidad;
-
-                string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
-                bool consumeStock = MovimientoDatos.TipoMovimientoConsumeStock(cmbMovimientos.Text, tipoDestino);
-                if (consumeStock && totalSolicitado > stockDisponibleRec)
-                {
-                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
-                        ? "Stock de recorte insuficiente."
-                        : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
-                    ToastNotification.ShowWarning(mensaje);
-                    return;
-                }
-            }
-
-            idMaterial = esCompraEventual ? (int?)null : _materialSeleccionado?.id;
-            string nombreMaterial = materialInfo?.nombre ?? materialTexto;
-
-            decimal precioUnitario = 0;
-            if (esCompraEventual && txtPrecioMaterial != null)
-            {
-                decimal.TryParse(txtPrecioMaterial.Text.Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out precioUnitario);
-            }
-
-            MovimientoMaterial nuevoItem = new MovimientoMaterial
-            {
-                id_material = idMaterial,
-                NombreMaterial = nombreMaterial + (_recorteSeleccionado != null ? $" (R: {_recorteSeleccionado.ancho}x{_recorteSeleccionado.altura})" : ""),
-                NombreMaterialEventual = esCompraEventual ? materialTexto : null,
-                cantidad = cantidad,
-                EsRecorte = _recorteSeleccionado != null,
-                IdRecorte = _recorteSeleccionado?.id,
-                MedidaRecorte = _recorteSeleccionado?.ancho,
-                EsCompraEventual = esCompraEventual,
-                precio_unitario = precioUnitario
-            };
-
-            if (itemAnterior != null)
-            {
-                // Estamos editando un material existente en la lista
-                int idx = materialesLista.IndexOf(itemAnterior);
-                if (idx >= 0) materialesLista[idx] = nuevoItem;
-
-                panelSeleccionado.Tag = nuevoItem;
-                TableLayoutPanel tbl = panelSeleccionado.Controls.OfType<TableLayoutPanel>().FirstOrDefault();
-                if (tbl != null)
-                {
-                    Label lblMat = tbl.GetControlFromPosition(0, 0) as Label;
-                    if (lblMat != null)
-                    {
-                        string textoPrecio = "";
-                        if (nuevoItem.EsCompraEventual && nuevoItem.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
-                        {
-                            textoPrecio = $" (${nuevoItem.precio_unitario:N2})";
-                        }
-                        lblMat.Text = nuevoItem.NombreMaterial + textoPrecio;
-                    }
-
-                    Label lblTip = tbl.GetControlFromPosition(1, 0) as Label;
-                    if (lblTip != null)
-                    {
-                        if (nuevoItem.EsRecorte) { lblTip.Text = "RECORTE"; lblTip.ForeColor = Color.Orange; }
-                        else if (nuevoItem.EsInsumo) { lblTip.Text = "INSUMO"; lblTip.ForeColor = Color.FromArgb(0, 188, 212); }
-                        else if (nuevoItem.EsCompraEventual) { lblTip.Text = "EVENTUAL"; lblTip.ForeColor = Color.FromArgb(255, 165, 0); }
-                        else { lblTip.Text = ""; }
-                    }
-
-                    Label lblCant = tbl.GetControlFromPosition(2, 0) as Label;
-                    if (lblCant != null) lblCant.Text = nuevoItem.cantidad.ToString("G29", CultureInfo.InvariantCulture);
-                }
-                
-                DeseleccionarItem();
-            }
-            else
-            {
-                // Es uno nuevo - Verificar si ya existe en la lista para acumular
-                var existente = materialesLista.FirstOrDefault(m => 
-                    m.id_material == nuevoItem.id_material && 
-                    m.NombreMaterialEventual == nuevoItem.NombreMaterialEventual &&
-                    m.EsRecorte == nuevoItem.EsRecorte && 
-                    m.IdRecorte == nuevoItem.IdRecorte &&
-                    m.EsInsumo == nuevoItem.EsInsumo &&
-                    m.EsCompraEventual == nuevoItem.EsCompraEventual &&
-                    m.precio_unitario == nuevoItem.precio_unitario);
-
-                if (existente != null)
-                {
-                    existente.cantidad += nuevoItem.cantidad;
-                    ActualizarCantidadEnUI(existente);
-                }
-                else
-                {
-                    materialesLista.Add(nuevoItem);
-                    AgregarItemLista(nuevoItem);
-                }
-
-                DeseleccionarItem();
-                GuardarBorrador();
-            }
-        }
-
-        private void DeseleccionarItem()
-        {
-            if (panelSeleccionado != null)
-                panelSeleccionado.BackColor = Color.Transparent;
-            panelSeleccionado = null;
-
-            isProgrammaticChange = true;
-            _materialSeleccionado = null;
-            _recorteSeleccionado = null;
-            txtBuscadorMaterial.Text = "";
-            cantMatMov.Text = "";
-            chkCompraEventual.Checked = cmbMovimientos.Text.ToUpper().Contains("COMPRA EVENTUAL");
-            btnRecorte.Enabled = false;
-            guna2Button1.Text = "Agregar Material";
-            isProgrammaticChange = false;
-            
-            ActualizarVisibilidadPrecios();
-            
-            // Regresar foco al buscador de materiales para agilizar el flujo de entrada
-            txtBuscadorMaterial.Focus();
-        }
-
-        private void AgregarItemLista(MovimientoMaterial item)
-        {
-            // ⚠️ Los hijos de FlowLayoutPanel NO deben usar Dock: el FLP controla su posición.
-            // Usamos Width explícito y un TableLayoutPanel interno para el layout de columnas.
-            Panel pnlItem = new Panel();
-            pnlItem.Margin = new Padding(0, 0, 0, 4);
-            // Tomar el ancho actual del FLP; si aún es 0 (carga inicial), usamos 600 como fallback
-            pnlItem.Width = flpMateriales.ClientSize.Width > 5
-                ? flpMateriales.ClientSize.Width - 5
-                : 600;
-            pnlItem.Height = 40;
-            pnlItem.Tag = item;
-            pnlItem.Cursor = Cursors.Hand;
-            pnlItem.BackColor = Color.Transparent;
-
-            // Tabla interna: [nombre | etiqueta tipo | cantidad]
-            TableLayoutPanel tbl = new TableLayoutPanel();
-            tbl.Dock = DockStyle.Fill;
-            tbl.ColumnCount = 3;
-            tbl.RowCount = 1;
-            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100f)); // nombre
-            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));       // etiqueta RECORTE/INSUMO
-            tbl.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 80f));  // cantidad
-            tbl.Padding = new Padding(8, 0, 8, 0);
-            tbl.BackColor = Color.Transparent;
-
-            Label lblMaterial = new Label();
-            string textoPrecio = "";
-            if (item.EsCompraEventual && item.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
-            {
-                textoPrecio = $" (${item.precio_unitario:N2})";
-            }
-            lblMaterial.Text = item.NombreMaterial + textoPrecio;
-            lblMaterial.Font = new Font("Bahnschrift SemiLight", 12.5f);
-            lblMaterial.ForeColor = Color.White;
-            lblMaterial.Dock = DockStyle.Fill;
-            lblMaterial.TextAlign = ContentAlignment.MiddleLeft;
-            lblMaterial.AutoEllipsis = true;
-            tbl.Controls.Add(lblMaterial, 0, 0);
-
-            Label lblTipo = new Label();
-            lblTipo.Dock = DockStyle.Fill;
-            lblTipo.TextAlign = ContentAlignment.MiddleCenter;
-            lblTipo.Font = new Font("Bahnschrift SemiBold", 9.5f);
-            lblTipo.Padding = new Padding(4, 0, 4, 0);
-            if (item.EsRecorte)       { lblTipo.Text = "RECORTE"; lblTipo.ForeColor = Color.Orange; }
-            else if (item.EsInsumo)   { lblTipo.Text = "INSUMO";  lblTipo.ForeColor = Color.FromArgb(0, 188, 212); }
-            else if (item.EsCompraEventual) { lblTipo.Text = "EVENTUAL"; lblTipo.ForeColor = Color.FromArgb(255, 165, 0); }
-            tbl.Controls.Add(lblTipo, 1, 0);
-
-            Label lblCantidad = new Label();
-            lblCantidad.Text = item.cantidad.ToString("G29", CultureInfo.InvariantCulture);
-            lblCantidad.Font = new Font("Bahnschrift SemiBold", 12.5f);
-            lblCantidad.ForeColor = Color.FromArgb(150, 220, 150);
-            lblCantidad.Dock = DockStyle.Fill;
-            lblCantidad.TextAlign = ContentAlignment.MiddleRight;
-            tbl.Controls.Add(lblCantidad, 2, 0);
-
-            pnlItem.Controls.Add(tbl);
-
-            pnlItem.Click += (s, ev) => Item_Click(pnlItem, ev);
-            tbl.Click      += (s, ev) => Item_Click(pnlItem, ev);
-            lblMaterial.Click += (s, ev) => Item_Click(pnlItem, ev);
-            lblTipo.Click     += (s, ev) => Item_Click(pnlItem, ev);
-            lblCantidad.Click += (s, ev) => Item_Click(pnlItem, ev);
-
-            flpMateriales.Controls.Add(pnlItem);
-        }
-
-        private void Item_Click(object sender, EventArgs e)
-        {
-            Panel clickedPanel = (Panel)sender;
-
-            // Si clicamos el mismo que ya está seleccionado, lo deseleccionamos (cancelamos edición)
-            if (panelSeleccionado == clickedPanel)
-            {
-                DeseleccionarItem();
-                return;
-            }
-
-            // Deseleccionar el previo
-            if (panelSeleccionado != null)
-                panelSeleccionado.BackColor = Color.Transparent;
-
-            panelSeleccionado = clickedPanel;
-            panelSeleccionado.BackColor = Color.FromArgb(75, 145, 90);
-            guna2Button1.Text = "Editar Material";
-
-            // Cargar el material y cantidad en los campos del selector
-            if (panelSeleccionado.Tag is MovimientoMaterial itemSel)
-            {
-                isProgrammaticChange = true;
-                chkCompraEventual.Checked = itemSel.EsCompraEventual;
-                
-                // Buscar el material en la lista completa para tener el objeto completo
-                var mat = itemSel.id_material.HasValue ? materialesFull.FirstOrDefault(m => m.id == itemSel.id_material) : null;
-                
-                _materialSeleccionado = mat;
-
-                if (itemSel.EsCompraEventual)
-                {
-                    txtBuscadorMaterial.Text = itemSel.NombreMaterialEventual ?? itemSel.NombreMaterial;
-                    btnRecorte.Enabled = false;
-                    _recorteSeleccionado = null;
-                }
-                else if (mat != null)
-                {
-
-                    if (itemSel.EsRecorte && itemSel.IdRecorte.HasValue)
-                    {
-                        // Para recortes mostramos el nombre con medida
-                        txtBuscadorMaterial.Text = itemSel.NombreMaterial;
-                    }
-                    else
-                    {
-                        txtBuscadorMaterial.Text = mat.nombre;
-                        // Refrescar categoría desde DB en tiempo real para reflejar cambios inmediatos
-                        var cat = new CategoriaDatos().GetCategorias().FirstOrDefault(c => c.id == mat.id_categoria);
-                        btnRecorte.Enabled = (cat != null && cat.recortable);
-                    }
-
-                }
-                else
-                {
-                    // Caso material eventual antiguo sin boolean
-                    txtBuscadorMaterial.Text = itemSel.NombreMaterial;
-                    btnRecorte.Enabled = false;
-                    _recorteSeleccionado = null;
-                }
-
-                cantMatMov.Text = itemSel.cantidad.ToString("G29", CultureInfo.InvariantCulture);
-
-                if (itemSel.EsCompraEventual && txtPrecioMaterial != null)
-                {
-                    txtPrecioMaterial.Text = itemSel.precio_unitario > 0 ? itemSel.precio_unitario.ToString("0.##").Replace('.', ',') : "";
-                }
-
-                isProgrammaticChange = false;
-
-                // Enfocar el campo de cantidad para edición inmediata
-                cantMatMov.Focus();
-                cantMatMov.SelectAll();
-            }
-        }
-
-        private void EliminarMaterial_Click(object sender, EventArgs e)
-        {
-            if (panelSeleccionado != null)
-            {
-                MovimientoMaterial item = (MovimientoMaterial)panelSeleccionado.Tag;
-                materialesLista.Remove(item);
-                flpMateriales.Controls.Remove(panelSeleccionado);
-                panelSeleccionado.Dispose();
-                
-                DeseleccionarItem();
-                GuardarBorrador();
-            }
-            else
-            {
-                ToastNotification.ShowWarning("Seleccione un ítem para eliminar.");
-            }
-        }
-
-        private decimal CalcularPrecioTotalMateriales()
-        {
-            decimal total = 0;
-            foreach (var detalle in materialesLista.Where(m => !m.EsInsumo))
-            {
-                decimal precioUnitario = detalle.EsCompraEventual
-                    ? detalle.precio_unitario
-                    : materialesFull.FirstOrDefault(m => detalle.id_material.HasValue && m.id == detalle.id_material.Value)?.precioUnitario ?? 0;
-
-                total += detalle.cantidad * precioUnitario;
-            }
-
-            return total;
-        }
-
-        private void GuardarMovimiento_Click(object sender, EventArgs e)
-        {
+            if (!modeloListo || !catalogosListos || ocupada) return;
             if (cmbMovimientos.SelectedIndex == -1 || cmbOrigen.SelectedIndex == -1 || cmbDestino.SelectedIndex == -1 || materialesLista.Count == 0)
             {
                 ToastNotification.ShowWarning("Completa todos los campos obligatorios.");
                 return;
             }
 
-            var confirmGuardar = MessageBox.Show(
-                "¿Estás seguro que querés guardar este remito?",
-                "Confirmar guardado",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button2);
+            var confirmGuardar = ConfirmarGuardado();
             if (confirmGuardar != DialogResult.Yes) return;
 
             // Validación de materiales eventuales antes de procesar
@@ -1806,11 +823,9 @@ namespace SteeLog.Vistas.Movimientos
 
                 // Determine destino name for insumo movements
                 string destinoNombre = "";
-                int? destinoObraId = null;
                 var itemDestino = (ItemCombo)cmbDestino.SelectedItem;
                 if (itemDestino.Tipo == "OBRA")
                 {
-                    destinoObraId = itemDestino.IdReal;
                     destinoNombre = itemDestino.TextoDisplay;
                 }
                 else
@@ -1838,59 +853,32 @@ namespace SteeLog.Vistas.Movimientos
                     precio_total = precioTotal
                 };
 
-                int idMovimientoFinal = 0;
-                MovimientoDatos movimientoDatos = new MovimientoDatos();
-
-                if (_idMovimientoAEditar > 0)
-                {
-                    idMovimientoFinal = movimientoDatos.ActualizarMovimiento(_idMovimientoAEditar, movimiento, materialesSolo);
-                }
-                else
-                {
-                    idMovimientoFinal = movimientoDatos.GuardarMovimiento(movimiento, materialesSolo);
-                }
-
-                // Handle insumo movements separately
-                if (insumosSolo.Count > 0)
-                {
-                    InsumoDatos insumoDatos = new InsumoDatos();
-                    foreach (var insumoItem in insumosSolo)
-                    {
-                        if (insumoItem.IdInsumo.HasValue)
-                        {
-                            insumoDatos.MoverInsumo(insumoItem.IdInsumo.Value, destinoObraId, origenNombre, destinoNombre, idMovimientoFinal);
-                        }
-                    }
-                }
+                var solicitud = new MovimientoSolicitud {
+                    Cabecera = new CabeceraMovimiento { Fecha=movimiento.fecha, Remito=movimiento.nroremito, OrigenId=movimiento.id_origen, TipoOrigen=movimiento.tipo_origen, DestinoId=movimiento.id_destino, TipoDestino=movimiento.tipo_destino, TipoMovimientoId=movimiento.id_tipomovimiento, ObraId=movimiento.id_obra > 0 ? (int?)movimiento.id_obra : null, CostoFlete=movimiento.costoflete, FleteId=movimiento.id_flete, Observaciones=movimiento.observaciones, PrecioTotal=movimiento.precio_total },
+                    Lineas = materialesSolo.Select(m => new LineaMovimiento { MaterialId=m.id_material, RecorteId=m.IdRecorte, MedidaRecorte=m.MedidaRecorte, Cantidad=m.cantidad, MaterialEventual=m.NombreMaterialEventual, CompraEventual=m.EsCompraEventual, PrecioUnitario=m.precio_unitario }).ToList(),
+                    Insumos = insumosSolo.Select(m => m.IdInsumo ?? 0).ToList(), OrigenNombre=origenNombre, DestinoNombre=destinoNombre
+                };
+                int versionOperacion = versionCarga, idOperacion = _idMovimientoAEditar;
+                int? guardado = await Presenter.GuardarAsync(idOperacion > 0 ? (int?)idOperacion : null, solicitud, cierre.Token);
+                if (!guardado.HasValue || IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
+                int idMovimientoFinal = guardado.Value;
 
                 ToastNotification.ShowSuccess(_idMovimientoAEditar > 0 ? "Movimiento actualizado." : "Movimiento guardado.");
                 _guardadoExitoso = true;
                 MovimientoDraftService.Eliminar(); // Borrador ya no necesario
 
-                // Verificar stock mínimo de los materiales consumidos
+                // Consultar el saldo confirmado antes de emitir alertas.
+                await RefrescarInventarioAsync(cierre.Token);
+                if (IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
                 VerificarStockMinimoPorMateriales(materialesSolo);
 
-                // PDF GENERATION
-                if (idMovimientoFinal > 0)
+                string archivoPdf = await Presenter.GenerarRemitoAsync(idMovimientoFinal, cierre.Token);
+                if (archivoPdf != null && !IsDisposed && !cierre.IsCancellationRequested && versionOperacion == versionCarga && idOperacion == _idMovimientoAEditar)
                 {
-                    try
-                    {
-                        MovimientoPDF generador = new MovimientoPDF();
-                        string tempFileName = Path.Combine(Path.GetTempPath(), generador.SugerirNombreArchivo(idMovimientoFinal));
-                        
-                        generador.Generar(tempFileName, idMovimientoFinal);
-                        
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                        {
-                            FileName = tempFileName,
-                            UseShellExecute = true
-                        });
-                    }
-                    catch (Exception exPdf)
-                    {
-                        ToastNotification.ShowError("Error al generar PDF: " + exPdf.Message);
-                    }
+                    try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = archivoPdf, UseShellExecute = true }); }
+                    catch (Exception exPdf) { ToastNotification.ShowError("Error al abrir PDF: " + exPdf.Message); }
                 }
+                if (IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
 
                 LimpiarFormulario();
                 _guardadoExitoso = true; // Permitir cierre limpio
@@ -1904,6 +892,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private void LimpiarFormulario()
         {
+            versionCarga++; cargaEdicion?.Cancel(); modeloListo = true; SetOcupada(ocupada);
             isProgrammaticChange = true;
             try
             {
@@ -1940,8 +929,7 @@ namespace SteeLog.Vistas.Movimientos
             _idMovimientoAEditar = 0;
             ActualizarModoEdicion();
 
-            // Refrescar Stock
-            materialesFull = new MaterialDatos().obtenerMateriales();
+
         }
 
         private void cmbMovimientos_SelectedIndexChanged(object sender, EventArgs e)
@@ -2036,7 +1024,7 @@ namespace SteeLog.Vistas.Movimientos
                 
                 // Clamp automático: solo para tipos de movimiento que CONSUMEN stock.
                 string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
-                bool consumeStock = MovimientoDatos.TipoMovimientoConsumeStock(cmbMovimientos.Text, tipoDestino);
+                bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
 
                 if (consumeStock && valor > stockMax)
                 {
@@ -2128,6 +1116,21 @@ namespace SteeLog.Vistas.Movimientos
             e.Handled = true;
         }
 
+        private async Task RefrescarInventarioAsync(CancellationToken token)
+        {
+            try
+            {
+                var materiales = await Presenter.MaterialesAsync(token);
+                if (IsDisposed || token.IsCancellationRequested) return;
+                materialesFull = materiales.Select(x => new Material { id=x.Id,nombre=x.Nombre,id_categoria=x.CategoriaId,nombre_categoria=x.Categoria,precioUnitario=x.Precio,stockActual=x.Stock,stockMinimo=x.Minimo }).ToList();
+                var recortes = await Presenter.RecortesAsync(token);
+                if (IsDisposed || token.IsCancellationRequested) return;
+                recortesDisponibles = recortes.Select(x => new Recorte { id=x.Id,id_material=x.MaterialId,nombre_material=x.Material,nombre_categoria=x.Categoria,ancho=x.Ancho,altura=x.Altura,medida=x.Medida,cantidad=x.Cantidad,estado=x.Estado,fecha_creacion=x.FechaCreacion }).ToList();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed) ToastNotification.ShowError("Movimiento guardado, pero no se pudo actualizar el stock: " + ex.Message); }
+        }
+
         private void VerificarStockMinimoPorMateriales(List<MovimientoMaterial> materialesUsados)
         {
             try
@@ -2141,8 +1144,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (idsAVerificar.Count == 0) return;
 
-                var datos = new MaterialDatos();
-                var todosLosMateriales = datos.obtenerMateriales();
+                var todosLosMateriales = materialesFull;
 
                 var bajoStock = todosLosMateriales
                     .Where(m => idsAVerificar.Contains(m.id)
@@ -2180,177 +1182,7 @@ namespace SteeLog.Vistas.Movimientos
 
         // ─────────────────────────────────────────────────────────────────────
         // BORRADOR / AUTOGUARDADO
-        // ─────────────────────────────────────────────────────────────────────
-
-        /// <summary>
-        /// Captura el estado actual del formulario y lo persiste como borrador en disco.
-        /// Se llama desde el timer cada 30 segundos. No lanza excepciones.
-        /// </summary>
-        private void GuardarBorrador()
-        {
-            try
-            {
-                // Si no hay nada cargado, no guardar un borrador vacío
-                if (cmbMovimientos.SelectedIndex < 0 && materialesLista.Count == 0) return;
-
-                var origen = cmbOrigen.SelectedItem as ItemCombo;
-                var destino = cmbDestino.SelectedItem as ItemCombo;
-
-                decimal ptDraft = CalcularPrecioTotalMateriales();
-
-                var draft = MovimientoDraftService.CrearDesde(
-                    fecha: guna2DateTimePicker1.Value,
-                    nroRemito: nroRemitoTxt.Text.Trim(),
-                    idTipoMov: cmbMovimientos.SelectedIndex >= 0 ? Convert.ToInt32(cmbMovimientos.SelectedValue) : 0,
-                    nombreTipoMov: cmbMovimientos.Text,
-                    idOrigen: origen?.IdReal ?? 0,
-                    tipoOrigen: origen?.Tipo ?? "",
-                    idDestino: destino?.IdReal ?? 0,
-                    tipoDestino: destino?.Tipo ?? "",
-                    idObra: cmbObras.SelectedIndex >= 0 ? Convert.ToInt32(cmbObras.SelectedValue) : 0,
-                    costoFlete: decimal.TryParse(costoFleteTxt.Text.Replace(',', '.'),
-                        System.Globalization.NumberStyles.Any,
-                        System.Globalization.CultureInfo.InvariantCulture, out decimal cf) ? cf : 0,
-                    idFlete: (cmbFlete.SelectedValue != null && Convert.ToInt32(cmbFlete.SelectedValue) > 0) ? Convert.ToInt32(cmbFlete.SelectedValue) : (int?)null,
-                    precioTotal: ptDraft,
-                    observaciones: txtCategoria.Text,
-                    materiales: materialesLista
-                );
-
-                MovimientoDraftService.Guardar(draft);
-            }
-            catch { /* silencioso */ }
-        }
-
-        /// <summary>
-        /// Verifica si existe un borrador válido al abrir la vista y, si el usuario acepta,
-        /// restaura todos los campos y la lista de materiales.
-        /// </summary>
-        private void IntentarRecuperarBorrador()
-        {
-            var draft = MovimientoDraftService.Leer();
-            if (draft == null || (draft.Materiales.Count == 0 && draft.IdTipoMovimiento == 0)) return;
-
-            string hace = "";
-            var edad = DateTime.Now - draft.FechaGuardado;
-            if (edad.TotalMinutes < 60)
-                hace = $"hace {(int)edad.TotalMinutes} min";
-            else
-                hace = $"hace {(int)edad.TotalHours}h";
-
-            var resultado = MessageBox.Show(
-                $"Se encontró un movimiento sin guardar ({hace}).\n\n" +
-                $"Tipo: {draft.NombreTipoMovimiento}\n" +
-                $"Materiales: {draft.Materiales.Count}\n\n" +
-                "¿Desea recuperarlo?",
-                "Borrador encontrado",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question,
-                MessageBoxDefaultButton.Button1);
-
-            if (resultado != DialogResult.Yes)
-            {
-                MovimientoDraftService.Eliminar();
-                return;
-            }
-
-            try
-            {
-                isProgrammaticChange = true;
-
-                // Fecha y remito
-                guna2DateTimePicker1.Value = draft.Fecha == default ? DateTime.Now : draft.Fecha;
-                nroRemitoTxt.Text = draft.NroRemito ?? "";
-
-                // Tipo de movimiento
-                if (draft.IdTipoMovimiento > 0)
-                    cmbMovimientos.SelectedValue = draft.IdTipoMovimiento;
-
-                // Origen
-                if (draft.IdOrigen > 0)
-                {
-                    foreach (var item in cmbOrigen.Items)
-                    {
-                        if (item is ItemCombo ic && ic.IdReal == draft.IdOrigen && ic.Tipo == draft.TipoOrigen)
-                        {
-                            cmbOrigen.SelectedItem = item;
-                            break;
-                        }
-                    }
-                }
-
-                // Destino
-                if (draft.IdDestino > 0)
-                {
-                    foreach (var item in cmbDestino.Items)
-                    {
-                        if (item is ItemCombo ic && ic.IdReal == draft.IdDestino && ic.Tipo == draft.TipoDestino)
-                        {
-                            cmbDestino.SelectedItem = item;
-                            break;
-                        }
-                    }
-                }
-
-                // Obra
-                if (draft.IdObra > 0)
-                    cmbObras.SelectedValue = draft.IdObra;
-
-                // Flete
-                if (draft.IdFlete.HasValue && draft.IdFlete.Value > 0)
-                {
-                    List<Flete> fletesBorrador = new FleteDatos().GetFletes(soloActivos: true, incluirId: draft.IdFlete.Value);
-                    fletesBorrador.Insert(0, new Flete { id = 0, nombre = "-" });
-                    cmbFlete.DataSource = fletesBorrador;
-                    cmbFlete.SelectedValue = draft.IdFlete.Value;
-                }
-                else
-                {
-                    cmbFlete.SelectedIndex = 0;
-                }
-
-                // Costo flete y observaciones
-                costoFleteTxt.Text = draft.CostoFlete > 0 ? draft.CostoFlete.ToString("0.##").Replace('.', ',') : "";
-                if (txtPrecioGeneral != null)
-                {
-                    txtPrecioGeneral.Text = draft.PrecioTotal > 0 ? draft.PrecioTotal.ToString("0.##").Replace('.', ',') : "";
-                }
-                txtCategoria.Text = draft.Observaciones ?? "";
-
-                // Materiales
-                foreach (var md in draft.Materiales)
-                {
-                    var item = new MovimientoMaterial
-                    {
-                        id_material = md.IdMaterial,
-                        NombreMaterial = md.NombreMaterial,
-                        NombreMaterialEventual = md.NombreMaterialEventual,
-                        cantidad = md.Cantidad,
-                        EsRecorte = md.EsRecorte,
-                        IdRecorte = md.IdRecorte,
-                        MedidaRecorte = md.MedidaRecorte,
-                        EsInsumo = md.EsInsumo,
-                        IdInsumo = md.IdInsumo,
-                        EsCompraEventual = md.EsCompraEventual,
-                        precio_unitario = md.PrecioUnitario
-                    };
-                    materialesLista.Add(item);
-                    AgregarItemLista(item);
-                }
-
-                ToastNotification.ShowSuccess("Borrador recuperado correctamente.");
-            }
-            catch
-            {
-                ToastNotification.ShowError("No se pudo restaurar el borrador completamente.");
-            }
-            finally
-            {
-                isProgrammaticChange = false;
-            }
-        }
-
-        private void btnAgregarFlete_Click(object sender, EventArgs e)
+        private async void btnAgregarFlete_Click(object sender, EventArgs e)
         {
             using (var modal = new ModalAgregarFlete())
             {
@@ -2359,18 +1191,13 @@ namespace SteeLog.Vistas.Movimientos
                     int nuevoId = modal.IdFleteCreado;
                     
                     // Recargar fletes e incluir el nuevo ID
-                    List<Flete> fletes = new FleteDatos().GetFletes(soloActivos: true, incluirId: nuevoId);
-                    fletes.Insert(0, new Flete { id = 0, nombre = "-" });
-                    
-                    cmbFlete.DataSource = fletes;
-                    cmbFlete.DisplayMember = "nombre";
-                    cmbFlete.ValueMember = "id";
-                    cmbFlete.SelectedValue = nuevoId;
+                    catalogos = await Presenter.CatalogosAsync(cierre.Token);
+                    if (!IsDisposed && !cierre.IsCancellationRequested) EstablecerFletes(nuevoId);
                 }
             }
         }
 
-        private void btnEliminarFlete_Click(object sender, EventArgs e)
+        private async void btnEliminarFlete_Click(object sender, EventArgs e)
         {
             if (cmbFlete.SelectedValue == null || Convert.ToInt32(cmbFlete.SelectedValue) == 0)
             {
@@ -2386,21 +1213,12 @@ namespace SteeLog.Vistas.Movimientos
             {
                 try
                 {
-                    ComunDatos datos = new ComunDatos();
-                    var valores = new System.Collections.Generic.Dictionary<string, object>();
-                    valores.Add("activo", false);
-                    datos.ActualizarEntidadGenerica("fletes", "id_flete", idSeleccionado, valores);
-
+                    var desactivado = await Presenter.DesactivarFleteAsync(idSeleccionado,cierre.Token);
+                    if (!desactivado.HasValue || IsDisposed || cierre.IsCancellationRequested) return;
+                    catalogos = await Presenter.CatalogosAsync(cierre.Token);
+                    if (IsDisposed || cierre.IsCancellationRequested) return;
                     ToastNotification.ShowSuccess("Flete desactivado (borrado lógico) correctamente.");
-
-                    // Recargar fletes
-                    List<Flete> fletes = new FleteDatos().GetFletes(soloActivos: true);
-                    fletes.Insert(0, new Flete { id = 0, nombre = "-" });
-                    
-                    cmbFlete.DataSource = fletes;
-                    cmbFlete.DisplayMember = "nombre";
-                    cmbFlete.ValueMember = "id";
-                    cmbFlete.SelectedIndex = 0;
+                    EstablecerFletes(null);
                 }
                 catch (Exception ex)
                 {

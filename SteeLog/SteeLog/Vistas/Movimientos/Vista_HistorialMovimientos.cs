@@ -5,17 +5,24 @@ using System.Drawing;
 using System.Globalization;
 using System.Linq;
 using System.Windows.Forms;
+using System.Threading;
+using System.ComponentModel;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using Guna.UI2.WinForms;
-using SteeLog.Datos;
 using SteeLog.Modelos;
 using SteeLog.Servicios;
 using SteeLog;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class Vista_HistorialMovimientos : Form, IMessageFilter, IRefrescable
+    public partial class Vista_HistorialMovimientos : Form, IMessageFilter, IRefrescable, IMovimientosVista
     {
-        private MovimientoDatos movDatos = new MovimientoDatos();
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private MovimientosPresenter presenter;
+        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        public void SetOcupada(bool ocupada) { if (!IsDisposed && dgvHistorial != null) dgvHistorial.Enabled = !ocupada; }
+        public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         private List<HistorialMovimiento> rawHistorial = new List<HistorialMovimiento>();
         private List<MovimientoGrupo> listaGrupos = new List<MovimientoGrupo>();
         private Guna.UI2.WinForms.Guna2DataGridView dgvDetalles;
@@ -27,15 +34,25 @@ namespace SteeLog.Vistas.Movimientos
         public Vista_HistorialMovimientos()
         {
             InitializeComponent();
+            if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             Application.AddMessageFilter(this);
-            this.FormClosed += (s, e) => Application.RemoveMessageFilter(this);
+            FormClosed += (s, e) => CerrarRecursos();
+            Disposed += (s, e) => CerrarRecursos();
             this.VisibleChanged += (s, e) => { if (this.Visible) BuscarHistorial(); };
             
             ConfigurarUIAdicional();
             ConfigurarFechas();
-            CargarTiposMovimiento();
             ConfigurarGrid();
-            CargarHistorial();
+            Load += (s, e) => { CargarTiposMovimiento(); CargarHistorial(); };
+        }
+
+        private bool recursosCerrados;
+        private void CerrarRecursos()
+        {
+            if (recursosCerrados) return;
+            recursosCerrados = true;
+            cierre.Cancel(); cargaHistorial?.Cancel();
+            Application.RemoveMessageFilter(this);
         }
 
         public bool PreFilterMessage(ref Message m)
@@ -229,7 +246,7 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
-        private void DgvDetalles_CellEndEdit(object sender, DataGridViewCellEventArgs e)
+        private async void DgvDetalles_CellEndEdit(object sender, DataGridViewCellEventArgs e)
         {
             if (e.RowIndex < 0 || dgvDetalles.Columns[e.ColumnIndex].Name != "colDetPrecio")
                 return;
@@ -244,7 +261,11 @@ namespace SteeLog.Vistas.Movimientos
 
             try
             {
-                decimal precioTotal = movDatos.ActualizarPrecioUnitarioCompraEventual(detalle.id_movimientomaterial.Value, precioNuevo);
+                decimal precioAnterior = precioUnitarioAnterior;
+                var resultado = await Presenter.ActualizarPrecioAsync(detalle.id_movimientomaterial.Value, precioNuevo, cierre.Token);
+                if (IsDisposed || cierre.IsCancellationRequested) return;
+                if (!resultado.HasValue) { detalle.precio_unitario=precioAnterior; dgvDetalles.Refresh(); return; }
+                decimal precioTotal=resultado.Value;
                 detalle.precio_unitario = precioNuevo;
                 detalle.precio_total = precioTotal;
 
@@ -313,12 +334,14 @@ namespace SteeLog.Vistas.Movimientos
             materiales.Controls.Add(chkHasta, 2, 0);
         }
 
-        private void CargarTiposMovimiento()
+        private async void CargarTiposMovimiento()
         {
             try
             {
-                ComunDatos datos = new ComunDatos();
-                var dt = datos.ObtenerListaGenerica("tipo_movimiento");
+                var catalogos = await Presenter.CatalogosAsync(cierre.Token);
+                if (IsDisposed || cierre.IsCancellationRequested) return;
+                var dt = new DataTable(); dt.Columns.Add("id_tipomovimiento", typeof(int)); dt.Columns.Add("nombre", typeof(string));
+                foreach (var tipo in catalogos.Tipos) dt.Rows.Add(tipo.Id, tipo.Nombre);
 
                 // Reordenar: primero TODOS, luego Envío a Obra, luego el resto
                 DataTable dtOrdenado = dt.Clone();
@@ -358,8 +381,10 @@ namespace SteeLog.Vistas.Movimientos
                 cmbTipoMov.ValueMember = "nombre";
                 cmbTipoMov.SelectedIndex = 0;
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
+                if (IsDisposed || cierre.IsCancellationRequested) return;
                 Console.WriteLine("Error cargando tipos: " + ex.Message);
                 cmbTipoMov.DataSource = null;
                 cmbTipoMov.Items.Clear();
@@ -556,28 +581,15 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
-        private void GenerarPDF(MovimientoGrupo mov)
+        private async void GenerarPDF(MovimientoGrupo mov)
         {
-            try
-            {
-                SteeLog.Reportes.MovimientoPDF generador = new SteeLog.Reportes.MovimientoPDF();
-                string tempFileName = System.IO.Path.Combine(System.IO.Path.GetTempPath(), generador.SugerirNombreArchivo(mov.id_movimiento));
-                
-                generador.Generar(tempFileName, mov.id_movimiento);
-                
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-                {
-                    FileName = tempFileName,
-                    UseShellExecute = true
-                });
-            }
-            catch (Exception exPdf)
-            {
-                ToastNotification.ShowError("Error al generar PDF: " + exPdf.Message);
-            }
+            string ruta = await Presenter.GenerarRemitoAsync(mov.id_movimiento, cierre.Token);
+            if (ruta == null || IsDisposed || cierre.IsCancellationRequested) return;
+            try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = ruta, UseShellExecute = true }); }
+            catch (Exception ex) { ToastNotification.ShowError("Error al abrir PDF: " + ex.Message); }
         }
 
-        private void ConfirmarEliminacion(MovimientoGrupo row)
+        private async void ConfirmarEliminacion(MovimientoGrupo row)
         {
             var result = MessageBox.Show(
                 $"¿Está seguro de que desea eliminar el movimiento completo?\r\n\r\n" +
@@ -593,7 +605,8 @@ namespace SteeLog.Vistas.Movimientos
             {
                 try
                 {
-                    movDatos.EliminarMovimiento(row.id_movimiento, null, 0, row.tipo_movimiento);
+                    var eliminado = await Presenter.EliminarAsync(row.id_movimiento, cierre.Token);
+                    if (!eliminado.HasValue || IsDisposed || cierre.IsCancellationRequested) return;
                     ToastNotification.ShowSuccess("Registro eliminado correctamente.");
                     BuscarHistorial();
                 }
@@ -661,8 +674,13 @@ namespace SteeLog.Vistas.Movimientos
             ExportarExcel();
         }
 
-        private void BuscarHistorial()
+        private int versionHistorial;
+        private CancellationTokenSource cargaHistorial;
+        private async void BuscarHistorial()
         {
+            int version = ++versionHistorial;
+            cargaHistorial?.Cancel();
+            cargaHistorial = CancellationTokenSource.CreateLinkedTokenSource(cierre.Token);
             try
             {
                 DateTime? fechaDesde = (chkDesde != null && chkDesde.Checked) ? (DateTime?)dtpDesde.Value.Date : (DateTime?)null;
@@ -679,7 +697,9 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (tipoFiltro == "TODOS") tipoFiltro = null;
 
-                rawHistorial = movDatos.ObtenerHistorial(fechaDesde, fechaHasta, tipoFiltro);
+                var leidos = await Presenter.HistorialAsync(fechaDesde, fechaHasta, tipoFiltro, cargaHistorial.Token);
+                if (IsDisposed || cierre.IsCancellationRequested || version != versionHistorial) return;
+                rawHistorial = leidos.Select(x => new HistorialMovimiento { id_movimiento=x.IdMovimiento, id_movimientomaterial=x.IdLinea, id_material=x.IdMaterial, fecha=x.Fecha, nroremito=x.Remito, tipo_movimiento=x.Tipo, material=x.Material, cantidad=x.Cantidad, origen=x.Origen, destino=x.Destino, observaciones=x.Observaciones, esrecorte=x.EsRecorte, medida_recorte=x.Medida, esinsumo=x.EsInsumo, es_compra_eventual=x.Eventual, precio_unitario=x.PrecioUnitario, precio_total=x.PrecioTotal }).ToList();
 
                 var grupos = rawHistorial.GroupBy(m => m.id_movimiento).Select(g => new MovimientoGrupo
                 {
@@ -716,9 +736,10 @@ namespace SteeLog.Vistas.Movimientos
 
                 lblSubtitulo.Text = $"{listaGrupos.Count} movimiento(s) encontrado(s)";
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                ToastNotification.ShowError($"Error al cargar historial: {ex.Message}");
+                if (!IsDisposed && version == versionHistorial) ToastNotification.ShowError($"Error al cargar historial: {ex.Message}");
             }
         }
 

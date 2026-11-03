@@ -5,7 +5,11 @@ using System.Drawing;
 using System.Linq;
 using System.Windows.Forms;
 using Guna.UI2.WinForms;
-using SteeLog.Datos;
+using System.Threading;
+using System.Threading.Tasks;
+using SteeLog.Core.Application.Inventario;
+using SteeLog.CompositionRoot;
+using SteeLog.Presentation;
 using SteeLog.Servicios;
 using SteeLog;
 
@@ -14,7 +18,9 @@ namespace SteeLog.Vistas.Inventario
     public partial class Vista_Inventario : Form, IRefrescable
     {
         private string tabActual = "materiales";
-        private InventarioDatos datos = new InventarioDatos();
+        private readonly InventarioPresenter presenter;
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private int versionLista, versionObras, versionResumen;
 
         // Filtros dinámicos
         private Guna2TextBox txtBusqueda;
@@ -55,13 +61,16 @@ namespace SteeLog.Vistas.Inventario
         private readonly Color colorTexto = Color.White;
         private readonly Color colorBorde = Color.FromArgb(60, 60, 65);
 
-        public Vista_Inventario()
+        public Vista_Inventario() : this(LocalServices.Current.Executor) { }
+
+        public Vista_Inventario(IUseCaseExecutor executor)
         {
+            presenter = new InventarioPresenter(executor);
             InitializeComponent();
             CrearInterfaz();
-            CargarFiltros();
-            CargarResumen();
-            CargarTab("materiales");
+            Shown += (s, e) => { CargarFiltros(); CargarResumen(); CargarTab("materiales"); };
+            FormClosed += (s, e) => cierre.Cancel();
+            Disposed += (s, e) => cierre.Cancel();
         }
 
         public void Refrescar()
@@ -318,11 +327,12 @@ namespace SteeLog.Vistas.Inventario
         }
 
         // ======================== CARGA ========================
-        private void CargarFiltros()
+        private async void CargarFiltros()
         {
             try
             {
-                var categorias = datos.ObtenerCategorias();
+                var categorias = await presenter.CategoriasAsync(cierre.Token);
+                if (cierre.IsCancellationRequested || IsDisposed) return;
                 cmbCategoria.Items.Clear();
                 foreach (var c in categorias) cmbCategoria.Items.Add(c);
                 ConfigurarComboBuscable(cmbCategoria);
@@ -332,6 +342,7 @@ namespace SteeLog.Vistas.Inventario
 
                 ActualizarFiltrosEstado();
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
                 Console.WriteLine("Error cargando filtros: " + ex.Message);
@@ -390,11 +401,14 @@ namespace SteeLog.Vistas.Inventario
                 cmbEstado.SelectedItem = tabActual == "herramientas" ? "EN OBRA" : "TODOS";
         }
 
-        private void CargarObrasFiltro()
+        private async void CargarObrasFiltro()
         {
-            var obras = tabActual == "herramientas"
-                ? datos.ObtenerObrasConHerramientas()
-                : datos.ObtenerObrasActivas();
+            int version = ++versionObras;
+            bool herramientas = tabActual == "herramientas";
+            try
+            {
+            var obras = await presenter.ObrasAsync(herramientas, cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionObras) return;
 
             cmbObra.Items.Clear();
             foreach (var obra in obras)
@@ -402,19 +416,25 @@ namespace SteeLog.Vistas.Inventario
 
             if (cmbObra.Items.Count > 0)
                 cmbObra.SelectedIndex = 0;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!cierre.IsCancellationRequested && version == versionObras) ToastNotification.ShowError("Error cargando obras: " + ex.Message); }
         }
 
-        private void CargarResumen()
+        private async void CargarResumen()
         {
+            int version = ++versionResumen;
             try
             {
-                var resumen = datos.ObtenerResumen();
+                var resumen = await presenter.ResumenAsync(cierre.Token);
+                if (cierre.IsCancellationRequested || IsDisposed || version != versionResumen) return;
                 lblResumen1.Text = $"📦 Materiales: {resumen.total_materiales} ({resumen.materiales_sin_stock} sin stock)";
                 lblResumen2.Text = $"✂ Recortes: {resumen.total_recortes} disponibles";
                 lblResumen3.Text = $"🔧 Herramientas: {resumen.total_herramientas} ({resumen.herramientas_en_obra} en obra)";
                 lblResumen4.Text = $"📋 Insumos: {resumen.total_insumos} ({resumen.insumos_en_obra} en obra)";
             }
-            catch { }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!cierre.IsCancellationRequested && version == versionResumen) ToastNotification.ShowError("Error cargando resumen: " + ex.Message); }
         }
 
         // ======================== TABS ========================
@@ -438,8 +458,9 @@ namespace SteeLog.Vistas.Inventario
         }
 
         // ======================== FILTROS ========================
-        private void AplicarFiltros()
+        private async void AplicarFiltros()
         {
+            int version = ++versionLista;
             try
             {
                 string busqueda = txtBusqueda?.Text?.Trim() ?? "";
@@ -451,23 +472,25 @@ namespace SteeLog.Vistas.Inventario
                 {
                     case "materiales":
                         if (modoPaquete)
-                            MostrarPaquetes();
+                            await MostrarPaquetes(version);
                         else
-                            MostrarMateriales(busqueda, categoria, estado);
+                            await MostrarMateriales(busqueda, categoria, estado, version);
                         break;
                     case "recortes":
-                        MostrarRecortes(busqueda, categoria);
+                        await MostrarRecortes(busqueda, categoria, version);
                         break;
                     case "herramientas":
-                        MostrarHerramientas(busqueda, estado, obra);
+                        await MostrarHerramientas(busqueda, estado, obra, version);
                         break;
                     case "insumos":
-                        MostrarInsumos(busqueda, estado, obra);
+                        await MostrarInsumos(busqueda, estado, obra, version);
                         break;
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
+                if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
                 dgvInventario.DataSource = CrearTablaVaciaSegunTab();
                 Console.WriteLine("Error al aplicar filtros del inventario: " + ex.Message);
             }
@@ -485,9 +508,10 @@ namespace SteeLog.Vistas.Inventario
         }
 
         // ======================== GRILLAS ========================
-        private void MostrarMateriales(string busqueda, string categoria, string estado)
+        private async Task MostrarMateriales(string busqueda, string categoria, string estado, int version)
         {
-            var items = datos.ObtenerMateriales(busqueda, categoria, estado);
+            var items = await presenter.MaterialesAsync(busqueda, categoria, estado, cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
             bool mostrarPrecios = SessionManager.Role == UserRole.Admin;
             bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
             DataTable dt = new DataTable();
@@ -565,7 +589,7 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Proveedores"] != null) dgvInventario.Columns["Proveedores"].FillWeight = mostrarPrecios ? 20 : 20;
         }
 
-        private void MostrarPaquetes()
+        private async Task MostrarPaquetes(int version)
         {
             // Definición de materiales con lógica de paquetes: codigo → (unidades por paquete, etiqueta corta)
             var definiciones = new System.Collections.Generic.Dictionary<string, (int porPaquete, string etiqueta)>
@@ -579,7 +603,8 @@ namespace SteeLog.Vistas.Inventario
                 { "SOL161", (12, "Solera 70") },
             };
 
-            var todosMateriales = datos.ObtenerMateriales();
+            var todosMateriales = await presenter.MaterialesAsync("", "", "", cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
             var filtrados = todosMateriales.Where(m => !string.IsNullOrEmpty(m.codigo) && definiciones.ContainsKey(m.codigo)).ToList();
 
             DataTable dt = new DataTable();
@@ -617,9 +642,10 @@ namespace SteeLog.Vistas.Inventario
             }
         }
 
-        private void MostrarRecortes(string busqueda, string categoria)
+        private async Task MostrarRecortes(string busqueda, string categoria, int version)
         {
-            var items = datos.ObtenerRecortes(busqueda, categoria);
+            var items = await presenter.RecortesAsync(busqueda, categoria, cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
             DataTable dt = new DataTable();
             dt.Columns.Add("Material", typeof(string));
             dt.Columns.Add("Categoría", typeof(string));
@@ -721,9 +747,10 @@ namespace SteeLog.Vistas.Inventario
             return "-";
         }
 
-        private void MostrarHerramientas(string busqueda, string estado, string obra)
+        private async Task MostrarHerramientas(string busqueda, string estado, string obra, int version)
         {
-            var items = datos.ObtenerHerramientas(busqueda, estado, obra);
+            var items = await presenter.HerramientasAsync(busqueda, estado, obra, cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
             DataTable dt = new DataTable();
             dt.Columns.Add("Herramienta", typeof(string));
             dt.Columns.Add("Estado", typeof(string));
@@ -749,9 +776,10 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Observaciones"] != null) dgvInventario.Columns["Observaciones"].FillWeight = 30;
         }
 
-        private void MostrarInsumos(string busqueda, string estado, string obra)
+        private async Task MostrarInsumos(string busqueda, string estado, string obra, int version)
         {
-            var items = datos.ObtenerInsumos(busqueda, estado, obra);
+            var items = await presenter.InsumosAsync(busqueda, estado, obra, cierre.Token);
+            if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
             DataTable dt = new DataTable();
             dt.Columns.Add("Insumo", typeof(string));
             dt.Columns.Add("Estado", typeof(string));

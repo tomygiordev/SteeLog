@@ -1,16 +1,19 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
-using SteeLog.Datos;
-using SteeLog.Modelos;
+using SteeLog.Core.Application.Movimientos;
+using SteeLog.Core.Application.Reportes;
 
-namespace SteeLog.Reportes
+namespace SteeLog.Infrastructure.Pdf
 {
-    public class MovimientoPDF
+    public sealed class MovimientoPDF : IRemitoPdf
     {
+        private readonly IRecursosPdf recursos;
+        public MovimientoPDF(IRecursosPdf recursos) { this.recursos = recursos ?? throw new ArgumentNullException(nameof(recursos)); }
+
         // Colores corporativos (mismos que InformeObraPDF)
         private static readonly BaseColor COLOR_VERDE_OSCURO = new BaseColor(25, 50, 35);
         private static readonly BaseColor COLOR_VERDE_HEADER = new BaseColor(35, 63, 43);
@@ -46,60 +49,46 @@ namespace SteeLog.Reportes
             fntPie = new Font(baseFontNormal, 8, Font.NORMAL, new BaseColor(120, 120, 120));
         }
 
-        public void Generar(string rutaDestino, int idMovimiento)
+        public void Generar(string rutaDestino, RemitoLectura remito)
         {
-            var datos = new InformeObraDatos();
-            var items = datos.ObtenerDetalleMovimiento(idMovimiento);
-            
-            if (items.Count == 0) return;
-
-            var primerItem = items[0];
-
-            Document doc = new Document(PageSize.A4, 40, 40, 40, 60);
-            PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(rutaDestino, FileMode.Create));
-            
-            // Footer
-            writer.PageEvent = new PieMovimiento();
-
-            doc.Open();
-
-            // Auto open print dialog when opened in viewer
-            PdfAction action = PdfAction.JavaScript("this.print(true);", writer);
-            writer.AddJavaScript(action);
-
-            for (int i = 0; i < 3; i++)
+            if (remito == null) throw new ArgumentNullException(nameof(remito));
+            if (remito.Lineas == null || remito.Lineas.Count == 0) throw new InvalidOperationException("El movimiento no tiene detalles para imprimir.");
+            var marca = recursos.Capturar();
+            using (var stream = new FileStream(rutaDestino, FileMode.Create))
+            using (var doc = new Document(PageSize.A4, 40, 40, 40, 60))
             {
-                if (i > 0) doc.NewPage();
-
-                // =================== ENCABEZADO ===================
-                AgregarEncabezado(doc, primerItem);
-
-                // =================== DATOS PRINCIPALES ===================
-                AgregarBloqueInfo(doc, primerItem);
-
-                // =================== TABLA DE MATERIALES ===================
-                AgregarTablaMateriales(doc, items, primerItem.costoflete);
-
-                // =================== OBSERVACIONES & FIRMA ===================
-                AgregarSeccionFirma(doc, primerItem);
+                PdfWriter writer = PdfWriter.GetInstance(doc, stream);
+                writer.PageEvent = new PieMovimiento(marca.Pie);
+                doc.Open();
+                writer.AddJavaScript(PdfAction.JavaScript("this.print(true);", writer));
+                for (int i = 0; i < 3; i++)
+                {
+                    if (i > 0) doc.NewPage();
+                    AgregarEncabezado(doc, remito, marca);
+                    AgregarBloqueInfo(doc, remito);
+                    AgregarTablaMateriales(doc, remito.Lineas, remito.CostoFlete);
+                    AgregarSeccionFirma(doc, remito);
+                }
             }
-
-            doc.Close();
         }
 
-        public string SugerirNombreArchivo(int idMovimiento)
+        public string SugerirNombreArchivo(RemitoLectura remito)
         {
-            var datos = new InformeObraDatos();
-            var items = datos.ObtenerDetalleMovimiento(idMovimiento);
-            if (items.Count == 0) return "Movimiento.pdf";
-
-            var mov = items[0];
-            string nro = !string.IsNullOrWhiteSpace(mov.nroremito) ? mov.nroremito : "SN";
-            string tipo = mov.tipo_movimiento.Replace(" ", "_");
-            return $"Comprobante_{tipo}_Remito_{nro}_{DateTime.Now:yyyyMMdd}.pdf";
+            if (remito == null) throw new ArgumentNullException(nameof(remito));
+            string nro = !string.IsNullOrWhiteSpace(remito.NroRemito) ? remito.NroRemito : "SN";
+            string tipo = (remito.TipoMovimiento ?? "-").Replace(" ", "_");
+            nro = NombreSeguro(nro);
+            tipo = NombreSeguro(tipo);
+            return $"Comprobante_{tipo}_Remito_{nro}_{remito.FechaArchivo:yyyyMMdd}.pdf";
         }
 
-        private void AgregarEncabezado(Document doc, InformeMovimientoDetalle mov)
+        private static string NombreSeguro(string valor)
+        {
+            var invalidos = Path.GetInvalidFileNameChars();
+            return new string(valor.Select(c => invalidos.Contains(c) || c == '/' || c == '\\' ? '_' : c).ToArray());
+        }
+
+        private void AgregarEncabezado(Document doc, RemitoLectura mov, MarcaPdf marca)
         {
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -111,7 +100,10 @@ namespace SteeLog.Reportes
             PdfPCell cellIzq = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
             // Logo superpuesto (cargado de recurso embebido)
-            cellIzq.AddElement(Branding.PdfLogo(150, 62));
+            var logo = iTextSharp.text.Image.GetInstance(marca.LogoPng);
+            logo.ScaleToFit(150, 62);
+            logo.Alignment = Element.ALIGN_LEFT;
+            cellIzq.AddElement(logo);
 
             // Datos de la empresa perfectamente apilados debajo del logo
             var fntDir = new Font(Font.FontFamily.HELVETICA, 8, Font.NORMAL, new BaseColor(80, 80, 80));
@@ -134,14 +126,14 @@ namespace SteeLog.Reportes
             // ======= DERECHA: DATOS DE REMITO =======
             // Alineamos al tope quitando el PaddingTop para que coincida con el borde superior del logo
             PdfPCell cellDer = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
-            
-            string tituloRemito = "REMITO DE " + mov.tipo_movimiento.ToUpper();
+
+            string tituloRemito = "REMITO DE " + mov.TipoMovimiento.ToUpper();
             // Le saco el SpacingBefore extra que podría empujarlo
             cellDer.AddElement(new Paragraph(tituloRemito, fntTituloPrincipal) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
-            
-            string nro = !string.IsNullOrWhiteSpace(mov.nroremito) ? mov.nroremito.PadLeft(8, '0') : "--------";
+
+            string nro = !string.IsNullOrWhiteSpace(mov.NroRemito) ? mov.NroRemito.PadLeft(8, '0') : "--------";
             cellDer.AddElement(new Paragraph($"Nº 0001 - {nro}", new Font(Font.FontFamily.HELVETICA, 12, Font.BOLD, COLOR_TEXTO)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
-            cellDer.AddElement(new Paragraph($"Fecha: {mov.fecha:dd/MM/yyyy HH:mm}", new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, COLOR_TEXTO)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
+            cellDer.AddElement(new Paragraph($"Fecha: {mov.Fecha:dd/MM/yyyy HH:mm}", new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, COLOR_TEXTO)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
 
             headerTable.AddCell(cellDer);
 
@@ -153,15 +145,15 @@ namespace SteeLog.Reportes
             doc.Add(lineaSep);
         }
 
-        private void AgregarBloqueInfo(Document doc, InformeMovimientoDetalle mov)
+        private void AgregarBloqueInfo(Document doc, RemitoLectura mov)
         {
             PdfPTable infoTable = new PdfPTable(4);
             infoTable.WidthPercentage = 100;
             infoTable.SetWidths(new float[] { 15f, 35f, 15f, 35f });
             infoTable.SpacingAfter = 15;
 
-            AgregarCeldaInfo(infoTable, "Origen:", mov.origen);
-            AgregarCeldaInfo(infoTable, "Destino:", mov.destino);
+            AgregarCeldaInfo(infoTable, "Origen:", mov.Origen);
+            AgregarCeldaInfo(infoTable, "Destino:", mov.Destino);
 
             doc.Add(infoTable);
         }
@@ -174,7 +166,7 @@ namespace SteeLog.Reportes
             tabla.AddCell(cellValor);
         }
 
-        private void AgregarTablaMateriales(Document doc, List<InformeMovimientoDetalle> items, decimal flete)
+        private void AgregarTablaMateriales(Document doc, List<RemitoLinea> items, decimal flete)
         {
             PdfPTable tabla = new PdfPTable(3);
             tabla.WidthPercentage = 100;
@@ -190,26 +182,26 @@ namespace SteeLog.Reportes
             bool alt = false;
             foreach (var item in items) {
                 BaseColor bg = alt ? COLOR_FONDO_FILA : COLOR_BLANCO;
-                
+
                 // Celda Material
                 Phrase pMat = new Phrase();
-                pMat.Add(new Chunk(item.material + " ", fntCelda));
-                if (item.esrecorte) {
-                    pMat.Add(new Chunk("[RECORTE" + (string.IsNullOrEmpty(item.medida_recorte) ? "" : ": " + item.medida_recorte) + "]", 
+                pMat.Add(new Chunk(item.Material + " ", fntCelda));
+                if (item.EsRecorte) {
+                    pMat.Add(new Chunk("[RECORTE" + (string.IsNullOrEmpty(item.MedidaRecorte) ? "" : ": " + item.MedidaRecorte) + "]",
                              new Font(Font.FontFamily.HELVETICA, 8, Font.BOLD, COLOR_ETIQUETA_RECORTE)));
-                } else if (item.esinsumo) {
+                } else if (item.EsInsumo) {
                     pMat.Add(new Chunk("[INSUMO]", new Font(Font.FontFamily.HELVETICA, 8, Font.BOLD, new BaseColor(0, 188, 212))));
-                } else if (item.es_compra_eventual) {
+                } else if (item.EsCompraEventual) {
                     pMat.Add(new Chunk("[COMPRA EVENTUAL]", new Font(Font.FontFamily.HELVETICA, 8, Font.BOLD, new BaseColor(230, 120, 0))));
                 }
                 PdfPCell cMat = new PdfPCell(pMat) { BackgroundColor = bg, Padding = 6, BorderColor = COLOR_GRIS_CLARO };
                 tabla.AddCell(cMat);
 
                 // Celda Cantidad
-                tabla.AddCell(new PdfPCell(new Phrase(item.cantidad.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), fntCeldaBold)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, BorderColor = COLOR_GRIS_CLARO });
+                tabla.AddCell(new PdfPCell(new Phrase(item.Cantidad.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), fntCeldaBold)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, BorderColor = COLOR_GRIS_CLARO });
 
                 // Celda Tipo
-                string tipo = item.esrecorte ? "Recorte" : (item.esinsumo ? "Insumo" : (item.es_compra_eventual ? "Eventual" : "Estándar"));
+                string tipo = item.EsRecorte ? "Recorte" : (item.EsInsumo ? "Insumo" : (item.EsCompraEventual ? "Eventual" : "Estándar"));
                 tabla.AddCell(new PdfPCell(new Phrase(tipo, fntCelda)) { BackgroundColor = bg, Padding = 6, HorizontalAlignment = Element.ALIGN_CENTER, BorderColor = COLOR_GRIS_CLARO });
 
                 alt = !alt;
@@ -219,25 +211,25 @@ namespace SteeLog.Reportes
             if (flete > 0)
             {
                 var culture = new System.Globalization.CultureInfo("es-AR");
-                
-                PdfPCell cellFleteLbl = new PdfPCell(new Phrase("FLETE:", fntEtiqueta)) 
-                { 
-                    BackgroundColor = COLOR_FONDO_FILA, 
-                    BorderColor = COLOR_GRIS_CLARO, 
-                    HorizontalAlignment = Element.ALIGN_RIGHT, 
+
+                PdfPCell cellFleteLbl = new PdfPCell(new Phrase("FLETE:", fntEtiqueta))
+                {
+                    BackgroundColor = COLOR_FONDO_FILA,
+                    BorderColor = COLOR_GRIS_CLARO,
+                    HorizontalAlignment = Element.ALIGN_RIGHT,
                     VerticalAlignment = Element.ALIGN_MIDDLE,
-                    Padding = 6, 
-                    Colspan = 2 
+                    Padding = 6,
+                    Colspan = 2
                 };
                 tabla.AddCell(cellFleteLbl);
 
-                PdfPCell cellFleteVal = new PdfPCell(new Phrase(flete.ToString("C2", culture), fntCeldaBold)) 
-                { 
-                    BackgroundColor = COLOR_BLANCO, 
-                    BorderColor = COLOR_GRIS_CLARO, 
-                    HorizontalAlignment = Element.ALIGN_CENTER, 
+                PdfPCell cellFleteVal = new PdfPCell(new Phrase(flete.ToString("C2", culture), fntCeldaBold))
+                {
+                    BackgroundColor = COLOR_BLANCO,
+                    BorderColor = COLOR_GRIS_CLARO,
+                    HorizontalAlignment = Element.ALIGN_CENTER,
                     VerticalAlignment = Element.ALIGN_MIDDLE,
-                    Padding = 6 
+                    Padding = 6
                 };
                 tabla.AddCell(cellFleteVal);
             }
@@ -245,22 +237,22 @@ namespace SteeLog.Reportes
             doc.Add(tabla);
         }
 
-        private void AgregarSeccionFirma(Document doc, InformeMovimientoDetalle mov)
+        private void AgregarSeccionFirma(Document doc, RemitoLectura mov)
         {
             // Reducimos el espacio inicial
             doc.Add(new Paragraph(" ") { SpacingBefore = 2 });
 
             // 1. Observaciones - Más compacto
             PdfPTable tObs = new PdfPTable(1) { WidthPercentage = 100, SpacingAfter = 6 };
-            
+
             PdfPCell cObsHdr = new PdfPCell(new Phrase("Observaciones", fntSeccion)) { BackgroundColor = COLOR_VERDE_ACCENT, Padding = 4, Border = Rectangle.NO_BORDER };
             tObs.AddCell(cObsHdr);
-            
-            string textoObs = string.IsNullOrWhiteSpace(mov.observaciones) ? " " : mov.observaciones;
+
+            string textoObs = string.IsNullOrWhiteSpace(mov.Observaciones) ? " " : mov.Observaciones;
             // Reducimos MinimumHeight de 40 a 20
             PdfPCell cObsVal = new PdfPCell(new Phrase(textoObs, fntCelda)) { BorderColor = COLOR_GRIS_CLARO, Padding = 6, MinimumHeight = 20 };
             tObs.AddCell(cObsVal);
-            
+
             doc.Add(tObs);
 
             // 2. Firmas - Reducimos de 70 a 45 para ganar espacio
@@ -300,11 +292,13 @@ namespace SteeLog.Reportes
 
     public class PieMovimiento : PdfPageEventHelper
     {
+        private readonly string pie;
+        public PieMovimiento(string pie) { this.pie = pie; }
         public override void OnEndPage(PdfWriter writer, Document document)
         {
             PdfContentByte cb = writer.DirectContent;
             BaseFont bf = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            
+
             cb.SetColorStroke(new BaseColor(78, 91, 63));  // #4E5B3F
             cb.SetLineWidth(1f);
             cb.MoveTo(document.LeftMargin, document.Bottom - 15);
@@ -314,7 +308,7 @@ namespace SteeLog.Reportes
             cb.BeginText();
             cb.SetFontAndSize(bf, 8);
             cb.SetColorFill(new BaseColor(120, 120, 120));
-            cb.ShowTextAligned(Element.ALIGN_LEFT, "SteeLog - Sistema de Gestión de Inventario — Generado " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), document.LeftMargin, document.Bottom - 28, 0);
+            cb.ShowTextAligned(Element.ALIGN_LEFT, pie, document.LeftMargin, document.Bottom - 28, 0);
             cb.EndText();
         }
     }

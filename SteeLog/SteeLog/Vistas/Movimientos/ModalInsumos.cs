@@ -2,29 +2,56 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Forms;
-using SteeLog.Datos;
 using SteeLog.Modelos;
 using SteeLog;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using System.Threading;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class ModalInsumos : Form
+    public partial class ModalInsumos : Form, IInsumosVista
     {
-        private InsumoDatos _insumoDatos = new InsumoDatos();
-        private List<Insumo> _todosInsumos;
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private List<Insumo> _todosInsumos = new List<Insumo>();
+        private InsumosPresenter presenter;
+        private readonly CargasInsumos cargas = new CargasInsumos();
+        private bool cargando;
+        private InsumosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearInsumosPresenter(this));
+        public void SetOcupada(bool valor) { if (!IsDisposed) btnConfirmar.Enabled = !valor && !cargando; }
+        public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public Insumo InsumoSeleccionado { get; private set; }
 
         public ModalInsumos()
         {
             InitializeComponent();
-            CargarInsumos();
+            Load += async (s, e) => await CargarInsumos();
+            FormClosed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
+            Disposed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
+            btnConfirmar.Enabled = false;
             txtBuscar.TextChanged += TxtBuscar_TextChanged;
         }
 
-        private void CargarInsumos()
+        private async System.Threading.Tasks.Task CargarInsumos()
         {
-            _todosInsumos = _insumoDatos.GetInsumos().Where(i => !i.consumido).ToList();
-            MostrarInsumos(_todosInsumos);
+            int actual = cargas.Iniciar();
+            cargando = true;
+            btnConfirmar.Enabled = false;
+            dgvInsumos.DataSource = null;
+            try
+            {
+                var lista = await Presenter.InsumosAsync(cierre.Token);
+                if (IsDisposed || cierre.IsCancellationRequested || !cargas.EsActual(actual)) return;
+                _todosInsumos = lista.Where(x => !x.Consumido).Select(x => new Insumo { id=x.Id, nombre=x.Nombre, id_obra=x.ObraId, nombre_obra=x.Obra, consumido=x.Consumido, observaciones=x.Observaciones }).ToList();
+                TxtBuscar_TextChanged(this, EventArgs.Empty);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !cierre.IsCancellationRequested && cargas.EsActual(actual)) MostrarError(ex); }
+            finally
+            {
+                if (!IsDisposed && !cierre.IsCancellationRequested && cargas.EsActual(actual))
+                { cargando = false; btnConfirmar.Enabled = _todosInsumos.Count > 0; }
+            }
         }
 
         private void MostrarInsumos(List<Insumo> lista)
@@ -84,7 +111,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private void btnConfirmar_Click(object sender, EventArgs e)
         {
-            if (dgvInsumos.SelectedRows.Count == 0 || dgvInsumos.CurrentRow == null)
+            if (cargando || cierre.IsCancellationRequested || dgvInsumos.SelectedRows.Count == 0 || dgvInsumos.CurrentRow == null)
             {
                 ToastNotification.ShowWarning("Seleccione un insumo.");
                 return;

@@ -5,6 +5,7 @@ using System.Linq;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
 using SteeLog.Core.Application.OrdenesCompra;
+using SteeLog.Core.Application.Reportes;
 
 namespace SteeLog.Infrastructure.Pdf
 {

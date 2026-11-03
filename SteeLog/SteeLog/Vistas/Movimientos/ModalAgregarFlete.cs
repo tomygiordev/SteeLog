@@ -1,20 +1,29 @@
 using System;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using System.Threading;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class ModalAgregarFlete : Form
+    public partial class ModalAgregarFlete : Form, IMovimientosVista
     {
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private MovimientosPresenter presenter;
+        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        public void SetOcupada(bool valor) { if (!IsDisposed) btnConfirmar.Enabled = !valor; }
+        public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public int IdFleteCreado { get; private set; }
         public string NombreFleteCreado { get; private set; }
 
         public ModalAgregarFlete()
         {
             InitializeComponent();
+            FormClosed += (s,e) => cierre.Cancel();
+            Disposed += (s,e) => cierre.Cancel();
         }
 
-        private void btnConfirmar_Click(object sender, EventArgs e)
+        private async void btnConfirmar_Click(object sender, EventArgs e)
         {
             string nombre = txtNombre.Text.Trim();
             if (string.IsNullOrEmpty(nombre))
@@ -25,10 +34,9 @@ namespace SteeLog.Vistas.Movimientos
 
             try
             {
-                FleteDatos datos = new FleteDatos();
-                int nuevoId = datos.GuardarFlete(nombre);
-                
-                IdFleteCreado = nuevoId;
+                int? nuevoId = await Presenter.CrearFleteAsync(nombre,cierre.Token);
+                if (!nuevoId.HasValue || IsDisposed || cierre.IsCancellationRequested) return;
+                IdFleteCreado = nuevoId.Value;
                 NombreFleteCreado = nombre;
                 
                 ToastNotification.ShowSuccess("Flete creado correctamente.");

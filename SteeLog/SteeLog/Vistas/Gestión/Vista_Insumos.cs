@@ -8,16 +8,25 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
 using SteeLog.Modelos;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using System.Threading;
 
 namespace SteeLog.Vistas
 {
-    public partial class Vista_Insumos : Form
+    public partial class Vista_Insumos : Form, IInsumosVista
     {
         private int idSeleccionado = -1;
-        private InsumoDatos insumoDatos = new InsumoDatos();
-        private ObraDatos obraDatos = new ObraDatos();
+        private bool ocupada;
+        private bool leyendo;
+        private readonly CargasInsumos cargas = new CargasInsumos();
+        private List<Insumo> insumos = new List<Insumo>();
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private InsumosPresenter presenter;
+        private InsumosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearInsumosPresenter(this));
+        public void SetOcupada(bool valor) { ocupada=valor; if (!IsDisposed) { btnGuardar.Enabled=!valor && !leyendo; btnEliminar.Enabled=!valor && !leyendo && idSeleccionado!=-1; } }
+        public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         private PrintDocument printDocument1;
         private Color tabActiveColor = Color.FromArgb(25, 135, 84);
         private Color tabInactiveColor = Color.FromArgb(47, 84, 57);
@@ -26,47 +35,48 @@ namespace SteeLog.Vistas
         public Vista_Insumos()
         {
             InitializeComponent();
+            FormClosed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
+            Disposed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
             btnEliminar.Enabled = false;
 
             printDocument1 = new PrintDocument();
             printDocument1.PrintPage += new PrintPageEventHandler(printDocument1_PrintPage);
         }
 
-        private void Vista_Insumos_Load(object sender, EventArgs e)
+        private async void Vista_Insumos_Load(object sender, EventArgs e)
         {
-            CargarComboObras();
-            CargarComboFiltroInsumo();
-            CargarInsumos();
+            int actual = cargas.Iniciar();
+            CambiarLectura(true);
+            try
+            {
+                var obras = await Presenter.ObrasAsync(cierre.Token);
+                if (!Vigente(actual)) return;
+                var listaObras = new List<Obra> { new Obra { id = 0, nombre = "Galpón" } };
+                listaObras.AddRange(obras.Select(x => new Obra { id = x.Id, nombre = x.Nombre }));
+                cboObra.DataSource = listaObras;
+                cboObra.DisplayMember = "nombre";
+                cboObra.ValueMember = "id";
+                cboObra.SelectedIndex = 0;
+                CambiarLectura(false);
+                await CargarInsumos();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente(actual)) MostrarError(ex); }
+            finally { if (Vigente(actual)) CambiarLectura(false); }
         }
-
-        // ===================== COMBOS =====================
-
-        private void CargarComboObras()
+        private bool Vigente(int actual) => !IsDisposed && !cierre.IsCancellationRequested && cargas.EsActual(actual);
+        private void CambiarLectura(bool valor)
         {
-            cboObra.Items.Clear();
-            cboObra.DataSource = null;
-
-            var obras = obraDatos.GetObras();
-            var listaObras = new List<Obra>();
-            listaObras.Add(new Obra { id = 0, nombre = "Galpón" });
-            listaObras.AddRange(obras);
-
-            cboObra.DataSource = listaObras;
-            cboObra.DisplayMember = "nombre";
-            cboObra.ValueMember = "id";
-            cboObra.SelectedIndex = 0;
+            leyendo = valor;
+            btnGuardar.Enabled = !valor && !ocupada;
+            btnEliminar.Enabled = !valor && !ocupada && idSeleccionado != -1;
+            btnVerInsumos.Enabled = !valor;
+            btnVerHistorial.Enabled = !valor;
         }
-
         private void CargarComboFiltroInsumo()
         {
-            cboFiltroInsumo.DataSource = null;
-
-            var insumos = insumoDatos.GetInsumos();
-            var lista = new List<Insumo>();
-            lista.Add(new Insumo { id = 0, nombre = "— Todos —" });
-            foreach (var i in insumos)
-                lista.Add(i);
-
+            var lista = new List<Insumo> { new Insumo { id = 0, nombre = "— Todos —" } };
+            lista.AddRange(insumos);
             cboFiltroInsumo.DataSource = lista;
             cboFiltroInsumo.DisplayMember = "nombre";
             cboFiltroInsumo.ValueMember = "id";
@@ -75,12 +85,19 @@ namespace SteeLog.Vistas
 
         // ===================== GRILLA INSUMOS =====================
 
-        private void CargarInsumos()
+        private async Task CargarInsumos()
         {
+            int actual = cargas.Iniciar();
+            LimpiarSeleccion();
+            insumos = new List<Insumo>();
+            dgvInsumos.DataSource = null;
+            CambiarLectura(true);
             try
             {
-                var lista = insumoDatos.GetInsumos();
-                dgvInsumos.DataSource = lista;
+                var datos = await Presenter.InsumosAsync(cierre.Token);
+                if (!Vigente(actual)) return;
+                insumos = datos.Select(x => new Insumo { id=x.Id, nombre=x.Nombre, id_obra=x.ObraId, nombre_obra=x.Obra, consumido=x.Consumido, observaciones=x.Observaciones }).ToList();
+                dgvInsumos.DataSource = insumos;
 
                 dgvInsumos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvInsumos.RowHeadersVisible = false;
@@ -133,17 +150,24 @@ namespace SteeLog.Vistas
             }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error al cargar insumos: " + ex.Message);
+                if (Vigente(actual)) ToastNotification.ShowError("Error al cargar insumos: " + ex.Message);
             }
+            finally { if (Vigente(actual)) CambiarLectura(false); }
         }
 
         // ===================== GRILLA HISTORIAL =====================
 
-        private void CargarHistorial()
+        private async Task CargarHistorial()
         {
+            int actual = cargas.Iniciar();
+            LimpiarSeleccion();
+            dgvHistorial.DataSource = null;
+            CambiarLectura(true);
             try
             {
-                var lista = insumoDatos.GetHistorial();
+                var datos = await Presenter.HistorialAsync(cierre.Token);
+                if (!Vigente(actual)) return;
+                var lista = datos.Select(x => new InsumoMovimiento { id=x.Id, nombre_insumo=x.Insumo, obra_origen=x.Origen, obra_destino=x.Destino, fecha=x.Fecha }).ToList();
 
                 if (cboFiltroInsumo.SelectedIndex > 0)
                 {
@@ -203,21 +227,22 @@ namespace SteeLog.Vistas
             }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error al cargar historial: " + ex.Message);
+                if (Vigente(actual)) ToastNotification.ShowError("Error al cargar historial: " + ex.Message);
             }
+            finally { if (Vigente(actual)) CambiarLectura(false); }
         }
 
         // ===================== FILTRO HISTORIAL =====================
 
-        private void cboFiltroInsumo_SelectedIndexChanged(object sender, EventArgs e)
+        private async void cboFiltroInsumo_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (vistaHistorialActiva)
-                CargarHistorial();
+                await CargarHistorial();
         }
 
         // ===================== TABS =====================
 
-        private void btnVerInsumos_Click(object sender, EventArgs e)
+        private async void btnVerInsumos_Click(object sender, EventArgs e)
         {
             vistaHistorialActiva = false;
             panelGrid.Visible = true;
@@ -225,10 +250,10 @@ namespace SteeLog.Vistas
             panelFiltro.Visible = false;
             btnVerInsumos.FillColor = tabActiveColor;
             btnVerHistorial.FillColor = tabInactiveColor;
-            CargarInsumos();
+            await CargarInsumos();
         }
 
-        private void btnVerHistorial_Click(object sender, EventArgs e)
+        private async void btnVerHistorial_Click(object sender, EventArgs e)
         {
             vistaHistorialActiva = true;
             panelGrid.Visible = false;
@@ -237,7 +262,7 @@ namespace SteeLog.Vistas
             btnVerInsumos.FillColor = tabInactiveColor;
             btnVerHistorial.FillColor = tabActiveColor;
             CargarComboFiltroInsumo();
-            CargarHistorial();
+            await CargarHistorial();
         }
 
         // ===================== SELECTION =====================
@@ -247,7 +272,7 @@ namespace SteeLog.Vistas
             idSeleccionado = -1;
             txtNombre.Clear();
             txtObservaciones.Clear();
-            cboObra.SelectedIndex = 0;
+            if (cboObra.Items.Count > 0) cboObra.SelectedIndex = 0;
             chkConsumido.Checked = false;
             btnGuardar.Text = "Guardar";
             btnEliminar.Enabled = false;
@@ -256,7 +281,7 @@ namespace SteeLog.Vistas
 
         private void dgvInsumos_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0) return;
+            if (leyendo || ocupada || e.RowIndex < 0) return;
 
             var fila = dgvInsumos.Rows[e.RowIndex];
             if (fila.Cells["id"].Value == null) return;
@@ -302,8 +327,9 @@ namespace SteeLog.Vistas
 
         // ===================== CRUD =====================
 
-        private void btnGuardar_Click(object sender, EventArgs e)
+        private async void btnGuardar_Click(object sender, EventArgs e)
         {
+            if (ocupada || leyendo || cboObra.SelectedItem == null) return;
             string nombre = txtNombre.Text.Trim();
             if (string.IsNullOrEmpty(nombre))
             {
@@ -321,17 +347,10 @@ namespace SteeLog.Vistas
 
             try
             {
-                if (idSeleccionado == -1)
-                {
-                    insumoDatos.GuardarInsumo(nombre, idObra, observaciones);
-                }
-                else
-                {
-                    insumoDatos.ActualizarInsumo(idSeleccionado, nombre, idObra, consumido, observaciones);
-                }
-
+                var resultado = await Presenter.GuardarAsync(idSeleccionado == -1 ? (int?)null : idSeleccionado, nombre, idObra, consumido, observaciones, cierre.Token);
+                if (!resultado.HasValue || IsDisposed || cierre.IsCancellationRequested) return;
                 LimpiarSeleccion();
-                CargarInsumos();
+                await CargarInsumos();
             }
             catch (Exception ex)
             {
@@ -339,9 +358,9 @@ namespace SteeLog.Vistas
             }
         }
 
-        private void btnEliminar_Click(object sender, EventArgs e)
+        private async void btnEliminar_Click(object sender, EventArgs e)
         {
-            if (idSeleccionado == -1) return;
+            if (ocupada || leyendo || idSeleccionado == -1) return;
 
             DialogResult resultado = MessageBox.Show(
                 "¿Estás seguro de eliminar este insumo?",
@@ -354,9 +373,10 @@ namespace SteeLog.Vistas
             {
                 try
                 {
-                    insumoDatos.EliminarInsumo(idSeleccionado);
+                    var eliminado = await Presenter.EliminarAsync(idSeleccionado, cierre.Token);
+                    if (!eliminado.HasValue || IsDisposed || cierre.IsCancellationRequested) return;
                     LimpiarSeleccion();
-                    CargarInsumos();
+                    await CargarInsumos();
                 }
                 catch (Exception ex)
                 {

@@ -1,7 +1,7 @@
 using System;
 using System.IO;
 using System.Reflection;
-using SteeLog.Core.Application.OrdenesCompra;
+using SteeLog.Core.Application.Reportes;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class RecursosPdfLocales : IRecursosPdf
