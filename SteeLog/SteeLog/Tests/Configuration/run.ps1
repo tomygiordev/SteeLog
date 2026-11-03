@@ -5,6 +5,8 @@ $build = Join-Path $dir 'build'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
 $msbuild = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
 $csc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+& $msbuild (Join-Path $root "..\SteeLog.sln") /t:Restore /p:RestorePackagesConfig=true /v:quiet /nologo
+if ($LASTEXITCODE -ne 0) { throw "Solution restore failed: $LASTEXITCODE" }
 function CheckNative { if ($LASTEXITCODE -ne 0) { throw "Native command failed: $LASTEXITCODE" } }
 foreach ($config in @('Debug', 'Release')) {
  $out = Join-Path $dir $config; $obj = Join-Path $dir ("obj-" + $config)

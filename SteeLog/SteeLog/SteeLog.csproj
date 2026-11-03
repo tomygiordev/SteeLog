@@ -556,4 +556,10 @@
       <HintPath>packages\dot-net-transitions.1.2.1.0\lib\net40-full\Transitions.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="CompositionRoot\LocalServices.cs" />
+    <ProjectReference Include="..\SteeLog.Domain\SteeLog.Domain.csproj"><Name>SteeLog.Domain</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>
+    <ProjectReference Include="..\SteeLog.Application\SteeLog.Application.csproj"><Name>SteeLog.Application</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>
+    <ProjectReference Include="..\SteeLog.Infrastructure\SteeLog.Infrastructure.csproj"><Name>SteeLog.Infrastructure</Name><GlobalPropertiesToRemove>BaseIntermediateOutputPath;OutputPath;IntermediateOutputPath</GlobalPropertiesToRemove></ProjectReference>
+  </ItemGroup>
 </Project>

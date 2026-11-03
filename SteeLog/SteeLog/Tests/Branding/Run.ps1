@@ -11,6 +11,8 @@ $build = Join-Path $out 'build'
 New-Item -ItemType Directory -Force $build | Out-Null
 $msbuild = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
 $csc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+& $msbuild (Join-Path $root "..\SteeLog.sln") /t:Restore /p:RestorePackagesConfig=true /v:quiet /nologo
+if ($LASTEXITCODE -ne 0) { throw "Solution restore failed: $LASTEXITCODE" }
 & $msbuild (Join-Path $root 'SteeLog.csproj') /t:Rebuild "/p:Configuration=$Configuration" "/p:OutputPath=$build\" "/p:BaseIntermediateOutputPath=$out\obj\" /v:minimal /nologo
 if ($LASTEXITCODE -ne 0) { throw 'Build failed' }
 Copy-Item (Join-Path $root 'packages\itextsharp.dll') $build

@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Npgsql" Version="5.0.18"/>
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.12"/>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\SteeLog.Application\SteeLog.Application.csproj"/>
+  </ItemGroup>
+</Project>
