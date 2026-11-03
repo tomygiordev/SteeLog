@@ -185,11 +185,8 @@ F8 | SteeLog.Reportes.PieKardex -> iTextSharp.text.pdf.PdfContentByte
 F8 | SteeLog.Reportes.PieKardex -> iTextSharp.text.pdf.PdfPageEventHelper
 F8 | SteeLog.Reportes.PieKardex -> iTextSharp.text.pdf.PdfWriter
 F8 | SteeLog.VistaGeneral -> SteeLog.Datos.MaterialDatos
-F8 | SteeLog.Vistas.FiltroMaterial -> SteeLog.Datos.CategoriaDatos
-F8 | SteeLog.Vistas.FiltroMaterial -> SteeLog.Datos.ComunDatos
 F8 | SteeLog.Vistas.Inventario.Vista_Conteo -> SteeLog.Datos.ConteoInventarioDatos
 F8 | SteeLog.Vistas.Inventario.Vista_Conteo -> SteeLog.Datos.MaterialDatos
-F8 | SteeLog.Vistas.ModalSeleccionProveedores -> SteeLog.Datos.ComunDatos
 F8 | SteeLog.Vistas.PieReporteStock -> iTextSharp.text.BaseColor
 F8 | SteeLog.Vistas.PieReporteStock -> iTextSharp.text.Document
 F8 | SteeLog.Vistas.PieReporteStock -> iTextSharp.text.Rectangle

@@ -1,42 +1,70 @@
 using System;
 using System.Collections.Generic;
-using System.Data;
-using System.Drawing;
+using System.ComponentModel;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
-using SteeLog;
+using SteeLog.CompositionRoot;
+using SteeLog.Presentation;
 
 namespace SteeLog.Vistas
 {
     public partial class ModalSeleccionProveedores : Form
     {
-        public List<int> IDsSeleccionados { get; private set; } = new List<int>();
+        private readonly MaterialesPresenter _presenter;
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private readonly HashSet<int> _idsIniciales;
 
-        public ModalSeleccionProveedores(List<int> idsIniciales)
+        public List<int> IDsSeleccionados { get; private set; } = new List<int>();
+        public List<int> ProveedoresSeleccionadosIds => IDsSeleccionados;
+
+        private sealed class ItemProveedor
         {
-            InitializeComponent();
-            CargarProveedores(idsIniciales);
+            public int Id { get; set; }
+            public string Nombre { get; set; }
+            public override string ToString() => Nombre ?? string.Empty;
         }
 
-        private void CargarProveedores(List<int> idsIniciales)
+        public ModalSeleccionProveedores(List<int> idsIniciales) : this(idsIniciales, null)
+        {
+        }
+
+        internal ModalSeleccionProveedores(List<int> idsIniciales, MaterialesPresenter presenter)
+        {
+            InitializeComponent();
+            _idsIniciales = idsIniciales != null ? new HashSet<int>(idsIniciales) : new HashSet<int>();
+            if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
+            _presenter = presenter ?? new MaterialesPresenter(LocalServices.Current.Executor);
+            FormClosed += (_, __) => _cierre.Cancel();
+            Disposed += (_, __) => _cierre.Dispose();
+            Shown += ModalSeleccionProveedores_Shown;
+        }
+
+        private async void ModalSeleccionProveedores_Shown(object sender, EventArgs e)
+        {
+            await CargarProveedoresAsync();
+        }
+
+        private async Task CargarProveedoresAsync()
         {
             try
             {
-                ComunDatos comunDatos = new ComunDatos();
-                var proveedores = comunDatos.ObtenerListaGenerica("proveedores");
+                var listaTodos = await _presenter.CatalogoProveedoresAsync(_cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
 
                 clbProveedores.Items.Clear();
-                foreach (DataRow row in proveedores.Rows)
+                foreach (var prov in listaTodos)
                 {
-                    int id = Convert.ToInt32(row["id_proveedores"]);
-                    string nombre = row["nombre"].ToString();
-                    bool seleccionado = idsIniciales.Contains(id);
-                    clbProveedores.Items.Add(new ProveedorItem(id, nombre), seleccionado);
+                    int index = clbProveedores.Items.Add(new ItemProveedor { Id = prov.Id, Nombre = prov.Nombre });
+                    if (_idsIniciales.Contains(prov.Id))
+                        clbProveedores.SetItemChecked(index, true);
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error al cargar proveedores: " + ex.Message);
+                if (!IsDisposed)
+                    MessageBox.Show("Error al cargar la lista de proveedores: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
 
@@ -45,12 +73,17 @@ namespace SteeLog.Vistas
             IDsSeleccionados.Clear();
             foreach (var item in clbProveedores.CheckedItems)
             {
-                if (item is ProveedorItem pi)
+                if (item is ItemProveedor ip)
+                    IDsSeleccionados.Add(ip.Id);
+                else if (item is ProveedorItem pi)
                     IDsSeleccionados.Add(pi.Id);
             }
+
             this.DialogResult = DialogResult.OK;
             this.Close();
         }
+
+        private void btnConfirmar_Click(object sender, EventArgs e) => btnAceptar_Click(sender, e);
 
         private void btnCancelar_Click(object sender, EventArgs e)
         {

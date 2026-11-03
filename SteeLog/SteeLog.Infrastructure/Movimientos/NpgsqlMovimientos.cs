@@ -48,7 +48,7 @@ namespace SteeLog.Infrastructure.Movimientos
                     {
                         bool esRecorte=!r.IsDBNull(8) && r.GetBoolean(8);
                         if (esRecorte != !r.IsDBNull(1)) throw new InvalidOperationException("No se puede revertir una línea histórica de recorte sin identidad coherente.");
-                        m.Lineas.Add(new LineaMovimiento { MaterialId=Int(r,0), RecorteId=Int(r,1), MedidaRecorte=Dec(r,2), Cantidad=Dec(r,3) ?? 0, MaterialEventual=Str(r,4), CompraEventual=!r.IsDBNull(5) && r.GetBoolean(5), PrecioUnitario=Dec(r,6) ?? 0, ImpactoReal=Dec(r,7) });
+                        m.Lineas.Add(new LineaMovimiento { MaterialId=Int(r,0), RecorteId=Int(r,1), MedidaRecorte=Dec(r,2), Cantidad=Dec(r,3) ?? 0, MaterialEventual=Str(r,4), CompraEventual=!r.IsDBNull(5) && r.GetBoolean(5), EsRecorte=esRecorte, PrecioUnitario=Dec(r,6) ?? 0, ImpactoReal=Dec(r,7) });
                     }
             }
             using (var c = Cmd(@"SELECT id,id_insumo,obra_origen,obra_destino,id_obra_origen_snapshot,id_obra_destino_snapshot,consumido_origen_snapshot,consumido_destino_snapshot,snapshot_completo FROM public.insumo_movimientos WHERE id_movimiento=@id ORDER BY id"))
@@ -93,6 +93,28 @@ namespace SteeLog.Infrastructure.Movimientos
         public async Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken token=default)
         {
             using(var c=Cmd("UPDATE public.recortes SET cantidad=@saldo WHERE id=@id RETURNING cantidad")) { c.Parameters.AddWithValue("id",id); c.Parameters.AddWithValue("saldo",saldo); var x=await c.ExecuteScalarAsync(token).ConfigureAwait(false); if(x==null) throw new InvalidOperationException("No se encontró el recorte."); return Convert.ToDecimal(x); }
+        }
+        public async Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken token = default)
+        {
+            using (var c = Cmd("SELECT id FROM public.recortes WHERE id_material=@m AND COALESCE(ancho,0)=@a AND COALESCE(altura,0)=@h AND medida=@med ORDER BY id LIMIT 1 FOR UPDATE"))
+            {
+                c.CommandTimeout = 15;
+                c.Parameters.AddWithValue("m", materialId);
+                c.Parameters.AddWithValue("a", ancho);
+                c.Parameters.AddWithValue("h", altura);
+                c.Parameters.AddWithValue("med", medida);
+                var id = await c.ExecuteScalarAsync(token).ConfigureAwait(false);
+                if (id != null && id != DBNull.Value) return Convert.ToInt32(id);
+            }
+            using (var c = Cmd("INSERT INTO public.recortes (id_material, ancho, altura, medida, cantidad, estado) VALUES (@m, @a, @h, @med, 0, NULL) RETURNING id"))
+            {
+                c.CommandTimeout = 15;
+                c.Parameters.AddWithValue("m", materialId);
+                c.Parameters.AddWithValue("a", ancho > 0 ? (object)ancho : DBNull.Value);
+                c.Parameters.AddWithValue("h", altura > 0 ? (object)altura : DBNull.Value);
+                c.Parameters.AddWithValue("med", medida);
+                return Convert.ToInt32(await c.ExecuteScalarAsync(token).ConfigureAwait(false));
+            }
         }
         public async Task<int> CrearCabeceraAsync(CabeceraMovimiento h, CancellationToken token=default)
         {

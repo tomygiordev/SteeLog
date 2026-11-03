@@ -24,11 +24,17 @@ namespace SteeLog.Core.Application.Movimientos
     public sealed class LineaMovimiento
     {
         public int? MaterialId { get; set; }
-        public int? RecorteId { get; set; }
-        public decimal? MedidaRecorte { get; set; }
-        public decimal Cantidad { get; set; }
         public string MaterialEventual { get; set; }
-        public bool CompraEventual { get; set; }
+        public decimal Cantidad { get; set; }
+        public bool EsRecorte { get; set; }
+        public int? RecorteId { get; set; }
+        public decimal? AnchoRecorte { get; set; }
+        public decimal? AlturaRecorte { get; set; }
+        public decimal? MedidaRecorte { get; set; }
+        public bool EsInsumo { get; set; }
+        public int? InsumoId { get; set; }
+        public bool EsCompraEventual { get; set; }
+        public bool CompraEventual { get => EsCompraEventual; set => EsCompraEventual = value; }
         public decimal PrecioUnitario { get; set; }
         public decimal? ImpactoReal { get; set; }
     }
@@ -77,6 +83,7 @@ namespace SteeLog.Core.Application.Movimientos
         Task<IDictionary<int, decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<IDictionary<int, InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken token = default);
+        Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken token = default);
         Task<int> CrearCabeceraAsync(CabeceraMovimiento cabecera, CancellationToken token = default);
         Task ActualizarCabeceraAsync(int id, CabeceraMovimiento cabecera, CancellationToken token = default);
         Task AgregarLineaAsync(int movimientoId, LineaMovimiento linea, decimal saldo, CancellationToken token = default);

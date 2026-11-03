@@ -18,13 +18,20 @@ namespace SteeLog.Domain.Inventario
             if (materialId <= 0) throw new ArgumentOutOfRangeException(nameof(materialId));
             if (!((ancho > 0 && altura > 0 && medida == 0) || (ancho == 0 && altura == 0 && medida > 0) || (ancho > 0 && altura == 0 && medida == ancho) || (altura > 0 && ancho == 0 && medida == altura)))
                 throw new ArgumentException("Ingrese una medida o bien ancho y altura positivos.");
-            if (medida > 99999999.99m || decimal.Round(medida, 2) != medida)
-                throw new ArgumentOutOfRangeException(nameof(medida));
+            ValidarDimension(ancho, nameof(ancho));
+            ValidarDimension(altura, nameof(altura));
+            ValidarDimension(medida, nameof(medida));
             if (estado != null && estado != "Buen estado" && estado != "Regular" && estado != "Mal estado")
                 throw new ArgumentException("El estado del recorte no es válido.", nameof(estado));
             Material.ValidarCantidad(cantidad, nameof(cantidad));
             Id = id; MaterialId = materialId; Ancho = ancho; Altura = altura; Medida = medida;
             Estado = estado; Cantidad = cantidad;
+        }
+
+        private static void ValidarDimension(decimal valor, string nombre)
+        {
+            if (valor < 0 || valor > 99999999.99m || decimal.Round(valor, 2) != valor)
+                throw new ArgumentOutOfRangeException(nombre, "La dimensión debe ser no negativa, no superar 99999999.99 y tener como máximo dos decimales.");
         }
 
         public void Aplicar(decimal diferencia)

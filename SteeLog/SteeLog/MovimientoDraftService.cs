@@ -71,6 +71,8 @@ namespace SteeLog
                         Cantidad = m.cantidad,
                         EsRecorte = m.EsRecorte,
                         IdRecorte = m.IdRecorte,
+                        AnchoRecorte = m.AnchoRecorte,
+                        AlturaRecorte = m.AlturaRecorte,
                         MedidaRecorte = m.MedidaRecorte,
                         EsInsumo = m.EsInsumo,
                         IdInsumo = m.IdInsumo,

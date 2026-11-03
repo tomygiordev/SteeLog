@@ -104,7 +104,7 @@ namespace SteeLog.Vistas
 
             if (_guardando || _cargandoProveedores || !_proveedoresDisponibles) return;
 
-            using (var modal = new ModalSeleccionProveedores(idsProveedoresSeleccionados))
+            using (var modal = new ModalSeleccionProveedores(idsProveedoresSeleccionados, _presenter))
 
             {
 
@@ -852,7 +852,7 @@ namespace SteeLog.Vistas
 
             {
 
-                this.filtroAbierto = new FiltroMaterial();
+                this.filtroAbierto = new FiltroMaterial(_presenter);
 
                 this.filtroAbierto.onBuscar += RecibirFiltro;
 

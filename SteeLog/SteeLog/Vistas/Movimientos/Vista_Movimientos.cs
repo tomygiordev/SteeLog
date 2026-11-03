@@ -32,6 +32,10 @@ namespace SteeLog.Vistas.Movimientos
         private List<Categoria> _categorias = new List<Categoria>();
         private List<Material> materialesFull = new List<Material>();
         private Recorte _recorteSeleccionado = null;
+        private int _idRecorteSeleccionado = 0;
+        private decimal _medidaRecorteSeleccionado = 0;
+        private decimal _anchoRecorteSeleccionado = 0;
+        private decimal _alturaRecorteSeleccionado = 0;
         internal Func<DialogResult> ConfirmarGuardado = () => MessageBox.Show(
             "¿Estás seguro que querés guardar este remito?", "Confirmar guardado",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
@@ -855,7 +859,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 var solicitud = new MovimientoSolicitud {
                     Cabecera = new CabeceraMovimiento { Fecha=movimiento.fecha, Remito=movimiento.nroremito, OrigenId=movimiento.id_origen, TipoOrigen=movimiento.tipo_origen, DestinoId=movimiento.id_destino, TipoDestino=movimiento.tipo_destino, TipoMovimientoId=movimiento.id_tipomovimiento, ObraId=movimiento.id_obra > 0 ? (int?)movimiento.id_obra : null, CostoFlete=movimiento.costoflete, FleteId=movimiento.id_flete, Observaciones=movimiento.observaciones, PrecioTotal=movimiento.precio_total },
-                    Lineas = materialesSolo.Select(m => new LineaMovimiento { MaterialId=m.id_material, RecorteId=m.IdRecorte, MedidaRecorte=m.MedidaRecorte, Cantidad=m.cantidad, MaterialEventual=m.NombreMaterialEventual, CompraEventual=m.EsCompraEventual, PrecioUnitario=m.precio_unitario }).ToList(),
+                    Lineas = materialesSolo.Select(m => new LineaMovimiento { MaterialId=m.id_material, EsRecorte=m.EsRecorte, RecorteId=m.IdRecorte, AnchoRecorte=m.AnchoRecorte, AlturaRecorte=m.AlturaRecorte, MedidaRecorte=m.MedidaRecorte, Cantidad=m.cantidad, MaterialEventual=m.NombreMaterialEventual, CompraEventual=m.EsCompraEventual, PrecioUnitario=m.precio_unitario }).ToList(),
                     Insumos = insumosSolo.Select(m => m.IdInsumo ?? 0).ToList(), OrigenNombre=origenNombre, DestinoNombre=destinoNombre
                 };
                 int versionOperacion = versionCarga, idOperacion = _idMovimientoAEditar;
@@ -920,6 +924,10 @@ namespace SteeLog.Vistas.Movimientos
 
             txtCategoria.Text = string.Empty;
             _recorteSeleccionado = null;
+            _idRecorteSeleccionado = 0;
+            _medidaRecorteSeleccionado = 0;
+            _anchoRecorteSeleccionado = 0;
+            _alturaRecorteSeleccionado = 0;
 
             btnRecorte.Enabled = false;
 

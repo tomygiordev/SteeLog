@@ -11,6 +11,7 @@ namespace SteeLog.Presentation
         public MaterialesPresenter(IUseCaseExecutor executor) { this.executor=executor ?? throw new ArgumentNullException(nameof(executor)); }
         public Task<IReadOnlyList<MaterialInventarioLectura>> ListarAsync(FiltroMaterialLectura filtro,CancellationToken token) => executor.ExecuteAsync<ConsultarMateriales,IReadOnlyList<MaterialInventarioLectura>>(x=>x.ListarAsync(filtro,token));
         public Task<IReadOnlyList<CategoriaMaterialLectura>> CategoriasAsync(CancellationToken token) => executor.ExecuteAsync<ConsultarMateriales,IReadOnlyList<CategoriaMaterialLectura>>(x=>x.CategoriasAsync(token));
+        public Task<IReadOnlyList<ProveedorMaterialLectura>> CatalogoProveedoresAsync(CancellationToken token) => executor.ExecuteAsync<ConsultarMateriales,IReadOnlyList<ProveedorMaterialLectura>>(x=>x.CatalogoProveedoresAsync(token));
         public Task<IReadOnlyList<int>> ProveedoresAsync(int id,CancellationToken token) => executor.ExecuteAsync<ConsultarMateriales,IReadOnlyList<int>>(x=>x.ProveedoresAsync(id,token));
         public Task<int> CrearAsync(DatosMaterial datos,decimal stock,CancellationToken token) => executor.ExecuteAsync<CrearMaterial,int>(x=>x.EjecutarAsync(datos,stock,token));
         public Task<int> EditarAsync(int id,DatosMaterial datos,decimal? stock,decimal? esperado,CancellationToken token) => executor.ExecuteAsync<EditarMaterial,int>(async x=>{await x.EjecutarAsync(id,datos,stock,esperado,token); return id;});

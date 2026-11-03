@@ -24,7 +24,7 @@ La procedencia, los prompts y las variantes de la marca están en [Resources/Bra
 ## 🛠️ Requisitos Previos
 
 * **Sistema Operativo:** Windows 10 / 11
-* **Docker Desktop / Docker Engine y Docker Compose:** motor Linux en ejecución (daemon local)
+* **Docker Engine (WSL2) / Docker y Docker Compose:** motor Linux en ejecución (daemon local en WSL2, sin requerir la interfaz de Docker Desktop)
 * **LazyDocker:** instalado y disponible en `PATH` (en este equipo: `A:\lazydocker`)
 * **.NET Framework 4.8 Runtime:** Instalado en el sistema
 * **Visual Studio 2022** (opcional, para desarrollo)
@@ -35,7 +35,7 @@ La procedencia, los prompts y las variantes de la marca están en [Resources/Bra
 
 ### 1. Iniciar PostgreSQL y abrir LazyDocker
 
-Inicia Docker Desktop y espera a que su motor Linux esté disponible. Desde PowerShell, en la raíz del repositorio:
+Asegúrate de que el motor Docker en WSL2 esté disponible (el script lo detecta y despierta automáticamente si está en reposo). Desde PowerShell, en la raíz del repositorio:
 
 ```powershell
 .\docker\iniciar.ps1

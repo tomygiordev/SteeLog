@@ -28,7 +28,10 @@ namespace SteeLog.Core.Application.Movimientos
         public ActualizarPrecioEventual(Session actor,IUnitOfWork uow,IPrecioEventualEscritura repo) { this.actor=actor;this.uow=uow;this.repo=repo; }
         public async Task<decimal> EjecutarAsync(int id,decimal precio,CancellationToken token=default)
         {
-            actor.Require(Role.Admin); if(id<=0 || precio<0 || precio>999999999999999999.99m) throw new ArgumentException("Precio inválido.");
+            actor.Require(Role.Admin);
+            if (id <= 0) throw new ArgumentOutOfRangeException(nameof(id));
+            if (precio < 0 || precio > 99999999.99m || decimal.Round(precio, 2) != precio)
+                throw new ArgumentOutOfRangeException(nameof(precio), "El precio unitario debe ser no negativo y tener como máximo dos decimales.");
             token.ThrowIfCancellationRequested(); await uow.BeginAsync(token).ConfigureAwait(false);
             try { var total=await repo.ActualizarAsync(id,precio,token).ConfigureAwait(false); token.ThrowIfCancellationRequested(); await uow.CommitAsync(token).ConfigureAwait(false); return total; }
             catch { await uow.RollbackAsync().ConfigureAwait(false); throw; }

@@ -8,6 +8,7 @@ using iTextSharp.text.pdf;
 using iTextSharp.text.pdf.parser;
 using SteeLog.Core.Application.Identidad;
 using SteeLog.Core.Application.Movimientos;
+using SteeLog.Core.Application.OrdenesCompra;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Infrastructure.Pdf;
 using Xunit;
@@ -21,6 +22,13 @@ namespace SteeLog.Tests
             public int Llamadas;
             public Task<RemitoLectura> ObtenerAsync(int idMovimiento, CancellationToken token = default)
             { Llamadas++; return Task.FromResult<RemitoLectura>(null); }
+        }
+        private sealed class RecursosConLogoInvalido : IRecursosPdf
+        {
+            public MarcaPdf Capturar()
+            {
+                return new MarcaPdf { LogoPng = new byte[] { 1, 2, 3 }, FechaLocal = new DateTime(2026, 1, 2), Pie = "SteeLog - Test" };
+            }
         }
         private sealed class Recursos : IRecursosPdf
         {
@@ -100,6 +108,75 @@ namespace SteeLog.Tests
                 if (!string.IsNullOrWhiteSpace(muestra)) File.Copy(archivo, muestra, true);
             }
             finally { if (File.Exists(archivo)) File.Delete(archivo); }
+        }
+        [Fact]
+        public void OrdenesPendientesPdfValidaRutaItemsVaciosYGeneraArchivo()
+        {
+            var pdf = new OrdenesPendientesPDF(new Recursos());
+            var items = new[]
+            {
+                new PendienteLectura
+                {
+                    Numero = "OC-001",
+                    Proveedor = "Acindar",
+                    Material = "Perfil UPN 100",
+                    Pedida = 10,
+                    Recibida = 4,
+                    Faltante = 6,
+                    Estado = "Pendiente"
+                }
+            };
+            var ruta = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
+
+            Assert.Throws<ArgumentException>(() => pdf.Generar(" ", items));
+            Assert.Throws<ArgumentNullException>(() => pdf.Generar(ruta, null));
+            Assert.Throws<InvalidOperationException>(() => pdf.Generar(ruta, new PendienteLectura[0]));
+
+            try
+            {
+                pdf.Generar(ruta, items);
+                Assert.True(File.Exists(ruta));
+                var bytes = File.ReadAllBytes(ruta);
+                Assert.True(bytes.Length > 4);
+                Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(bytes, 0, 5));
+            }
+            finally
+            {
+                if (File.Exists(ruta)) File.Delete(ruta);
+            }
+        }
+
+        [Fact]
+        public void OrdenesPendientesPdfLiberaDescriptorSiFallaRenderizadoDeLogo()
+        {
+            var pdf = new OrdenesPendientesPDF(new RecursosConLogoInvalido());
+            var items = new[]
+            {
+                new PendienteLectura
+                {
+                    Numero = "OC-001",
+                    Proveedor = "Acindar",
+                    Material = "Perfil UPN 100",
+                    Pedida = 10,
+                    Recibida = 4,
+                    Faltante = 6,
+                    Estado = "Pendiente"
+                }
+            };
+            var ruta = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
+
+            try
+            {
+                Assert.ThrowsAny<Exception>(() => pdf.Generar(ruta, items));
+                using (var fs = File.Open(ruta, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+                {
+                    Assert.NotNull(fs);
+                }
+            }
+            finally
+            {
+                if (File.Exists(ruta)) File.Delete(ruta);
+            }
         }
     }
 }

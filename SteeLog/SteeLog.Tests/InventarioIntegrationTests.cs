@@ -170,6 +170,7 @@ public sealed class InventarioIntegrationTests
         public Task<IDictionary<int,decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearRecortesAsync(ids,t);
         public Task<IDictionary<int,InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearInsumosAsync(ids,t);
         public Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken t = default) => inner.GuardarRecorteAsync(id,saldo,t);
+        public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken t = default) => inner.ResolverRecorteAsync(materialId, ancho, altura, medida, t);
         public Task<int> CrearCabeceraAsync(CabeceraMovimiento c, CancellationToken t = default) => inner.CrearCabeceraAsync(c,t);
         public Task ActualizarCabeceraAsync(int id, CabeceraMovimiento c, CancellationToken t = default) => inner.ActualizarCabeceraAsync(id,c,t);
         public Task AgregarLineaAsync(int id, LineaMovimiento l, decimal saldo, CancellationToken t = default) => inner.AgregarLineaAsync(id,l,saldo,t);
@@ -524,6 +525,7 @@ public sealed class InventarioIntegrationTests
         var filtro=new FiltroMaterialLectura{Nombre=prefijo,Desde=4m,Hasta=8m,Categorias=new[]{1},Proveedores=new[]{1},SoloStockBajo=true,Priorizados=true};
         var lista=await q.ListarAsync(filtro); Assert.Equal(2,lista.Count); Assert.Equal(a,lista[0].Id); Assert.Equal(3m,lista[0].CantidadUsada); Assert.Equal(1,lista[0].CantidadMovimientos); Assert.Equal(b,lista[1].Id);
         Assert.Contains(await q.CategoriasAsync(),x=>x.Id==1); Assert.Contains(1,await q.ProveedoresAsync(a));
+        Assert.Contains(await new ConsultarMateriales(Actor(Role.Galpon), new NpgsqlMaterialesConsulta(Factory())).CatalogoProveedoresAsync(), x => x.Id == 1 && !string.IsNullOrWhiteSpace(x.Nombre));
         filtro.Proveedores=new[]{int.MaxValue}; Assert.Empty(await q.ListarAsync(filtro));
         var sinActor=new ConsultarMateriales(Actor(Role.None),new NpgsqlMaterialesConsulta(Factory())); Assert.Throws<UnauthorizedAccessException>(()=>{_ = sinActor.ListarAsync(filtro);});
     }
@@ -582,12 +584,71 @@ public sealed class InventarioIntegrationTests
     {
         var solicitud=Solicitud(1,3,1m); solicitud.Lineas=new List<LineaMovimiento>{new LineaMovimiento{CompraEventual=true,MaterialEventual="Eventual",Cantidad=2m,PrecioUnitario=3m}};
         int id=await Crear(solicitud); int linea=Convert.ToInt32(Sql("SELECT id_movimientomaterial FROM public.movimientomaterial WHERE id_movimiento=@id",new NpgsqlParameter("id",id)));
-        using(var u=new NpgsqlUnitOfWork(Factory())) Assert.Equal(9m,await new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,4.5m));
-        Assert.Equal(9m,Convert.ToDecimal(Sql("SELECT precio_total FROM public.movimientos WHERE id_movimiento=@id",new NpgsqlParameter("id",id))));
+
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,4.567m));
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,-1m));
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,100000000m));
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(0,5m));
+
+        using (var blocker = new NpgsqlConnection(ConnectionString()))
+        {
+            blocker.Open();
+            using (var tx = blocker.BeginTransaction())
+            {
+                using (var cmd = new NpgsqlCommand("SELECT id_movimientomaterial FROM public.movimientomaterial WHERE id_movimientomaterial=@id FOR UPDATE", blocker, tx))
+                {
+                    cmd.Parameters.AddWithValue("id", linea);
+                    cmd.ExecuteScalar();
+                }
+                var updateTask = Task.Run(async () =>
+                {
+                    using (var u = new NpgsqlUnitOfWork(Factory()))
+                        return await new ActualizarPrecioEventual(Actor(), u, new NpgsqlPrecioEventual(u)).EjecutarAsync(linea, 4.5m);
+                });
+                try
+                {
+                    var deadline = DateTime.UtcNow.AddSeconds(15);
+                    int waiting = 0;
+                    while (DateTime.UtcNow < deadline)
+                    {
+                        waiting = Convert.ToInt32(Sql("SELECT count(*) FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND query LIKE '%FROM public.movimientomaterial%FOR UPDATE%'"));
+                        if (waiting >= 1) break;
+                        await Task.Delay(30);
+                    }
+                    Assert.True(waiting >= 1, "ActualizarPrecioEventual debe esperar el bloqueo de la línea eventual.");
+                }
+                finally
+                {
+                    tx.Rollback();
+                }
+                Assert.Equal(9m, await updateTask);
+            }
+        }
+        Assert.Equal(9m, Convert.ToDecimal(Sql("SELECT precio_total FROM public.movimientos WHERE id_movimiento=@id", new NpgsqlParameter("id", id))));
+
         using(var u=new NpgsqlUnitOfWork(Factory())) await Assert.ThrowsAsync<UnauthorizedAccessException>(()=>new ActualizarPrecioEventual(Actor(Role.Galpon),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,5m));
         int material=Material(5m), normal=await Crear(Solicitud(material,7,1m)); int lineaNormal=Convert.ToInt32(Sql("SELECT id_movimientomaterial FROM public.movimientomaterial WHERE id_movimiento=@id",new NpgsqlParameter("id",normal)));
         using(var u=new NpgsqlUnitOfWork(Factory())) await Assert.ThrowsAsync<InvalidOperationException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(lineaNormal,5m));
         Assert.Equal(4m,Stock(material)); Assert.Equal(9m,Convert.ToDecimal(Sql("SELECT precio_total FROM public.movimientos WHERE id_movimiento=@id",new NpgsqlParameter("id",id))));
+
+        Sql("UPDATE public.movimientos SET id_tipomovimiento=11 WHERE id_movimiento=@id",new NpgsqlParameter("id",id));
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+        {
+            var ex=await Assert.ThrowsAsync<InvalidOperationException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,5m));
+            Assert.Contains("registro interno",ex.Message,StringComparison.OrdinalIgnoreCase);
+        }
+        int tipoInterno=Convert.ToInt32(Sql("INSERT INTO public.tipo_movimiento(nombre) VALUES (@nombre) RETURNING id_tipomovimiento",new NpgsqlParameter("nombre","Registro Interno "+Guid.NewGuid().ToString("N"))));
+        Sql("UPDATE public.movimientos SET id_tipomovimiento=@tipo WHERE id_movimiento=@id",new NpgsqlParameter("tipo",tipoInterno),new NpgsqlParameter("id",id));
+        using(var u=new NpgsqlUnitOfWork(Factory()))
+        {
+            var ex=await Assert.ThrowsAsync<InvalidOperationException>(()=>new ActualizarPrecioEventual(Actor(),u,new NpgsqlPrecioEventual(u)).EjecutarAsync(linea,5m));
+            Assert.Contains("registro interno",ex.Message,StringComparison.OrdinalIgnoreCase);
+        }
+        Assert.Equal(9m,Convert.ToDecimal(Sql("SELECT precio_total FROM public.movimientos WHERE id_movimiento=@id",new NpgsqlParameter("id",id))));
     }
     private static void AssertRemitoDuplicado(InvalidOperationException error,string remito)
     {
@@ -629,5 +690,100 @@ public sealed class InventarioIntegrationTests
             int material=Material(10m); var segundo=Solicitud(material,7,1m); segundo.Cabecera.Observaciones=valor;
             var error=await Assert.ThrowsAsync<PostgresException>(()=>Crear(segundo)); Assert.Equal("23505",error.SqlState); Assert.Equal(index,error.ConstraintName); Assert.Equal(10m,Stock(material));
         } finally { Sql("DROP INDEX IF EXISTS public."+index+"; SELECT 1"); }
+    }
+    [Fact]
+    public async Task MovimientoIngresoConRecorteNuevoLoCreaEnTransaccionYRollbackNoDejaHuerfanoStockCero()
+    {
+        // Caso 1 (Éxito en ingreso/devolución a almacén, tipo = 2 o Origen = OBRA, Destino = UBICACION):
+        int material = Material(10m);
+        var sol1 = Solicitud(material, 2);
+        sol1.Lineas = new List<LineaMovimiento>
+        {
+            new LineaMovimiento
+            {
+                MaterialId = material,
+                EsRecorte = true,
+                RecorteId = null,
+                AnchoRecorte = 1.5m,
+                AlturaRecorte = 2.5m,
+                MedidaRecorte = 0m,
+                Cantidad = 3m
+            }
+        };
+        int idMov1 = await Crear(sol1);
+        Assert.True(idMov1 > 0);
+
+        var recorteIdObj = Sql("SELECT id FROM public.recortes WHERE id_material=@m AND ancho=1.5 AND altura=2.5", new NpgsqlParameter("m", material));
+        Assert.NotNull(recorteIdObj);
+        int recorteId1 = Convert.ToInt32(recorteIdObj);
+        var cantidadRecorte1 = Convert.ToDecimal(Sql("SELECT cantidad FROM public.recortes WHERE id=@id", new NpgsqlParameter("id", recorteId1)));
+        Assert.Equal(3m, cantidadRecorte1);
+
+        var huerfanos = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@m AND cantidad=0", new NpgsqlParameter("m", material)));
+        Assert.Equal(0L, huerfanos);
+
+        // Caso 2 (Reutilización de recorte coincidente):
+        var sol2 = Solicitud(material, 2);
+        sol2.Lineas = new List<LineaMovimiento>
+        {
+            new LineaMovimiento
+            {
+                MaterialId = material,
+                EsRecorte = true,
+                RecorteId = null,
+                AnchoRecorte = 1.5m,
+                AlturaRecorte = 2.5m,
+                MedidaRecorte = 0m,
+                Cantidad = 2m
+            }
+        };
+        int idMov2 = await Crear(sol2);
+        Assert.True(idMov2 > 0);
+
+        var recorteIdObj2 = Sql("SELECT id FROM public.recortes WHERE id_material=@m AND ancho=1.5 AND altura=2.5", new NpgsqlParameter("m", material));
+        Assert.Equal(recorteId1, Convert.ToInt32(recorteIdObj2));
+        var cantidadRecorte2 = Convert.ToDecimal(Sql("SELECT cantidad FROM public.recortes WHERE id=@id", new NpgsqlParameter("id", recorteId1)));
+        Assert.Equal(5m, cantidadRecorte2);
+
+        // Caso 3 (Rollback por fallo / remito duplicado):
+        var sol3 = Solicitud(material, 2);
+        sol3.Cabecera.Remito = sol1.Cabecera.Remito;
+        sol3.Lineas = new List<LineaMovimiento>
+        {
+            new LineaMovimiento
+            {
+                MaterialId = material,
+                EsRecorte = true,
+                RecorteId = null,
+                AnchoRecorte = 0m,
+                AlturaRecorte = 0m,
+                MedidaRecorte = 4.25m,
+                Cantidad = 1m
+            }
+        };
+        var exDup = await Assert.ThrowsAsync<InvalidOperationException>(() => Crear(sol3));
+        AssertRemitoDuplicado(exDup, sol1.Cabecera.Remito);
+        var countRecorte3 = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=4.25", new NpgsqlParameter("id", material)));
+        Assert.Equal(0L, countRecorte3);
+
+        // Caso 4 (Rechazo en salida):
+        var sol4 = Solicitud(material, 7);
+        sol4.Lineas = new List<LineaMovimiento>
+        {
+            new LineaMovimiento
+            {
+                MaterialId = material,
+                EsRecorte = true,
+                RecorteId = null,
+                AnchoRecorte = 0m,
+                AlturaRecorte = 0m,
+                MedidaRecorte = 1.75m,
+                Cantidad = 1m
+            }
+        };
+        var exSalida = await Assert.ThrowsAsync<InvalidOperationException>(() => Crear(sol4));
+        Assert.Equal("Stock insuficiente.", exSalida.Message);
+        var countRecorte4 = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material)));
+        Assert.Equal(0L, countRecorte4);
     }
 }

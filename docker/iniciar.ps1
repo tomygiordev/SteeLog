@@ -31,6 +31,8 @@ function Invoke-Docker([string]$Argumentos, [int]$TiempoMs = 10000) {
 }
 
 Push-Location $raiz
+if (-not $env:DOCKER_HOST) { $env:DOCKER_HOST = 'tcp://127.0.0.1:2375' }
+if (-not $env:COMPOSE_CONVERT_WINDOWS_PATHS) { $env:COMPOSE_CONVERT_WINDOWS_PATHS = '1' }
 try {
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
         throw 'Docker no esta instalado o no esta en PATH.'
@@ -41,7 +43,14 @@ try {
     $resultado = Invoke-Docker 'compose version'
     if ($resultado.Codigo -ne 0) { throw 'Docker Compose no esta disponible o no respondio en 10 segundos.' }
     $resultado = Invoke-Docker 'info --format {{.ServerVersion}}'
-    if ($resultado.Codigo -ne 0) { throw 'El motor de Docker no responde. Inicia Docker Desktop y espera a que este listo.' }
+    if ($resultado.Codigo -ne 0) {
+        if (Get-Command wsl -ErrorAction SilentlyContinue) {
+            Start-Process wsl -ArgumentList '-d', 'Ubuntu', '-e', 'true' -NoNewWindow -Wait
+            Start-Sleep -Seconds 2
+            $resultado = Invoke-Docker 'info --format {{.ServerVersion}}'
+        }
+    }
+    if ($resultado.Codigo -ne 0) { throw 'El motor de Docker no responde. Verifica que WSL este en ejecucion con "wsl -d Ubuntu".' }
     $resultado = Invoke-Docker "$compose config --quiet"
     if ($resultado.Codigo -ne 0) { throw 'La configuracion de Compose no es valida o no respondio en 10 segundos.' }
     $resultado = Invoke-Docker "$compose up -d" 120000

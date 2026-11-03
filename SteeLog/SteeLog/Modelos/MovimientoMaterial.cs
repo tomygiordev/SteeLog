@@ -17,6 +17,8 @@ namespace SteeLog.Modelos
         public decimal StockActual { get; set; }
         public bool EsRecorte { get; set; }
         public int? IdRecorte { get; set; }
+        public decimal? AnchoRecorte { get; set; }
+        public decimal? AlturaRecorte { get; set; }
         public decimal? MedidaRecorte { get; set; }
         public bool EsInsumo { get; set; }
         public int? IdInsumo { get; set; }

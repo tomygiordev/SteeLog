@@ -13,6 +13,8 @@ namespace SteeLog.Core.Application.Borradores
         [DataMember] public decimal Cantidad { get; set; }
         [DataMember] public bool EsRecorte { get; set; }
         [DataMember] public int? IdRecorte { get; set; }
+        [DataMember] public decimal? AnchoRecorte { get; set; }
+        [DataMember] public decimal? AlturaRecorte { get; set; }
         [DataMember] public decimal? MedidaRecorte { get; set; }
         [DataMember] public bool EsInsumo { get; set; }
         [DataMember] public int? IdInsumo { get; set; }

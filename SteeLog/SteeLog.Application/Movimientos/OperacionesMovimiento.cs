@@ -33,12 +33,37 @@ namespace SteeLog.Core.Application.Movimientos
                 var nuevas = solicitud?.Lineas ?? new List<LineaMovimiento>();
                 var insumosPrevios = previo?.Insumos ?? new List<TrasladoInsumo>();
                 var insumosNuevos = solicitud?.Insumos ?? new List<int>();
-                var recorteIds = anteriores.Concat(nuevas).Where(x => x.RecorteId.HasValue).Select(x => x.RecorteId.Value).Distinct().OrderBy(x => x).ToArray();
-                var duenos = await repo.ObtenerMaterialesRecortesAsync(recorteIds, token).ConfigureAwait(false);
+
+                string nombreTipo = null;
+                ImpactoStock impactoNuevo = ImpactoStock.SinImpacto;
+                decimal factorNuevo = 0m;
+                if (!eliminar && solicitud != null)
+                {
+                    nombreTipo = await repo.NombreTipoAsync(solicitud.Cabecera.TipoMovimientoId, token).ConfigureAwait(false);
+                    SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(solicitud.Cabecera.TipoMovimientoId, nombreTipo);
+                    impactoNuevo = ClasificadorMovimiento.Clasificar(nombreTipo, solicitud.Cabecera.TipoDestino, !id.HasValue);
+                    factorNuevo = impactoNuevo == ImpactoStock.Entrada ? 1m : impactoNuevo == ImpactoStock.Salida ? -1m : 0m;
+                }
+
+                var recorteIdsPrevios = anteriores.Where(x => x.RecorteId.HasValue).Select(x => x.RecorteId.Value).Distinct().OrderBy(x => x).ToArray();
+                var duenosPrevios = await repo.ObtenerMaterialesRecortesAsync(recorteIdsPrevios, token).ConfigureAwait(false);
                 var materialesIds = anteriores.Concat(nuevas).Where(x => x.MaterialId.HasValue && !x.CompraEventual)
-                    .Select(x => x.MaterialId.Value).Concat(duenos.Values).Distinct().OrderBy(x => x).ToArray();
+                    .Select(x => x.MaterialId.Value).Concat(duenosPrevios.Values).Distinct().OrderBy(x => x).ToArray();
                 var insumoIds = insumosPrevios.Select(x => x.InsumoId).Concat(insumosNuevos).Distinct().OrderBy(x => x).ToArray();
                 var materiales = await inventario.BloquearAsync(materialesIds, token).ConfigureAwait(false);
+
+                foreach (var linea in nuevas.Where(x => x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0)))
+                {
+                    if (!linea.MaterialId.HasValue || !materiales.ContainsKey(linea.MaterialId.Value))
+                        throw new InvalidOperationException("El material indicado no existe.");
+                    if (factorNuevo <= 0)
+                        throw new InvalidOperationException("Stock insuficiente.");
+                    var spec = new SteeLog.Domain.Inventario.Recorte(0, linea.MaterialId.Value, linea.AnchoRecorte ?? 0m, linea.AlturaRecorte ?? 0m, linea.MedidaRecorte ?? 0m, 0m, null);
+                    linea.RecorteId = await repo.ResolverRecorteAsync(spec.MaterialId, spec.Ancho, spec.Altura, spec.Medida, token).ConfigureAwait(false);
+                }
+
+                var recorteIds = anteriores.Concat(nuevas).Where(x => x.RecorteId.HasValue).Select(x => x.RecorteId.Value).Distinct().OrderBy(x => x).ToArray();
+                var duenos = await repo.ObtenerMaterialesRecortesAsync(recorteIds, token).ConfigureAwait(false);
                 var recortes = await repo.BloquearRecortesAsync(recorteIds, token).ConfigureAwait(false);
                 var duenosBloqueados = await repo.ObtenerMaterialesRecortesAsync(recorteIds, token).ConfigureAwait(false);
                 foreach (var recorte in recorteIds)
@@ -75,9 +100,6 @@ namespace SteeLog.Core.Application.Movimientos
                 int movimientoId;
                 if (id.HasValue) { movimientoId = id.Value; await repo.ActualizarCabeceraAsync(id.Value, solicitud.Cabecera, token).ConfigureAwait(false); }
                 else movimientoId = await repo.CrearCabeceraAsync(solicitud.Cabecera, token).ConfigureAwait(false);
-                var nombreTipo = await repo.NombreTipoAsync(solicitud.Cabecera.TipoMovimientoId, token).ConfigureAwait(false);
-                SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(solicitud.Cabecera.TipoMovimientoId, nombreTipo);
-                var impactoNuevo = ClasificadorMovimiento.Clasificar(nombreTipo, solicitud.Cabecera.TipoDestino, !id.HasValue);
                 foreach (var linea in nuevas)
                 {
                     decimal delta = impactoNuevo == ImpactoStock.Entrada ? linea.Cantidad : impactoNuevo == ImpactoStock.Salida ? -linea.Cantidad : 0m;
@@ -117,13 +139,49 @@ namespace SteeLog.Core.Application.Movimientos
         private static MovimientoSolicitud ValidarYCopiar(MovimientoSolicitud s)
         {
             if (s?.Cabecera == null || s.Lineas == null || s.Insumos == null) throw new ArgumentException("Movimiento incompleto.");
-            var c=s.Cabecera;
-            var lineas=s.Lineas.Select(x => x == null ? null : new SteeLog.Domain.Movimientos.LineaMovimiento(x.MaterialId, x.RecorteId, x.MedidaRecorte, x.Cantidad, x.CompraEventual, x.MaterialEventual, x.PrecioUnitario));
-            var m = new SteeLog.Domain.Movimientos.Movimiento(c.Fecha,c.OrigenId,c.TipoOrigen,c.DestinoId,c.TipoDestino,c.TipoMovimientoId,c.Remito,c.ObraId,c.CostoFlete,c.FleteId,c.Observaciones,c.PrecioTotal,lineas,s.Insumos,s.OrigenNombre,s.DestinoNombre);
-            return new MovimientoSolicitud {
-                Cabecera = new CabeceraMovimiento { Fecha=m.Fecha, Remito=m.Remito, OrigenId=m.OrigenId, TipoOrigen=m.TipoOrigen, DestinoId=m.DestinoId, TipoDestino=m.TipoDestino, TipoMovimientoId=m.TipoId, ObraId=m.ObraId, CostoFlete=m.CostoFlete, FleteId=m.FleteId, Observaciones=m.Observaciones, PrecioTotal=m.PrecioTotal },
-                Lineas=m.Lineas.Select(x => new LineaMovimiento { MaterialId=x.MaterialId, RecorteId=x.RecorteId, MedidaRecorte=x.MedidaRecorte, Cantidad=x.Cantidad, MaterialEventual=x.NombreEventual, CompraEventual=x.CompraEventual, PrecioUnitario=x.PrecioUnitario }).ToList(),
-                Insumos=m.Insumos.ToList(), OrigenNombre=m.OrigenNombre, DestinoNombre=m.DestinoNombre
+            var c = s.Cabecera;
+            var lineasDominio = new List<SteeLog.Domain.Movimientos.LineaMovimiento>();
+            foreach (var x in s.Lineas)
+            {
+                if (x == null)
+                {
+                    lineasDominio.Add(null);
+                    continue;
+                }
+                if (x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0))
+                {
+                    if (!x.MaterialId.HasValue || x.MaterialId.Value <= 0 || x.EsInsumo || x.EsCompraEventual)
+                        throw new ArgumentException("El recorte es inválido.");
+                    var recorteValido = new SteeLog.Domain.Inventario.Recorte(0, x.MaterialId.Value, x.AnchoRecorte ?? 0m, x.AlturaRecorte ?? 0m, x.MedidaRecorte ?? 0m, 0m, null);
+                    lineasDominio.Add(new SteeLog.Domain.Movimientos.LineaMovimiento(x.MaterialId, null, recorteValido.Medida > 0 ? (decimal?)recorteValido.Medida : null, x.Cantidad, false, null, x.PrecioUnitario));
+                }
+                else
+                {
+                    lineasDominio.Add(new SteeLog.Domain.Movimientos.LineaMovimiento(x.MaterialId, x.RecorteId, x.MedidaRecorte, x.Cantidad, x.CompraEventual, x.MaterialEventual, x.PrecioUnitario));
+                }
+            }
+            var m = new SteeLog.Domain.Movimientos.Movimiento(c.Fecha, c.OrigenId, c.TipoOrigen, c.DestinoId, c.TipoDestino, c.TipoMovimientoId, c.Remito, c.ObraId, c.CostoFlete, c.FleteId, c.Observaciones, c.PrecioTotal, lineasDominio, s.Insumos, s.OrigenNombre, s.DestinoNombre);
+            return new MovimientoSolicitud
+            {
+                Cabecera = new CabeceraMovimiento { Fecha = m.Fecha, Remito = m.Remito, OrigenId = m.OrigenId, TipoOrigen = m.TipoOrigen, DestinoId = m.DestinoId, TipoDestino = m.TipoDestino, TipoMovimientoId = m.TipoId, ObraId = m.ObraId, CostoFlete = m.CostoFlete, FleteId = m.FleteId, Observaciones = m.Observaciones, PrecioTotal = m.PrecioTotal },
+                Lineas = s.Lineas.Where(x => x != null).Select(x => new LineaMovimiento
+                {
+                    MaterialId = x.MaterialId,
+                    RecorteId = x.RecorteId > 0 ? x.RecorteId : null,
+                    AnchoRecorte = x.AnchoRecorte,
+                    AlturaRecorte = x.AlturaRecorte,
+                    MedidaRecorte = x.MedidaRecorte,
+                    Cantidad = x.Cantidad,
+                    MaterialEventual = x.MaterialEventual,
+                    EsRecorte = x.EsRecorte || (x.RecorteId.HasValue && x.RecorteId.Value > 0),
+                    EsInsumo = x.EsInsumo,
+                    InsumoId = x.InsumoId,
+                    EsCompraEventual = x.EsCompraEventual,
+                    PrecioUnitario = x.PrecioUnitario
+                }).ToList(),
+                Insumos = m.Insumos.ToList(),
+                OrigenNombre = m.OrigenNombre,
+                DestinoNombre = m.DestinoNombre
             };
         }
 

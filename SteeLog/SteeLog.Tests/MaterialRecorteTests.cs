@@ -39,5 +39,34 @@ namespace SteeLog.Tests
             Assert.Throws<ArgumentException>(() => new Recorte(0, 2, 1, 0, 2, 1, "Regular"));
             Assert.Throws<ArgumentException>(() => new Recorte(0, 2, 0, 0, 1, 1, "Roto"));
         }
+
+        [Fact]
+        public void RecorteValidaEscalaYLimiteSuperiorEnDimensiones()
+        {
+            var exAnchoEscala = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 1.234m, 2m, 0m, 1m, "Buen estado"));
+            Assert.Equal("ancho", exAnchoEscala.ParamName);
+
+            var exAlturaEscala = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 1m, 2.345m, 0m, 1m, "Buen estado"));
+            Assert.Equal("altura", exAlturaEscala.ParamName);
+
+            var exAnchoLimite = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 100000000m, 2m, 0m, 1m, "Buen estado"));
+            Assert.Equal("ancho", exAnchoLimite.ParamName);
+
+            var exAlturaLimite = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 1m, 100000000m, 0m, 1m, "Buen estado"));
+            Assert.Equal("altura", exAlturaLimite.ParamName);
+
+            var exMedidaEscala = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 0m, 0m, 1.234m, 1m, "Buen estado"));
+            Assert.Equal("medida", exMedidaEscala.ParamName);
+
+            var exMedidaLimite = Assert.Throws<ArgumentOutOfRangeException>(() => new Recorte(0, 1, 0m, 0m, 100000000m, 1m, "Buen estado"));
+            Assert.Equal("medida", exMedidaLimite.ParamName);
+
+            var recorteValido2D = new Recorte(0, 1, 99999999.99m, 0.01m, 0m, 1m, "Buen estado");
+            Assert.Equal(99999999.99m, recorteValido2D.Ancho);
+            Assert.Equal(0.01m, recorteValido2D.Altura);
+
+            var recorteValido1D = new Recorte(0, 1, 0m, 0m, 99999999.99m, 1m, "Buen estado");
+            Assert.Equal(99999999.99m, recorteValido1D.Medida);
+        }
     }
 }

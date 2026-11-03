@@ -19,7 +19,7 @@ namespace SteeLog.Vistas.Movimientos
         private readonly RecortesPresenter _presenter = new RecortesPresenter(LocalServices.Current.Executor);
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionCarga;
-        private bool _guardando;
+        private List<Recorte> _listaOriginal = new List<Recorte>();
         public Recorte RecorteSeleccionado { get; private set; }
         public decimal CantidadSeleccionada { get; private set; } = 1;
 
@@ -49,7 +49,12 @@ namespace SteeLog.Vistas.Movimientos
             {
                 var lista = await _presenter.ListarAsync(_idMaterial, ancho, altura, null, _cierre.Token);
                 if (_cierre.IsCancellationRequested || version != _versionCarga || IsDisposed) return;
-                dgvRecortesDisponibles.DataSource = lista.Select(r => new Recorte { id = r.Id, id_material = r.MaterialId, nombre_material = r.Material, nombre_categoria = r.Categoria, ancho = r.Ancho, altura = r.Altura, medida = r.Medida, cantidad = r.Cantidad, estado = r.Estado, fecha_creacion = r.FechaCreacion }).ToList();
+                var items = lista.Select(r => new Recorte { id = r.Id, id_material = r.MaterialId, nombre_material = r.Material, nombre_categoria = r.Categoria, ancho = r.Ancho, altura = r.Altura, medida = r.Medida, cantidad = r.Cantidad, estado = r.Estado, fecha_creacion = r.FechaCreacion }).ToList();
+                if (!ancho.HasValue && !altura.HasValue)
+                {
+                    _listaOriginal = items;
+                }
+                dgvRecortesDisponibles.DataSource = items;
             }
             catch (OperationCanceledException) { return; }
             catch (Exception ex) { if (!_cierre.IsCancellationRequested && version == _versionCarga) ToastNotification.ShowError("Error al cargar recortes: " + ex.Message); return; }
@@ -124,8 +129,6 @@ namespace SteeLog.Vistas.Movimientos
                 e.Handled = true;
         }
 
-
-
         private void DgvRecortesDisponibles_SelectionChanged(object sender, EventArgs e)
         {
             txtCantidad.Text = "1";
@@ -172,7 +175,7 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
-        private async void btnCrearNuevo_Click(object sender, EventArgs e)
+        private void btnCrearNuevo_Click(object sender, EventArgs e)
         {
             string inputAncho = txtAnchoBuscado.Text.Replace(',', '.');
             string inputAltura = txtAlturaBuscada.Text.Replace(',', '.');
@@ -202,25 +205,40 @@ namespace SteeLog.Vistas.Movimientos
                 medida = 0; // Ambos fueron ingresados
             }
 
-            if (_guardando) return;
-            _guardando = true;
             try
             {
+                var validado = new SteeLog.Domain.Inventario.Recorte(0, _idMaterial, ancho, altura, medida, 0m, null);
+                var listaParaBuscar = (_listaOriginal != null && _listaOriginal.Count > 0)
+                    ? _listaOriginal
+                    : (dgvRecortesDisponibles.DataSource as List<Recorte>);
+
+                var existente = listaParaBuscar?.FirstOrDefault(r =>
+                    r.ancho == validado.Ancho &&
+                    r.altura == validado.Altura &&
+                    r.medida == validado.Medida);
+
                 string inputCantCrear = txtCantidad.Text.Replace(',', '.');
                 decimal.TryParse(inputCantCrear, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantidadCrear);
-                int id = await _presenter.AgregarAsync(_idMaterial, ancho, altura, medida, 0, null, _cierre.Token);
-                if (_cierre.IsCancellationRequested || IsDisposed) return;
-                var lista = await _presenter.ListarAsync(_idMaterial, ancho, altura, medida, _cierre.Token);
-                if (_cierre.IsCancellationRequested || IsDisposed) return;
-                var existente = lista.FirstOrDefault(r => r.Id == id);
-                RecorteSeleccionado = existente == null ? new Recorte { id = id, id_material = _idMaterial, nombre_material = _nombreMaterial, ancho = ancho, altura = altura, medida = medida, estado = null } : new Recorte { id = existente.Id, id_material = existente.MaterialId, nombre_material = existente.Material, nombre_categoria = existente.Categoria, ancho = existente.Ancho, altura = existente.Altura, medida = existente.Medida, cantidad = existente.Cantidad, estado = existente.Estado, fecha_creacion = existente.FechaCreacion };
                 CantidadSeleccionada = cantidadCrear > 0 ? cantidadCrear : 1m;
-                DialogResult = DialogResult.OK;
-                Close();
+
+                RecorteSeleccionado = existente ?? new Recorte
+                {
+                    id = 0,
+                    id_material = _idMaterial,
+                    nombre_material = _nombreMaterial,
+                    ancho = validado.Ancho,
+                    altura = validado.Altura,
+                    medida = validado.Medida,
+                    cantidad = 0,
+                    estado = null
+                };
+                this.DialogResult = DialogResult.OK;
+                this.Close();
             }
-            catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al gestionar el recorte: " + ex.Message); }
-            finally { _guardando = false; }
+            catch (Exception ex)
+            {
+                if (!IsDisposed) ToastNotification.ShowWarning("Error en las dimensiones del recorte: " + ex.Message);
+            }
         }
 
         private void btnCancelar_Click(object sender, EventArgs e)

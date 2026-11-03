@@ -171,6 +171,8 @@ namespace SteeLog.Vistas.Movimientos
                         cantidad = md.Cantidad,
                         EsRecorte = md.EsRecorte,
                         IdRecorte = md.IdRecorte,
+                        AnchoRecorte = md.AnchoRecorte,
+                        AlturaRecorte = md.AlturaRecorte,
                         MedidaRecorte = md.MedidaRecorte,
                         EsInsumo = md.EsInsumo,
                         IdInsumo = md.IdInsumo,

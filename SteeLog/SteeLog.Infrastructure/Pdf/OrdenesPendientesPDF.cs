@@ -48,29 +48,33 @@ namespace SteeLog.Infrastructure.Pdf
 
         public void Generar(string rutaDestino, IReadOnlyList<PendienteLectura> items)
         {
+            if (string.IsNullOrWhiteSpace(rutaDestino)) throw new ArgumentException("La ruta de destino es obligatoria.", nameof(rutaDestino));
             if (items == null) throw new ArgumentNullException(nameof(items));
-            if (items.Count == 0) throw new Exception("No hay órdenes pendientes para imprimir.");
+            if (items.Count == 0) throw new InvalidOperationException("No hay órdenes pendientes para imprimir.");
 
             MarcaPdf marca = recursos.Capturar();
-            Document doc = new Document(PageSize.A4, 40, 40, 40, 60);
-            PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(rutaDestino, FileMode.Create));
+            using (var stream = new FileStream(rutaDestino, FileMode.Create))
+            using (var doc = new Document(PageSize.A4, 40, 40, 40, 60))
+            {
+                PdfWriter writer = PdfWriter.GetInstance(doc, stream);
             
-            // Footer
-            writer.PageEvent = new PieOrden(marca.Pie);
+                // Footer
+                writer.PageEvent = new PieOrden(marca.Pie);
 
-            doc.Open();
+                doc.Open();
 
-            // Auto open print dialog when opened in viewer
-            PdfAction action = PdfAction.JavaScript("this.print(true);", writer);
-            writer.AddJavaScript(action);
+                // Auto open print dialog when opened in viewer
+                PdfAction action = PdfAction.JavaScript("this.print(true);", writer);
+                writer.AddJavaScript(action);
 
-            // =================== ENCABEZADO ===================
-            AgregarEncabezado(doc, marca);
+                // =================== ENCABEZADO ===================
+                AgregarEncabezado(doc, marca);
 
-            // =================== TABLA DE ÓRDENES ===================
-            AgregarTablaOrdenes(doc, items);
+                // =================== TABLA DE ÓRDENES ===================
+                AgregarTablaOrdenes(doc, items);
 
-            doc.Close();
+                doc.Close();
+            }
         }
 
         public string SugerirNombreArchivo()

@@ -71,5 +71,15 @@ namespace SteeLog.Tests
             Assert.Throws<InvalidOperationException>(() => SaldoInventario.Aplicar(1, -2));
             Assert.Equal(3, SaldoInventario.Aplicar(1, 2));
         }
+
+        [Fact]
+        public void EstadosOrdenTodosEsInmutableYContieneLosTresEstadosCanonicos()
+        {
+            Assert.Equal(3, EstadosOrden.Todos.Count);
+            Assert.Equal(new[] { EstadosOrden.Pendiente, EstadosOrden.RecibidaCompleta, EstadosOrden.RecibidaParcial }, EstadosOrden.Todos);
+
+            var listaMutable = Assert.IsAssignableFrom<IList<string>>(EstadosOrden.Todos);
+            Assert.Throws<NotSupportedException>(() => listaMutable[0] = "Otro");
+        }
     }
 }

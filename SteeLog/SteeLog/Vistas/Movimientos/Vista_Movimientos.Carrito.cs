@@ -40,11 +40,30 @@ namespace SteeLog.Vistas.Movimientos
                     var recorte = modal.RecorteSeleccionado;
                     decimal cantidad = modal.CantidadSeleccionada;
 
+                    _idRecorteSeleccionado = recorte.id;
+                    _anchoRecorteSeleccionado = recorte.ancho;
+                    _alturaRecorteSeleccionado = recorte.altura;
+                    _medidaRecorteSeleccionado = recorte.medida;
+
                     // Verificar si ya existe para acumular
-                    var existente = materialesLista.FirstOrDefault(m =>
-                        m.id_material == idMat &&
-                        m.EsRecorte == true &&
-                        m.IdRecorte == recorte.id);
+                    MovimientoMaterial existente = null;
+                    if (recorte.id > 0)
+                    {
+                        existente = materialesLista.FirstOrDefault(m =>
+                            m.id_material == idMat &&
+                            m.EsRecorte == true &&
+                            m.IdRecorte == recorte.id);
+                    }
+                    else
+                    {
+                        existente = materialesLista.FirstOrDefault(m =>
+                            m.id_material == idMat &&
+                            m.EsRecorte == true &&
+                            (!m.IdRecorte.HasValue || m.IdRecorte == 0) &&
+                            m.AnchoRecorte == recorte.ancho &&
+                            m.AlturaRecorte == recorte.altura &&
+                            m.MedidaRecorte == recorte.medida);
+                    }
 
                     if (existente != null)
                     {
@@ -53,14 +72,20 @@ namespace SteeLog.Vistas.Movimientos
                     }
                     else
                     {
+                        string detalleDim = recorte.medida > 0
+                            ? $" (R: {recorte.medida.ToString("0.##", CultureInfo.InvariantCulture)}m)"
+                            : $" (R: {recorte.ancho.ToString("0.##", CultureInfo.InvariantCulture)}x{recorte.altura.ToString("0.##", CultureInfo.InvariantCulture)})";
+
                         MovimientoMaterial nuevoItem = new MovimientoMaterial
                         {
                             id_material = idMat,
-                            NombreMaterial = nomMat + $" (R: {recorte.ancho}x{recorte.altura})",
+                            NombreMaterial = nomMat + detalleDim,
                             cantidad = cantidad,
                             EsRecorte = true,
-                            IdRecorte = recorte.id,
-                            MedidaRecorte = recorte.ancho
+                            IdRecorte = recorte.id > 0 ? (int?)recorte.id : null,
+                            AnchoRecorte = recorte.ancho,
+                            AlturaRecorte = recorte.altura,
+                            MedidaRecorte = recorte.medida > 0 ? recorte.medida : recorte.ancho
                         };
 
                         materialesLista.Add(nuevoItem);
@@ -74,6 +99,10 @@ namespace SteeLog.Vistas.Movimientos
                     isProgrammaticChange = false;
                     cantMatMov.Text = "";
                     _recorteSeleccionado = null;
+                    _idRecorteSeleccionado = 0;
+                    _anchoRecorteSeleccionado = 0;
+                    _alturaRecorteSeleccionado = 0;
+                    _medidaRecorteSeleccionado = 0;
                     btnRecorte.Enabled = false;
                 }
             }
@@ -176,6 +205,10 @@ namespace SteeLog.Vistas.Movimientos
                 {
                     _materialSeleccionado = null;
                     _recorteSeleccionado = null;
+                    _idRecorteSeleccionado = 0;
+                    _anchoRecorteSeleccionado = 0;
+                    _alturaRecorteSeleccionado = 0;
+                    _medidaRecorteSeleccionado = 0;
                 }
                 btnRecorte.Enabled = false;
             }
@@ -210,10 +243,12 @@ namespace SteeLog.Vistas.Movimientos
                 return;
             }
 
+            bool tieneRecorteSel = _recorteSeleccionado != null || _idRecorteSeleccionado > 0 || _medidaRecorteSeleccionado > 0 || (_anchoRecorteSeleccionado > 0 && _alturaRecorteSeleccionado > 0);
+
             // Evitar pérdida silenciosa: la columna cantidad es entera en la base para materiales normales.
             // Si el usuario ingresa un decimal (ej: 2,75) se perdería la parte fraccional.
             // Los recortes y compras eventuales aceptan decimales (ej: 0.5, 1.25).
-            if (_recorteSeleccionado == null && !esCompraEventual && cantidadVal != Math.Floor(cantidadVal))
+            if (!tieneRecorteSel && !esCompraEventual && cantidadVal != Math.Floor(cantidadVal))
             {
                 var resp = MessageBox.Show(
                     $"La cantidad '{cantidadVal.ToString(CultureInfo.InvariantCulture)}' tiene decimales y se guardará redondeada a {Math.Round(cantidadVal, MidpointRounding.AwayFromZero)}.\n\n¿Continuar?",
@@ -253,7 +288,12 @@ namespace SteeLog.Vistas.Movimientos
                 if (confirmEdit != DialogResult.Yes) return;
             }
 
-            if (_recorteSeleccionado == null && materialInfo != null)
+            int? idRec = _recorteSeleccionado?.id ?? (_idRecorteSeleccionado > 0 ? (int?)_idRecorteSeleccionado : null);
+            decimal? anchoRec = _recorteSeleccionado != null ? (decimal?)_recorteSeleccionado.ancho : (_anchoRecorteSeleccionado > 0 ? (decimal?)_anchoRecorteSeleccionado : null);
+            decimal? alturaRec = _recorteSeleccionado != null ? (decimal?)_recorteSeleccionado.altura : (_alturaRecorteSeleccionado > 0 ? (decimal?)_alturaRecorteSeleccionado : null);
+            decimal? medidaRec = _recorteSeleccionado != null ? (_recorteSeleccionado.medida > 0 ? _recorteSeleccionado.medida : _recorteSeleccionado.ancho) : (_medidaRecorteSeleccionado > 0 ? (decimal?)_medidaRecorteSeleccionado : (_anchoRecorteSeleccionado > 0 ? (decimal?)_anchoRecorteSeleccionado : null));
+
+            if (!tieneRecorteSel && materialInfo != null)
             {
                 // En modo edición el stock disponible incluye lo ya cargado (será revertido)
                 decimal stockDisponible = idMaterial.HasValue ? StockDisponibleMaterial(idMaterial.Value) : 0;
@@ -279,26 +319,36 @@ namespace SteeLog.Vistas.Movimientos
                     return;
                 }
             }
-            else if (_recorteSeleccionado != null)
+            else if (tieneRecorteSel)
             {
-                decimal stockDisponibleRec = StockDisponibleRecorte(_recorteSeleccionado.id);
-                decimal yaEnLista = materialesLista.Where(m => m.EsRecorte && m.IdRecorte == _recorteSeleccionado.id).Sum(m => m.cantidad);
-
-                if (itemAnterior != null && itemAnterior.EsRecorte && itemAnterior.IdRecorte == _recorteSeleccionado.id)
-                {
-                    yaEnLista -= itemAnterior.cantidad;
-                }
-
-                decimal totalSolicitado = yaEnLista + cantidad;
-
                 string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
                 bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
-                if (consumeStock && totalSolicitado > stockDisponibleRec)
+
+                if (idRec.HasValue && idRec.Value > 0)
                 {
-                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                    decimal stockDisponibleRec = StockDisponibleRecorte(idRec.Value);
+                    decimal yaEnLista = materialesLista.Where(m => m.EsRecorte && m.IdRecorte == idRec.Value).Sum(m => m.cantidad);
+
+                    if (itemAnterior != null && itemAnterior.EsRecorte && itemAnterior.IdRecorte == idRec.Value)
+                    {
+                        yaEnLista -= itemAnterior.cantidad;
+                    }
+
+                    decimal totalSolicitado = yaEnLista + cantidad;
+                    if (consumeStock && totalSolicitado > stockDisponibleRec)
+                    {
+                        string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                            ? "Stock de recorte insuficiente."
+                            : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
+                        ToastNotification.ShowWarning(mensaje);
+                        return;
+                    }
+                }
+                else if (consumeStock)
+                {
+                    ToastNotification.ShowWarning(SessionManager.DebeOcultarCantidadesStockMateriales
                         ? "Stock de recorte insuficiente."
-                        : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
-                    ToastNotification.ShowWarning(mensaje);
+                        : "Stock de recorte insuficiente. Disponible: 0");
                     return;
                 }
             }
@@ -312,15 +362,25 @@ namespace SteeLog.Vistas.Movimientos
                 decimal.TryParse(txtPrecioMaterial.Text.Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out precioUnitario);
             }
 
+            string detalleDim = "";
+            if (tieneRecorteSel)
+            {
+                detalleDim = (medidaRec.HasValue && medidaRec.Value > 0)
+                    ? $" (R: {medidaRec.Value.ToString("0.##", CultureInfo.InvariantCulture)}m)"
+                    : $" (R: {anchoRec?.ToString("0.##", CultureInfo.InvariantCulture)}x{alturaRec?.ToString("0.##", CultureInfo.InvariantCulture)})";
+            }
+
             MovimientoMaterial nuevoItem = new MovimientoMaterial
             {
                 id_material = idMaterial,
-                NombreMaterial = nombreMaterial + (_recorteSeleccionado != null ? $" (R: {_recorteSeleccionado.ancho}x{_recorteSeleccionado.altura})" : ""),
+                NombreMaterial = nombreMaterial + detalleDim,
                 NombreMaterialEventual = esCompraEventual ? materialTexto : null,
                 cantidad = cantidad,
-                EsRecorte = _recorteSeleccionado != null,
-                IdRecorte = _recorteSeleccionado?.id,
-                MedidaRecorte = _recorteSeleccionado?.ancho,
+                EsRecorte = tieneRecorteSel,
+                IdRecorte = idRec,
+                AnchoRecorte = anchoRec,
+                AlturaRecorte = alturaRec,
+                MedidaRecorte = medidaRec,
                 EsCompraEventual = esCompraEventual,
                 precio_unitario = precioUnitario
             };
@@ -368,7 +428,9 @@ namespace SteeLog.Vistas.Movimientos
                     m.id_material == nuevoItem.id_material &&
                     m.NombreMaterialEventual == nuevoItem.NombreMaterialEventual &&
                     m.EsRecorte == nuevoItem.EsRecorte &&
-                    m.IdRecorte == nuevoItem.IdRecorte &&
+                    (nuevoItem.EsRecorte && (!nuevoItem.IdRecorte.HasValue || nuevoItem.IdRecorte == 0)
+                        ? (!m.IdRecorte.HasValue || m.IdRecorte == 0) && m.AnchoRecorte == nuevoItem.AnchoRecorte && m.AlturaRecorte == nuevoItem.AlturaRecorte && m.MedidaRecorte == nuevoItem.MedidaRecorte
+                        : m.IdRecorte == nuevoItem.IdRecorte) &&
                     m.EsInsumo == nuevoItem.EsInsumo &&
                     m.EsCompraEventual == nuevoItem.EsCompraEventual &&
                     m.precio_unitario == nuevoItem.precio_unitario);
@@ -398,6 +460,10 @@ namespace SteeLog.Vistas.Movimientos
             isProgrammaticChange = true;
             _materialSeleccionado = null;
             _recorteSeleccionado = null;
+            _idRecorteSeleccionado = 0;
+            _anchoRecorteSeleccionado = 0;
+            _alturaRecorteSeleccionado = 0;
+            _medidaRecorteSeleccionado = 0;
             txtBuscadorMaterial.Text = "";
             cantMatMov.Text = "";
             chkCompraEventual.Checked = cmbMovimientos.Text.ToUpper().Contains("COMPRA EVENTUAL");
@@ -515,14 +581,21 @@ namespace SteeLog.Vistas.Movimientos
                     txtBuscadorMaterial.Text = itemSel.NombreMaterialEventual ?? itemSel.NombreMaterial;
                     btnRecorte.Enabled = false;
                     _recorteSeleccionado = null;
+                    _idRecorteSeleccionado = 0;
+                    _anchoRecorteSeleccionado = 0;
+                    _alturaRecorteSeleccionado = 0;
+                    _medidaRecorteSeleccionado = 0;
                 }
                 else if (mat != null)
                 {
-
-                    if (itemSel.EsRecorte && itemSel.IdRecorte.HasValue)
+                    if (itemSel.EsRecorte)
                     {
                         // Para recortes mostramos el nombre con medida
                         txtBuscadorMaterial.Text = itemSel.NombreMaterial;
+                        _idRecorteSeleccionado = itemSel.IdRecorte ?? 0;
+                        _anchoRecorteSeleccionado = itemSel.AnchoRecorte ?? 0;
+                        _alturaRecorteSeleccionado = itemSel.AlturaRecorte ?? 0;
+                        _medidaRecorteSeleccionado = itemSel.MedidaRecorte ?? 0;
                     }
                     else
                     {
@@ -530,6 +603,10 @@ namespace SteeLog.Vistas.Movimientos
                         // Refrescar categoría desde DB en tiempo real para reflejar cambios inmediatos
                         var cat = _categorias.FirstOrDefault(c => c.id == mat.id_categoria);
                         btnRecorte.Enabled = (cat != null && cat.recortable);
+                        _idRecorteSeleccionado = 0;
+                        _anchoRecorteSeleccionado = 0;
+                        _alturaRecorteSeleccionado = 0;
+                        _medidaRecorteSeleccionado = 0;
                     }
 
                 }
@@ -539,6 +616,10 @@ namespace SteeLog.Vistas.Movimientos
                     txtBuscadorMaterial.Text = itemSel.NombreMaterial;
                     btnRecorte.Enabled = false;
                     _recorteSeleccionado = null;
+                    _idRecorteSeleccionado = 0;
+                    _anchoRecorteSeleccionado = 0;
+                    _alturaRecorteSeleccionado = 0;
+                    _medidaRecorteSeleccionado = 0;
                 }
 
                 cantMatMov.Text = itemSel.cantidad.ToString("G29", CultureInfo.InvariantCulture);

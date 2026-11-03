@@ -17,10 +17,12 @@ namespace SteeLog.Core.Application.Inventario
         public decimal CantidadUsada { get; set; } public int CantidadMovimientos { get; set; } public int? UbicacionId { get; set; }
     }
     public sealed class CategoriaMaterialLectura { public int Id { get; set; } public string Nombre { get; set; } public bool Recortable { get; set; } }
+    public sealed class ProveedorMaterialLectura { public int Id { get; set; } public string Nombre { get; set; } }
     public interface IMaterialesConsulta
     {
         Task<IReadOnlyList<MaterialInventarioLectura>> ListarAsync(FiltroMaterialLectura filtro, CancellationToken token = default);
         Task<IReadOnlyList<CategoriaMaterialLectura>> CategoriasAsync(CancellationToken token = default);
+        Task<IReadOnlyList<ProveedorMaterialLectura>> CatalogoProveedoresAsync(CancellationToken token = default);
         Task<IReadOnlyList<int>> ProveedoresAsync(int materialId, CancellationToken token = default);
     }
     public sealed class ConsultarMateriales
@@ -29,6 +31,7 @@ namespace SteeLog.Core.Application.Inventario
         public ConsultarMateriales(Session actor, IMaterialesConsulta consulta) { this.actor=actor; this.consulta=consulta; }
         public Task<IReadOnlyList<MaterialInventarioLectura>> ListarAsync(FiltroMaterialLectura filtro, CancellationToken token = default) { actor.Require(Role.Galpon); return consulta.ListarAsync(filtro ?? new FiltroMaterialLectura(),token); }
         public Task<IReadOnlyList<CategoriaMaterialLectura>> CategoriasAsync(CancellationToken token = default) { actor.Require(Role.Galpon); return consulta.CategoriasAsync(token); }
+        public Task<IReadOnlyList<ProveedorMaterialLectura>> CatalogoProveedoresAsync(CancellationToken token = default) { actor.Require(Role.Galpon); return consulta.CatalogoProveedoresAsync(token); }
         public Task<IReadOnlyList<int>> ProveedoresAsync(int id, CancellationToken token = default) { actor.Require(Role.Admin); return consulta.ProveedoresAsync(id,token); }
     }
 }

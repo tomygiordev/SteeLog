@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
+using Npgsql;
 using NpgsqlTypes;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Infrastructure.Persistence;
@@ -35,6 +36,19 @@ namespace SteeLog.Infrastructure.Inventario
         public async Task<IReadOnlyList<CategoriaMaterialLectura>> CategoriasAsync(CancellationToken token = default)
         {
             var result=new List<CategoriaMaterialLectura>(); using(var c=factory.Create()) { await c.OpenAsync(token).ConfigureAwait(false); using(var q=c.CreateCommand()) { q.CommandText="SELECT id_categoria,nombre,recortable FROM public.categorias"; using(var r=await q.ExecuteReaderAsync(token).ConfigureAwait(false)) while(await r.ReadAsync(token).ConfigureAwait(false)) result.Add(new CategoriaMaterialLectura { Id=r.GetInt32(0),Nombre=r.GetString(1),Recortable=r.GetBoolean(2) }); } } return result;
+        }
+        public async Task<IReadOnlyList<ProveedorMaterialLectura>> CatalogoProveedoresAsync(CancellationToken token = default)
+        {
+            var lista = new List<ProveedorMaterialLectura>();
+            using (var c = factory.Create())
+            {
+                await c.OpenAsync(token).ConfigureAwait(false);
+                using (var cmd = new NpgsqlCommand("SELECT id_proveedores, nombre FROM public.proveedores ORDER BY nombre ASC", c) { CommandTimeout = 15 })
+                using (var r = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false))
+                    while (await r.ReadAsync(token).ConfigureAwait(false))
+                        lista.Add(new ProveedorMaterialLectura { Id = r.GetInt32(0), Nombre = r.GetString(1) });
+            }
+            return lista;
         }
         public async Task<IReadOnlyList<int>> ProveedoresAsync(int materialId, CancellationToken token = default)
         {
