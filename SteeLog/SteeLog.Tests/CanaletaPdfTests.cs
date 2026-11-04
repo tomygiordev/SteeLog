@@ -83,7 +83,10 @@ namespace SteeLog.Tests
         public void ErrorDeRecursoLiberaArchivo()
         {
             var ruta = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
-            try { Assert.ThrowsAny<Exception>(new Action(() => new InformeObraPDF(new Recursos { Invalidos=true }).Generar(ruta, Datos(true)))); using (File.Open(ruta, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { } }
+            try {
+                Assert.ThrowsAny<Exception>(new Action(() => new InformeObraPDF(new Recursos { Invalidos=true }).Generar(ruta, Datos(true))));
+                Assert.False(File.Exists(ruta));
+            }
             finally { if (File.Exists(ruta)) File.Delete(ruta); }
         }
     }

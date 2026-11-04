@@ -235,5 +235,100 @@ namespace SteeLog.Tests
                 }
             });
         }
+        [Fact]
+        public void ErrorFotosNoBloqueaCursorYSeRecuperaConLimpiar()
+        {
+            Sta(() => {
+                var e = new Ejecutor();
+                using (var vista = Crear(e, out Type tipo)) {
+                    var handle = vista.Handle;
+                    tipo.GetField("_inicializando", Privado).SetValue(vista, false); tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(_ => { }));
+                    tipo.GetField("_errorFotos", Privado).SetValue(vista, true);
+                    tipo.GetMethod("CambiarEstadoGuardado", Privado).Invoke(vista, new object[] { false });
+
+                    var btnGuardar = (Control)tipo.GetField("btnGuardar", Privado).GetValue(vista);
+                    Assert.False(btnGuardar.Enabled);
+                    Assert.Equal(Cursors.Default, vista.Cursor);
+
+                    var btnLimpiar = (Control)tipo.GetField("btnLimpiar", Privado).GetValue(vista);
+                    tipo.GetMethod("btnLimpiar_Click", Privado).Invoke(vista, new object[] { btnLimpiar, EventArgs.Empty });
+
+                    Assert.False((bool)tipo.GetField("_errorFotos", Privado).GetValue(vista));
+                    Assert.True(btnGuardar.Enabled);
+                }
+            });
+        }
+        [Fact]
+        public void FotoAusenteEnDiscoLimpiaPreviewYNoLanzaCodec()
+        {
+            Sta(() => {
+                var e = new Ejecutor();
+                using (var vista = Crear(e, out Type tipo)) {
+                    var handle = vista.Handle;
+                    var preview = (PictureBox)tipo.GetField("picPreview", Privado).GetValue(vista);
+                    preview.Image = new Bitmap(2, 2);
+                    var tcs = new TaskCompletionSource<byte[]>();
+                    e.Previews.Enqueue(tcs);
+                    var tipoFoto = tipo.GetNestedType("FotoListItem", BindingFlags.NonPublic);
+                    var item = Activator.CreateInstance(tipoFoto, true);
+                    tipoFoto.GetProperty("ObjectPath").SetValue(item, "inexistente.jpg"); string aviso = null; tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(m => aviso = m)); var lista = (ListBox)tipo.GetField("lstFotos", Privado).GetValue(vista); lista.Items.Add(item); lista.SelectedItem = item; int vPrev = (int)tipo.GetField("_versionPreview", Privado).GetValue(vista);
+                    var tarea = (Task)tipo.GetMethod("MostrarPreviewAsync", Privado).Invoke(vista, new object[] { item, vPrev });
+                    tcs.SetResult(new byte[0]);
+                    Esperar(tarea);
+                    Assert.Null(preview.Image);
+                }
+            });
+        }
+        private sealed class EjecutorAltaAdjuntoIncierto : IUseCaseExecutor
+        {
+            public int CanaletasConsultadas;
+            public int AdjuntosIntentados;
+            public Task<TResult> ExecuteAsync<TUseCase, TResult>(Func<TUseCase, Task<TResult>> accion) where TUseCase : class
+            {
+                if (typeof(TResult) == typeof(int))
+                {
+                    AdjuntosIntentados++;
+                    if (AdjuntosIntentados == 1)
+                        return Task.FromResult((TResult)(object)100);
+                    throw new CanaletaResultadoInciertoException("falla incierta en adjunto", new IOException());
+                }
+                if (typeof(TResult) == typeof(IReadOnlyList<CanaletaLectura>))
+                {
+                    Interlocked.Increment(ref CanaletasConsultadas);
+                    return Task.FromResult((TResult)(object)new List<CanaletaLectura>
+                    {
+                        new CanaletaLectura { Id = 100, ObraId = 1, Descripcion = "nueva", Precio = 50m }
+                    });
+                }
+                if (typeof(TResult) == typeof(IReadOnlyList<FotoCanaletaLectura>))
+                    return Task.FromResult((TResult)(object)new List<FotoCanaletaLectura>());
+                throw new InvalidOperationException();
+            }
+        }
+        [Fact]
+        public void AltaConAdjuntoInciertoRefrescaGrilla()
+        {
+            Sta(() => {
+                var e = new EjecutorAltaAdjuntoIncierto();
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(e) }, null)) {
+                    var handle = vista.Handle;
+                    tipo.GetField("_inicializando", Privado).SetValue(vista, false); tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(_ => { }));
+                    var lista = (ListBox)tipo.GetField("lstFotos", Privado).GetValue(vista);
+                    var tipoFoto = tipo.GetNestedType("FotoListItem", BindingFlags.NonPublic);
+                    var foto = Activator.CreateInstance(tipoFoto, true);
+                    tipoFoto.GetProperty("NombreMostrar").SetValue(foto, "foto1.png");
+                    tipoFoto.GetProperty("BytesLocal").SetValue(foto, Imagen(Color.Blue));
+                    lista.Items.Add(foto);
+
+                    var tarea = (Task)tipo.GetMethod("GuardarCoreAsync", Privado).Invoke(vista, new object[] { 1, "nueva", 50m, false });
+                    Esperar(tarea);
+
+                    Assert.True((bool)tipo.GetField("_errorFotos", Privado).GetValue(vista));
+                    Assert.True(e.CanaletasConsultadas > 0);
+                    Assert.Equal(Cursors.Default, vista.Cursor);
+                }
+            });
+        }
     }
 }

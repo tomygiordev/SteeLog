@@ -65,6 +65,15 @@ Una primera corrida integrada obtuvo 140/140 Debug y 139/140 Release: falló un 
 
 Antislop se aplicó durante la implementación como filtro de conservación: misma marca, controles y navegación; sin assets inventados ni rediseño. No se presenta como auditoría visual integral ni como validación manual de todos los controles.
 
+## Subsanaciones de calidad y robustez post-revisión
+
+1. **Gestión de UI y cursor en fallos:** Se desacopló la condición de bloqueo de botones (`bloqueado`) del cursor de espera (`enCurso`), garantizando que ante `_errorFotos = true` el cursor regrese a `Cursors.Default`. Se habilitó la recuperación del formulario mediante `btnLimpiar_Click` cuando no hay operaciones en curso. Ante alta confirmada con fallo incierto posterior en adjuntos, se fuerza el refresco de grilla (`CargarItemsAsync`) para visibilizar el nuevo registro.
+2. **Claridad de notificaciones y preview:** Se eliminó la emisión simultánea y contradictoria de Toasts de éxito y advertencia cuando quedan limpiezas pendientes de archivos. En `MostrarPreviewAsync`, la ausencia de bytes en disco se reporta explícitamente limpiando el preview en vez de provocar excepciones de codec GDI engañosas.
+3. **Limpieza de código muerto:** Se retiró el método privado sin uso `RefrescarListaFotos` en `Vista_CanaletasPlegados.cs` y los métodos no referenciados `AgregarSeccionMaterialesAcumulados`, `AgregarSeccionRecortes`, `AgregarSeccionEventuales` junto con `fntPie` en `InformeObraPDF.cs`.
+4. **Compensación directa en rollback:** En `Canaletas.AdjuntarAsync`, el rollback cierto previo a commit compensa directamente el archivo local sin abrir consultas SQL innecesarias sobre conexiones potencialmente degradadas.
+5. **Normalización y leases locales:** `LocalCanaletaStorage` normaliza segmentos recortando puntos y espacios finales en alineación con las consultas SQL, compara identidades de certificados `.owned` de forma normalizada, y elimina en best-effort los archivos `.lock` huérfanos al liberar los leases.
+6. **Prevención de PDFs truncos:** `InformeObraPDF.Generar` valida la integridad de `LogoPng` antes de crear el `FileStream`, evitando la generación de archivos `.pdf` de 0 bytes ante logos corruptos o inválidos.
+
 ## Límites que no se ocultan
 
 - No se ejecutaron `Program.Main`, updater real, publicación, servicios remotos ni pruebas destructivas sobre instalaciones existentes. No se leyó configuración privada ni la sesión DPAPI real.

@@ -35,13 +35,11 @@ namespace SteeLog.Infrastructure.Pdf
         private static Font fntDatoObra;
         private static Font fntEtiqueta;
         private static Font fntObservacion;
-        private static Font fntPie;
 
         static InformeObraPDF()
         {
             var baseFontNormal = BaseFont.CreateFont(BaseFont.HELVETICA, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
             var baseFontBold = BaseFont.CreateFont(BaseFont.HELVETICA_BOLD, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-            var baseFontItalic = BaseFont.CreateFont(BaseFont.HELVETICA_OBLIQUE, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
 
             fntTituloPrincipal = new Font(baseFontBold, 22, Font.NORMAL, COLOR_VERDE_OSCURO);
             fntSubtitulo = new Font(baseFontNormal, 10, Font.NORMAL, COLOR_TEXTO_MUTED);
@@ -52,7 +50,6 @@ namespace SteeLog.Infrastructure.Pdf
             fntDatoObra = new Font(baseFontNormal, 9.5f, Font.NORMAL, COLOR_TEXTO);
             fntEtiqueta = new Font(baseFontBold, 9.5f, Font.NORMAL, COLOR_VERDE_HEADER);
             fntObservacion = new Font(baseFontNormal, 8.5f, Font.NORMAL, COLOR_TEXTO);
-            fntPie = new Font(baseFontItalic, 8, Font.NORMAL, COLOR_TEXTO_MUTED);
         }
 
         /// <summary>
@@ -62,6 +59,10 @@ namespace SteeLog.Infrastructure.Pdf
         {
             if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
             var marca = recursos.Capturar();
+            if (marca.LogoPng != null && marca.LogoPng.Length > 0)
+            {
+                Image.GetInstance(marca.LogoPng);
+            }
             using (var stream = new FileStream(rutaDestino, FileMode.Create))
             using (var doc = new Document(PageSize.A4, 40, 40, 40, 60))
             {
@@ -362,190 +363,6 @@ namespace SteeLog.Infrastructure.Pdf
 
                 doc.Add(tabla);
             }
-        }
-
-        private void AgregarSeccionMaterialesAcumulados(Document doc, List<InformeMovimientoDetallePdf> movimientos, string nombreObra)
-        {
-            PdfPTable tituloTabla = new PdfPTable(1);
-            tituloTabla.WidthPercentage = 100;
-            tituloTabla.SpacingBefore = 10;
-            tituloTabla.SpacingAfter = 6;
-
-            PdfPCell tituloCell = new PdfPCell(new Phrase("DETALLE ACUMULADO DE MATERIALES EN OBRA", fntSeccion));
-            tituloCell.BackgroundColor = COLOR_FONDO_SECCION;
-            tituloCell.Border = Rectangle.LEFT_BORDER;
-            tituloCell.BorderColorLeft = COLOR_VERDE_ACCENT;
-            tituloCell.BorderWidthLeft = 4f;
-            tituloCell.Padding = 8;
-            tituloCell.PaddingLeft = 12;
-            tituloCell.VerticalAlignment = Element.ALIGN_MIDDLE;
-
-            tituloTabla.AddCell(tituloCell);
-            doc.Add(tituloTabla);
-
-            PdfPTable tabla = new PdfPTable(4);
-            tabla.WidthPercentage = 100;
-            tabla.SetWidths(new float[] { 45f, 18f, 18f, 19f });
-            tabla.SpacingAfter = 15;
-
-            AgregarCeldaHeader(tabla, "Material", Element.ALIGN_LEFT);
-            AgregarCeldaHeader(tabla, "Total Enviado", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Total Devuelto", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Neto en Obra", Element.ALIGN_CENTER);
-
-            var resumen = movimientos
-                .Where(m => !m.esrecorte && !m.esinsumo)
-                .GroupBy(m => m.material)
-                .Select(g => new {
-                    Material = g.Key,
-                    Enviado = g.Where(m => m.destino != null && m.destino.Equals(nombreObra, StringComparison.OrdinalIgnoreCase)).Sum(m => m.cantidad),
-                    Devuelto = g.Where(m => m.origen != null && m.origen.Equals(nombreObra, StringComparison.OrdinalIgnoreCase)).Sum(m => m.cantidad)
-                })
-                .OrderBy(g => g.Material)
-                .ToList();
-
-            bool alternar = false;
-            foreach (var r in resumen)
-            {
-                BaseColor bgColor = alternar ? COLOR_FONDO_FILA : COLOR_BLANCO;
-                decimal neto = r.Enviado - r.Devuelto;
-
-                AgregarCeldaDato(tabla, r.Material, bgColor);
-                AgregarCeldaDato(tabla, r.Enviado.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), bgColor, Element.ALIGN_CENTER);
-                AgregarCeldaDato(tabla, r.Devuelto.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), bgColor, Element.ALIGN_CENTER);
-
-                Font fntNeto = neto > 0 ? new Font(Font.FontFamily.HELVETICA, 8.5f, Font.BOLD, COLOR_VERDE_ACCENT) : fntCeldaBold;
-                PdfPCell cellNeto = new PdfPCell(new Phrase(neto.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), fntNeto));
-                cellNeto.BackgroundColor = bgColor;
-                cellNeto.Padding = 7;
-                cellNeto.HorizontalAlignment = Element.ALIGN_CENTER;
-                cellNeto.VerticalAlignment = Element.ALIGN_MIDDLE;
-                cellNeto.Border = Rectangle.BOTTOM_BORDER;
-                cellNeto.BorderColorBottom = COLOR_GRIS_BORDE;
-                cellNeto.BorderWidthBottom = 0.5f;
-                tabla.AddCell(cellNeto);
-
-                alternar = !alternar;
-            }
-
-            doc.Add(tabla);
-        }
-
-        private void AgregarSeccionRecortes(Document doc, List<InformeMovimientoDetallePdf> recortes, string nombreObra)
-        {
-            PdfPTable tituloTabla = new PdfPTable(1);
-            tituloTabla.WidthPercentage = 100;
-            tituloTabla.SpacingBefore = 10;
-            tituloTabla.SpacingAfter = 6;
-
-            PdfPCell tituloCell = new PdfPCell(new Phrase("RECORTES EN OBRA", fntSeccion));
-            tituloCell.BackgroundColor = COLOR_FONDO_SECCION;
-            tituloCell.Border = Rectangle.LEFT_BORDER;
-            tituloCell.BorderColorLeft = COLOR_ETIQUETA_RECORTE;
-            tituloCell.BorderWidthLeft = 4f;
-            tituloCell.Padding = 8;
-            tituloCell.PaddingLeft = 12;
-            tituloCell.VerticalAlignment = Element.ALIGN_MIDDLE;
-
-            tituloTabla.AddCell(tituloCell);
-            doc.Add(tituloTabla);
-
-            PdfPTable tabla = new PdfPTable(5);
-            tabla.WidthPercentage = 100;
-            tabla.SetWidths(new float[] { 35f, 18f, 15f, 17f, 15f });
-            tabla.SpacingAfter = 15;
-
-            AgregarCeldaHeader(tabla, "Material", Element.ALIGN_LEFT);
-            AgregarCeldaHeader(tabla, "Medida", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Enviado", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Devuelto", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Neto en Obra", Element.ALIGN_CENTER);
-
-            var resumen = recortes
-                .GroupBy(m => new { m.material, m.medida_recorte })
-                .Select(g => new {
-                    Material  = g.Key.material,
-                    Medida    = g.Key.medida_recorte,
-                    Enviado   = g.Where(m => m.destino != null && m.destino.Equals(nombreObra, StringComparison.OrdinalIgnoreCase)).Sum(m => m.cantidad),
-                    Devuelto  = g.Where(m => m.origen  != null && m.origen .Equals(nombreObra, StringComparison.OrdinalIgnoreCase)).Sum(m => m.cantidad)
-                })
-                .OrderBy(r => r.Material)
-                .ThenBy(r => r.Medida)
-                .ToList();
-
-            bool alt = false;
-            foreach (var r in resumen)
-            {
-                BaseColor bg = alt ? COLOR_FONDO_FILA : COLOR_BLANCO;
-                decimal neto = r.Enviado - r.Devuelto;
-
-                AgregarCeldaDato(tabla, r.Material, bg);
-                AgregarCeldaDato(tabla, string.IsNullOrEmpty(r.Medida) ? "-" : r.Medida, bg, Element.ALIGN_CENTER);
-                AgregarCeldaDato(tabla, r.Enviado.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), bg, Element.ALIGN_CENTER);
-                AgregarCeldaDato(tabla, r.Devuelto.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), bg, Element.ALIGN_CENTER);
-
-                Font fntNeto = neto > 0 ? new Font(Font.FontFamily.HELVETICA, 8.5f, Font.BOLD, COLOR_VERDE_ACCENT) : fntCeldaBold;
-                PdfPCell cellNeto = new PdfPCell(new Phrase(neto.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), fntNeto));
-                cellNeto.BackgroundColor = bg;
-                cellNeto.Padding = 7;
-                cellNeto.HorizontalAlignment = Element.ALIGN_CENTER;
-                cellNeto.VerticalAlignment = Element.ALIGN_MIDDLE;
-                cellNeto.Border = Rectangle.BOTTOM_BORDER;
-                cellNeto.BorderColorBottom = COLOR_GRIS_BORDE;
-                cellNeto.BorderWidthBottom = 0.5f;
-                tabla.AddCell(cellNeto);
-
-                alt = !alt;
-            }
-
-            doc.Add(tabla);
-        }
-
-        private void AgregarSeccionEventuales(Document doc, List<InformeMovimientoDetallePdf> eventuales)
-        {
-            PdfPTable tituloTabla = new PdfPTable(1);
-            tituloTabla.WidthPercentage = 100;
-            tituloTabla.SpacingBefore = 10;
-            tituloTabla.SpacingAfter = 6;
-
-            PdfPCell tituloCell = new PdfPCell(new Phrase("MATERIALES EVENTUALES Y APORTES", fntSeccion));
-            tituloCell.BackgroundColor = COLOR_FONDO_SECCION;
-            tituloCell.Border = Rectangle.LEFT_BORDER;
-            tituloCell.BorderColorLeft = COLOR_VERDE_ACCENT;
-            tituloCell.BorderWidthLeft = 4f;
-            tituloCell.Padding = 8;
-            tituloCell.PaddingLeft = 12;
-            tituloCell.VerticalAlignment = Element.ALIGN_MIDDLE;
-
-            tituloTabla.AddCell(tituloCell);
-            doc.Add(tituloTabla);
-
-            PdfPTable tabla = new PdfPTable(4);
-            tabla.WidthPercentage = 100;
-            tabla.SetWidths(new float[] { 45f, 25f, 15f, 15f });
-            tabla.SpacingAfter = 15;
-
-            AgregarCeldaHeader(tabla, "Material / Descripción", Element.ALIGN_LEFT);
-            AgregarCeldaHeader(tabla, "Tipo", Element.ALIGN_LEFT);
-            AgregarCeldaHeader(tabla, "Cantidad", Element.ALIGN_CENTER);
-            AgregarCeldaHeader(tabla, "Fecha", Element.ALIGN_CENTER);
-
-            var ordenados = eventuales.OrderByDescending(m => m.fecha).ToList();
-            bool alternar = false;
-
-            foreach (var m in ordenados)
-            {
-                BaseColor bgColor = alternar ? COLOR_FONDO_FILA : COLOR_BLANCO;
-
-                AgregarCeldaDato(tabla, m.material, bgColor);
-                AgregarCeldaDato(tabla, m.tipo_movimiento, bgColor);
-                AgregarCeldaDato(tabla, m.cantidad.ToString("G29", System.Globalization.CultureInfo.InvariantCulture), bgColor, Element.ALIGN_CENTER);
-                AgregarCeldaDato(tabla, m.fecha.ToString("dd/MM/yyyy"), bgColor, Element.ALIGN_CENTER);
-
-                alternar = !alternar;
-            }
-
-            doc.Add(tabla);
         }
 
         private void AgregarSeccionCanaletasPlegados(Document doc, List<InformeCanaletaPlegadoDetallePdf> canaletasPlegados, bool mostrarValorizacion)

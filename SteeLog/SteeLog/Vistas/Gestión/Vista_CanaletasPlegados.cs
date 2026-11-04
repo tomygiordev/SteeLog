@@ -408,6 +408,10 @@ namespace SteeLog.Vistas
             if (cmbFiltroPagado.Items.Count > 0)
                 cmbFiltroPagado.SelectedIndex = 0;
             AplicarFiltros();
+            if (_errorFotos && !_guardando && !_inicializando && !_cargandoFotos)
+            {
+                LimpiarSeleccion();
+            }
         }
 
         private void cmbFiltroPagado_SelectedIndexChanged(object sender, EventArgs e)
@@ -434,9 +438,10 @@ namespace SteeLog.Vistas
             int version = _versionSeleccion; int idAnterior = _idSeleccionado;
             var pendientes = ObtenerPendientes();
             _guardando = true; CambiarEstadoGuardado(true);
+            int id = -1;
             try
             {
-                int id = await _presenter.GuardarAsync(idAnterior < 0 ? (int?)null : idAnterior, obraId, descripcion, precio, pagado, _cierre.Token);
+                id = await _presenter.GuardarAsync(idAnterior < 0 ? (int?)null : idAnterior, obraId, descripcion, precio, pagado, _cierre.Token);
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
                 if (!_cierre.IsCancellationRequested && !IsDisposed && version == _versionSeleccion && idAnterior < 0) MarcarComoEdicion(id);
                 int fallidas = 0; bool limpiezaPendiente = false;
@@ -449,14 +454,46 @@ namespace SteeLog.Vistas
                     catch { fallidas++; }
                 }
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
-                if (fallidas == 0) { ToastNotification.ShowSuccess("Trabajo guardado correctamente."); LimpiarSeleccion(); }
-                else { MarcarComoEdicion(id); await RefrescarFotosConPendientesAsync(id, version); if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; ToastNotification.ShowWarning("Trabajo guardado. " + fallidas + " foto(s) pendientes para reintentar."); }
-                if (limpiezaPendiente) ToastNotification.ShowWarning("Fotos guardadas; queda limpieza de archivos pendiente.");
+                if (fallidas == 0)
+                {
+                    if (!limpiezaPendiente) ToastNotification.ShowSuccess("Trabajo guardado correctamente.");
+                    LimpiarSeleccion();
+                }
+                else
+                {
+                    MarcarComoEdicion(id);
+                    await RefrescarFotosConPendientesAsync(id, version);
+                    if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                    AdvertirAdjuntos("Trabajo guardado. " + fallidas + " foto(s) pendientes para reintentar.");
+                }
+                if (limpiezaPendiente) AdvertirAdjuntos("Fotos guardadas; queda limpieza de archivos pendiente.");
                 await CargarItemsAsync();
             }
             catch (OperationCanceledException) { }
-            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
-            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Operación confirmada; queda limpieza pendiente. " + ex.Message); } }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex)
+            {
+                if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion)
+                {
+                    if (idAnterior < 0 && id > 0)
+                    {
+                        try { await CargarItemsAsync(); } catch { }
+                    }
+                    _errorFotos = true;
+                    AdvertirAdjuntos("Resultado incierto; verifique antes de reintentar. " + ex.Message);
+                }
+            }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex)
+            {
+                if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion)
+                {
+                    if (idAnterior < 0 && id > 0)
+                    {
+                        try { await CargarItemsAsync(); } catch { }
+                    }
+                    _errorFotos = true;
+                    AdvertirAdjuntos("Operación confirmada; queda limpieza pendiente. " + ex.Message);
+                }
+            }
             catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError("Error al guardar: " + ex.Message); }
             finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
@@ -507,13 +544,14 @@ namespace SteeLog.Vistas
 
         private void CambiarEstadoGuardado(bool guardando)
         {
-            guardando = guardando || _guardando || _inicializando || _cargandoFotos || _errorFotos;
-            btnGuardar.Enabled = !guardando;
-            btnEliminar.Enabled = !guardando && _idSeleccionado >= 0;
-            btnAgregarFoto.Enabled = !guardando;
+            bool enCurso = guardando || _guardando || _inicializando || _cargandoFotos;
+            bool bloqueado = enCurso || _errorFotos;
+            btnGuardar.Enabled = !bloqueado;
+            btnEliminar.Enabled = !bloqueado && _idSeleccionado >= 0;
+            btnAgregarFoto.Enabled = !bloqueado;
             dgvCanaletas.Enabled = !_guardando && !_inicializando;
-            btnQuitarFoto.Enabled = !guardando && lstFotos.SelectedIndex >= 0;
-            Cursor = guardando ? Cursors.WaitCursor : Cursors.Default;
+            btnQuitarFoto.Enabled = !bloqueado && lstFotos.SelectedIndex >= 0;
+            Cursor = enCurso ? Cursors.WaitCursor : Cursors.Default;
         }
 
         // ===================== FOTOS =====================
@@ -629,8 +667,17 @@ namespace SteeLog.Vistas
                     catch { fallidas++; }
                 }
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
-                if (fallidas > 0) { await RefrescarFotosConPendientesAsync(id, version); if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; AdvertirAdjuntos(fallidas + " foto(s) pendientes para reintentar."); }
-                else { ToastNotification.ShowSuccess("Fotos guardadas correctamente."); await CargarFotosExistenteAsync(id); }
+                if (fallidas > 0)
+                {
+                    await RefrescarFotosConPendientesAsync(id, version);
+                    if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                    AdvertirAdjuntos(fallidas + " foto(s) pendientes para reintentar.");
+                }
+                else
+                {
+                    if (!limpiezaPendiente) ToastNotification.ShowSuccess("Fotos guardadas correctamente.");
+                    await CargarFotosExistenteAsync(id);
+                }
                 if (limpiezaPendiente && !_cierre.IsCancellationRequested && !IsDisposed) AdvertirAdjuntos("Fotos guardadas; queda limpieza de archivos pendiente.");
             }
             catch (OperationCanceledException) { }
@@ -708,6 +755,13 @@ namespace SteeLog.Vistas
             await MostrarPreviewAsync(item, version);
         }
 
+        private void LimpiarImagenPreview()
+        {
+            picPreview.Image?.Dispose();
+            picPreview.Image = null;
+            picPreview.Tag = null;
+        }
+
         private void MostrarPreviewDesdeBytes(byte[] bytes)
         {
             try
@@ -721,9 +775,8 @@ namespace SteeLog.Vistas
             }
             catch
             {
-                picPreview.Image?.Dispose();
-                picPreview.Image = null;
-                ToastNotification.ShowWarning("No se puede previsualizar esta imagen en este equipo; la foto se conserva.");
+                LimpiarImagenPreview();
+                AdvertirAdjuntos("No se puede previsualizar esta imagen en este equipo; la foto se conserva.");
             }
         }
 
@@ -733,10 +786,16 @@ namespace SteeLog.Vistas
             {
                 byte[] bytes = await _presenter.LeerFotoAsync(item.ObjectPath, _cierre.Token);
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionPreview || lstFotos.SelectedItem != item) return;
+                if (bytes == null || bytes.Length == 0)
+                {
+                    LimpiarImagenPreview();
+                    AdvertirAdjuntos("El archivo de la foto no se encuentra en el almacenamiento local.");
+                    return;
+                }
                 MostrarPreviewDesdeBytes(bytes);
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionPreview) ToastNotification.ShowWarning("No se pudo previsualizar la foto: " + ex.Message); }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionPreview) AdvertirAdjuntos("No se pudo previsualizar la foto: " + ex.Message); }
         }
 
         private List<FotoListItem> ObtenerPendientes()
@@ -751,26 +810,6 @@ namespace SteeLog.Vistas
             return pendientes;
         }
 
-        private void RefrescarListaFotos()
-        {
-            int indice = lstFotos.SelectedIndex;
-            lstFotos.BeginUpdate();
-            try
-            {
-                for (int i = 0; i < lstFotos.Items.Count; i++)
-                    lstFotos.Items[i] = lstFotos.Items[i];
-
-                if (indice >= 0 && indice < lstFotos.Items.Count)
-                    lstFotos.SelectedIndex = indice;
-            }
-            finally
-            {
-                lstFotos.EndUpdate();
-            }
-
-            ActualizarContadorFotos();
-            btnQuitarFoto.Enabled = lstFotos.SelectedIndex >= 0;
-        }
 
     }
 }

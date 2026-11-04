@@ -24,8 +24,15 @@ namespace SteeLog.Infrastructure.Files
         {
             if (string.IsNullOrWhiteSpace(path) || Path.IsPathRooted(path) || path.IndexOf(':') >= 0) throw new ArgumentException("Ruta de foto inválida.");
             var partes = path.Replace('\\', '/').Split('/');
-            foreach (var p in partes) if (p == ".." || p == "." || p.Length == 0 || p.EndsWith(".", StringComparison.Ordinal) || p.EndsWith(" ", StringComparison.Ordinal)) throw new ArgumentException("Ruta de foto inválida.");
-            var completo = Path.GetFullPath(Path.Combine(root, path.Replace('/', Path.DirectorySeparatorChar)));
+            var limpios = new string[partes.Length];
+            for (int i = 0; i < partes.Length; i++)
+            {
+                var limpio = partes[i]; if (limpio.EndsWith(".", StringComparison.Ordinal) || limpio.EndsWith(" ", StringComparison.Ordinal)) throw new ArgumentException("Ruta de foto inválida.");
+                if (limpio == ".." || limpio == "." || limpio.Length == 0) throw new ArgumentException("Ruta de foto inválida.");
+                limpios[i] = limpio;
+            }
+            var rutaNormalizada = string.Join(Path.DirectorySeparatorChar.ToString(), limpios);
+            var completo = Path.GetFullPath(Path.Combine(root, rutaNormalizada));
             if (!completo.StartsWith(root, StringComparison.OrdinalIgnoreCase)) throw new ArgumentException("Ruta de foto inválida.");
             ComprobarReparse(completo);
             return completo;
@@ -50,6 +57,8 @@ namespace SteeLog.Infrastructure.Files
             using (var sha = SHA256.Create()) return BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(Clave(path)))).Replace("-", "");
         }
 
+        private string Candado(string path) => Path.Combine(pendientes, Hash(path) + ".lock");
+
         private void Tomar(string path)
         {
             Resolver(path);
@@ -58,7 +67,7 @@ namespace SteeLog.Infrastructure.Files
             lock (gate)
             {
                 if (locks.ContainsKey(Clave(path))) throw new IOException("La foto ya tiene una operación en curso.");
-                var f = new FileStream(Path.Combine(pendientes, Hash(path) + ".lock"), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
+                var f = new FileStream(Candado(path), FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None);
                 locks.Add(Clave(path), f);
             }
         }
@@ -70,7 +79,13 @@ namespace SteeLog.Infrastructure.Files
                 if (locks.TryGetValue(Clave(path), out var f))
                 {
                     locks.Remove(Clave(path));
-                    f.Dispose();
+                    try { f.Dispose(); } catch { }
+                    try
+                    {
+                        var c = Candado(path);
+                        if (File.Exists(c)) File.Delete(c);
+                    }
+                    catch { }
                 }
             }
         }
@@ -95,7 +110,7 @@ namespace SteeLog.Infrastructure.Files
             var marca = Propiedad(path);
             if (!File.Exists(marca)) return false;
             ComprobarReparse(marca);
-            return File.ReadAllText(marca, Encoding.UTF8) == path;
+            return Clave(File.ReadAllText(marca, Encoding.UTF8).Trim()) == Clave(path);
         }
 
         public Task PendienteAsync(string path, CancellationToken t)

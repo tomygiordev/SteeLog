@@ -416,9 +416,12 @@ namespace SteeLog.Core.Application.Canaletas
             {
                 try
                 {
-                    await Conciliar(path).ConfigureAwait(false);
+                    await archivos.CompletarAsync(path, true, CancellationToken.None).ConfigureAwait(false);
                 }
                 catch
+                {
+                }
+                finally
                 {
                     await archivos.LiberarAsync(path).ConfigureAwait(false);
                 }
