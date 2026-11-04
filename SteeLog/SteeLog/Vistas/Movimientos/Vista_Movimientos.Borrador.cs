@@ -85,6 +85,7 @@ namespace SteeLog.Vistas.Movimientos
                 hace = $"hace {(int)edad.TotalHours}h";
 
             var resultado = MessageBox.Show(
+                this,
                 $"Se encontró un movimiento sin guardar ({hace}).\n\n" +
                 $"Tipo: {draft.NombreTipoMovimiento}\n" +
                 $"Materiales: {draft.Materiales.Count}\n\n" +

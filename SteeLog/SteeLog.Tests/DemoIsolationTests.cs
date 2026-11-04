@@ -1,10 +1,38 @@
 using System;
 using System.IO;
 using System.Reflection;
+using Microsoft.Extensions.DependencyInjection;
+using SteeLog.Core.Application.Activos;
+using SteeLog.Core.Application.Canaletas;
 using Xunit;
 
 public sealed class DemoIsolationTests
 {
+    [Theory]
+    [InlineData(typeof(ConsultarInsumos))]
+    [InlineData(typeof(GestionarInsumos))]
+    [InlineData(typeof(ConsultarCanaletas))]
+    [InlineData(typeof(OperacionesCanaleta))]
+    public void CasosDeCanaletasEInsumosSeResuelvenDesdeElContenedorRealSinAbrirConexion(Type caso)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "steelog-demo-resolution-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            File.WriteAllText(Path.Combine(root, ".steelog-demo"), "steelog-demo-v1");
+            File.WriteAllText(Path.Combine(root, "appsettings.json"),
+                "{\"ConnectionStrings\":{\"DefaultConnection\":\"Host=127.0.0.1;Port=1;Database=steelog_test_sin_conexion;Username=demo;Password=demo;Timeout=1\"}}");
+            using (var services = (IDisposable)Create(root, root))
+            {
+                var provider = (IServiceProvider)services.GetType().GetField("provider", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services);
+                using (var scope = provider.CreateScope())
+                    Assert.IsType(caso, scope.ServiceProvider.GetRequiredService(caso));
+            }
+            Assert.False(File.Exists(Path.Combine(root, "SteeLog", "session.dat")));
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     private static object Create(string executable, string root)
     {
         var host = Assembly.LoadFrom(Environment.GetEnvironmentVariable("STEELOG_HOST_ASSEMBLY"));

@@ -105,7 +105,7 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<EliminarRecorte>();
             registrations.AddScoped<ConsultarRecortes>();
             registrations.AddScoped<IInsumosEscritura, NpgsqlInsumos>();
-            registrations.AddScoped<IInsumosConsulta, NpgsqlInsumosConsulta>();
+            registrations.AddScoped<IInsumosConsulta>(_ => new NpgsqlInsumosConsulta(Connections));
             registrations.AddScoped<ConsultarInsumos>();
             registrations.AddScoped<IHistorialMovimientoConsulta>(_ => new NpgsqlHistorialMovimientoConsulta(Connections));
             registrations.AddScoped<ConsultarHistorialMovimientos>();

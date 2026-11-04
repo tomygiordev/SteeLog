@@ -183,7 +183,9 @@ namespace SteeLog.Vistas.Movimientos
             {
                 if (_panelResultados != null && _panelResultados.Visible && txtBuscadorMaterial != null && !txtBuscadorMaterial.IsDisposed)
                 {
-                    Point mousePos = Control.MousePosition;
+                    var puntoMensaje = PuntoPantallaDelMensaje(m);
+                    if (!puntoMensaje.HasValue) return false;
+                    Point mousePos = puntoMensaje.Value;
                     Rectangle txtRect = txtBuscadorMaterial.RectangleToScreen(txtBuscadorMaterial.ClientRectangle);
                     Rectangle pnlRect = _panelResultados.RectangleToScreen(_panelResultados.ClientRectangle);
 
@@ -197,6 +199,17 @@ namespace SteeLog.Vistas.Movimientos
                 }
             }
             return false;
+        }
+
+        [System.Runtime.InteropServices.DllImport("user32.dll")]
+        private static extern bool ClientToScreen(IntPtr window, ref Point point);
+
+        private static Point? PuntoPantallaDelMensaje(Message mensaje)
+        {
+            if (mensaje.HWnd == IntPtr.Zero) return null;
+            long coordenadas = mensaje.LParam.ToInt64();
+            var punto = new Point(unchecked((short)(coordenadas & 0xffff)), unchecked((short)((coordenadas >> 16) & 0xffff)));
+            return ClientToScreen(mensaje.HWnd, ref punto) ? punto : (Point?)null;
         }
 
         private async void RefrescarDatos()

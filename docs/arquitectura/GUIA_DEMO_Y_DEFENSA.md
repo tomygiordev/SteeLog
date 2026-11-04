@@ -47,6 +47,8 @@ El lanzador valida el contenedor y descubre nuevamente su puerto: Docker puede c
 
 Credenciales ficticias: **admin / admin** y **galpon / galpon**. La contraseña PostgreSQL incluida es pública y solo de demostración.
 
+Para elegir un monitor en la demo puede definirse `STEELOG_DEMO_DISPLAY` **en el proceso que ejecuta el lanzador**, antes de iniciarlo. Su valor debe coincidir con `Screen.DeviceName` del equipo (por ejemplo, `\\.\DISPLAY1`; ese nombre no significa siempre «secundario»). El host ubica login/principal antes de mostrarlos; no cambia las pantallas de Windows. Sin esta variable conserva la ubicación habitual, y un nombre inexistente falla explícitamente. La opción solo actúa junto al perfil aislado `STEELOG_DEMO_ROOT` que configura el lanzador. No garantiza que todos los diálogos o el visor PDF externo permanezcan en ese monitor ni que no tomen foco: la validación interactiva sigue siendo necesaria.
+
 1. Con Admin: inventario inicial, envío `DEMO-ENVIO-001` de 10 montantes y saldo 140; OC pendiente de 10 soleras; conteo abierto con 139 montantes; canaleta pendiente de $25.000; taladro en obra y disco en depósito.
 2. Recibir parcialmente la OC y consultar saldo/estado. La recepción **no agrega automáticamente un movimiento Kardex**; explicar ese límite.
 3. Registrar y editar un movimiento; comprobar saldo, insumos y remito. Provocar un error válido sin dejar cambios parciales.

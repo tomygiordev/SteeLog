@@ -231,15 +231,34 @@ namespace SteeLog.Vistas.Movimientos
             _panelResultados.Visible = true;
         }
 
+        private sealed class PanelResultado : Panel
+        {
+            internal PanelResultado() { SetStyle(ControlStyles.Selectable, true); }
+        }
+
         private Panel CrearItemResultado(ItemBuscador item)
         {
-            var panel = new Panel
+            var panel = new PanelResultado
             {
                 Size = new Size(496, 48),
                 BackColor = Color.FromArgb(25, 30, 28),
                 Dock = DockStyle.Top,
                 Cursor = Cursors.Hand,
-                Padding = new Padding(10, 0, 10, 0)
+                Padding = new Padding(10, 0, 10, 0),
+                TabStop = true,
+                AccessibleName = item.NombreMostrar
+            };
+            panel.PreviewKeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space || e.KeyCode == Keys.Escape)
+                    e.IsInputKey = true;
+            };
+            panel.KeyDown += (s, e) =>
+            {
+                if (e.KeyCode == Keys.Enter || e.KeyCode == Keys.Space) ItemClicked(item);
+                else if (e.KeyCode == Keys.Escape) { OcultarResultados(); txtBuscadorMaterial.Focus(); }
+                else return;
+                e.SuppressKeyPress = true;
             };
 
             var accentBar = new Panel
