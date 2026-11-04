@@ -6,19 +6,30 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using System.Windows.Forms;
-using SteeLog.Datos;
-using SteeLog.Modelos;
 using SteeLog.Servicios;
 
 namespace SteeLog.Vistas
 {
     public partial class Vista_CanaletasPlegados : Form
     {
-        private readonly CanaletaPlegadoDatos _datos = new CanaletaPlegadoDatos();
-        private readonly ObraDatos _obraDatos = new ObraDatos();
-        private readonly CanaletaPlegadoFotoDatos _fotoDatos = new CanaletaPlegadoFotoDatos();
+        private CanaletasPresenter _presenter;
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private int _versionSeleccion, _versionPreview;
+        private bool _inicializando = true, _cargandoFotos, _guardando, _errorFotos, _conciliacionIniciada;
+        internal Action<string> AdvertirConciliacion = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Action<string> AdvertirAdjuntos = mensaje => ToastNotification.ShowWarning(mensaje);
         private List<CanaletaPlegado> _items = new List<CanaletaPlegado>();
+        private sealed class Obra { public int id { get; set; } public string nombre { get; set; } }
+        private sealed class CanaletaPlegado
+        {
+            public int id { get; set; } public int id_obra { get; set; }
+            public string nombre_obra { get; set; } public string descripcion { get; set; }
+            public decimal precio { get; set; } public bool pagado { get; set; } public DateTime fecha_creacion { get; set; }
+        }
         private int _idSeleccionado = -1;
         private const int AltoPanelFotosCarga = 126;
         private const int AltoPanelFotosCargaCompacto = 150;
@@ -55,9 +66,7 @@ namespace SteeLog.Vistas
             txtPrecio.KeyPress += TxtPrecio_KeyPress;
             txtFiltroPrecio.KeyPress += TxtPrecio_KeyPress;
             lblListado.Visible = false;
-            CargarObras();
             CargarFiltroPagado();
-            CargarItems();
             LimpiarFotosUI();
             UbicarPanelFotosJuntoACarga();
             AjustarLayoutResponsivo();
@@ -66,26 +75,48 @@ namespace SteeLog.Vistas
 
         // ===================== CARGAS INICIALES =====================
 
-        private void CargarObras()
+        internal Vista_CanaletasPlegados(CanaletasPresenter presenter) : this() { _presenter = presenter; }
+
+        protected override async void OnLoad(EventArgs e)
         {
-            var obras = _obraDatos.GetObras();
-            var listaCombo = new List<Obra>();
-            listaCombo.Add(new Obra { id = 0, nombre = "— Seleccione —" });
-            listaCombo.AddRange(obras);
-
-            cmbObra.DataSource = new List<Obra>(listaCombo);
-            cmbObra.DisplayMember = "nombre";
-            cmbObra.ValueMember = "id";
-            cmbObra.SelectedIndex = 0;
-
-            var listaFiltro = new List<Obra>();
-            listaFiltro.Add(new Obra { id = 0, nombre = "— Todas —" });
-            listaFiltro.AddRange(obras);
-
-            cmbFiltroObra.DataSource = new List<Obra>(listaFiltro);
-            cmbFiltroObra.DisplayMember = "nombre";
-            cmbFiltroObra.ValueMember = "id";
-            cmbFiltroObra.SelectedIndex = 0;
+            base.OnLoad(e);
+            CambiarEstadoGuardado(false);
+            try
+            {
+                if (_presenter == null) _presenter = new CanaletasPresenter(LocalServices.Current.Executor);
+                if (!_conciliacionIniciada) { _conciliacionIniciada = true; _ = ConciliarAlAbrirAsync(); }
+                var obras = await _presenter.ObrasAsync(_cierre.Token);
+                var items = await _presenter.ListarAsync(null, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed) return;
+                var lista = obras.Select(x => new Obra { id = x.Id, nombre = x.Nombre }).ToList();
+                cmbObra.DisplayMember = "nombre"; cmbObra.ValueMember = "id";
+                cmbObra.DataSource = new[] { new Obra { id = 0, nombre = "— Seleccione —" } }.Concat(lista).ToList();
+                cmbFiltroObra.DisplayMember = "nombre"; cmbFiltroObra.ValueMember = "id";
+                cmbFiltroObra.DataSource = new[] { new Obra { id = 0, nombre = "— Todas —" } }.Concat(lista).ToList();
+                AsignarItems(items);
+                _inicializando = false;
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al cargar canaletas/plegados: " + ex.Message); }
+            finally { if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
+        }
+        private async Task ConciliarAlAbrirAsync()
+        {
+            try { await _presenter.ConciliarAsync(_cierre.Token); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested) AdvertirConciliacion("No se pudo completar la limpieza pendiente de fotos: " + ex.Message); }
+        }
+        protected override void OnFormClosed(FormClosedEventArgs e) { CancelarCierre(); base.OnFormClosed(e); }
+        private void CancelarCierre() { if (!_cierre.IsCancellationRequested) _cierre.Cancel(); }
+        private void AsignarItems(System.Collections.Generic.IReadOnlyList<SteeLog.Core.Application.Canaletas.CanaletaLectura> items)
+        {
+            _items = items.Select(x => new CanaletaPlegado { id=x.Id, id_obra=x.ObraId, nombre_obra=x.NombreObra, descripcion=x.Descripcion, precio=x.Precio, pagado=x.Pagado, fecha_creacion=x.FechaCreacion }).ToList();
+            AplicarFiltros();
+        }
+        private async Task CargarItemsAsync()
+        {
+            var items = await _presenter.ListarAsync(null, _cierre.Token);
+            if (!_cierre.IsCancellationRequested && !IsDisposed) AsignarItems(items);
         }
 
         private void CargarFiltroPagado()
@@ -99,19 +130,6 @@ namespace SteeLog.Vistas
             cmbFiltroPagado.DisplayMember = nameof(FiltroPagado.Texto);
             cmbFiltroPagado.DataSource = opciones;
             cmbFiltroPagado.SelectedIndex = 0;
-        }
-
-        private void CargarItems()
-        {
-            try
-            {
-                _items = _datos.ObtenerCanaletasPlegados();
-                AplicarFiltros();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar canaletas/plegados: " + ex.Message);
-            }
         }
 
         // ===================== FILTROS =====================
@@ -329,9 +347,9 @@ namespace SteeLog.Vistas
                 e.Handled = true;
         }
 
-        private void dgvCanaletas_CellClick(object sender, DataGridViewCellEventArgs e)
+        private async void dgvCanaletas_CellClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex < 0) return;
+            if (_inicializando || _guardando || e.RowIndex < 0) return;
             var fila = dgvCanaletas.Rows[e.RowIndex];
             if (fila.Cells["id"].Value == null) return;
 
@@ -363,7 +381,7 @@ namespace SteeLog.Vistas
             btnGuardar.FillColor = Color.FromArgb(33, 150, 243);
             btnEliminar.Enabled = true;
 
-            CargarFotosExistente(id);
+            await CargarFotosExistenteAsync(id);
         }
 
         private void cmbFiltroObra_SelectedIndexChanged(object sender, EventArgs e)
@@ -401,116 +419,70 @@ namespace SteeLog.Vistas
 
         private async void btnGuardar_Click(object sender, EventArgs e)
         {
-            if (!(cmbObra.SelectedItem is Obra obraSeleccionada) || obraSeleccionada.id <= 0)
-            {
-                ToastNotification.ShowWarning("Seleccione una obra válida.");
-                return;
-            }
-
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos) return;
+            if (!(cmbObra.SelectedItem is Obra obra) || obra.id <= 0) { ToastNotification.ShowWarning("Seleccione una obra válida."); return; }
             string descripcion = txtDescripcion.Text.Trim();
-            if (string.IsNullOrWhiteSpace(descripcion))
-            {
-                ToastNotification.ShowWarning("Ingrese una descripción.");
-                return;
-            }
+            if (string.IsNullOrWhiteSpace(descripcion)) { ToastNotification.ShowWarning("Ingrese una descripción."); return; }
+            if (!decimal.TryParse(txtPrecio.Text.Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal precio) || precio < 0) { ToastNotification.ShowWarning("Ingrese un precio válido (mayor o igual a 0)."); return; }
+            if (MessageBox.Show(_idSeleccionado < 0 ? "¿Registrar este trabajo?" : "¿Actualizar este trabajo?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            await GuardarCoreAsync(obra.id, descripcion, precio, chkPagado.Checked);
+        }
 
-            string precioTexto = txtPrecio.Text.Replace(',', '.').Trim();
-            if (!decimal.TryParse(precioTexto, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal precio) || precio < 0)
-            {
-                ToastNotification.ShowWarning("Ingrese un precio válido (mayor o igual a 0).");
-                return;
-            }
-
-            string _msg = _idSeleccionado < 0 ? "¿Registrar este trabajo?" : "¿Actualizar este trabajo?";
-            if (MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
-                return;
-
+        private async Task GuardarCoreAsync(int obraId, string descripcion, decimal precio, bool pagado)
+        {
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos) return;
+            int version = _versionSeleccion; int idAnterior = _idSeleccionado;
+            var pendientes = ObtenerPendientes();
+            _guardando = true; CambiarEstadoGuardado(true);
             try
             {
-                CambiarEstadoGuardado(true);
-
-                var item = new CanaletaPlegado
+                int id = await _presenter.GuardarAsync(idAnterior < 0 ? (int?)null : idAnterior, obraId, descripcion, precio, pagado, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                if (!_cierre.IsCancellationRequested && !IsDisposed && version == _versionSeleccion && idAnterior < 0) MarcarComoEdicion(id);
+                int fallidas = 0; bool limpiezaPendiente = false;
+                foreach (var foto in pendientes)
                 {
-                    id = _idSeleccionado,
-                    id_obra = obraSeleccionada.id,
-                    descripcion = descripcion,
-                    precio = precio,
-                    pagado = chkPagado.Checked
-                };
-
-                if (_idSeleccionado < 0)
-                {
-                    int nuevoId = _datos.GuardarCanaletaPlegado(item);
-                    var fallidas = await SubirFotosPendientesAsync(nuevoId);
-                    if (fallidas.Count == 0)
-                    {
-                        ToastNotification.ShowSuccess("Trabajo registrado correctamente.");
-                        LimpiarSeleccion();
-                    }
-                    else
-                    {
-                        MarcarComoEdicion(nuevoId);
-                        ToastNotification.ShowWarning(
-                            "Trabajo registrado. No se pudo subir " + fallidas.Count + " foto(s). Las fotos pendientes quedan en pantalla para reintentar con Actualizar.");
-                    }
+                    try { foto.FotoId = await _presenter.AdjuntarAsync(id, foto.NombreMostrar, foto.BytesLocal, _cierre.Token); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException) { throw; }
+                    catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!ex.ResultadoId.HasValue) throw; foto.FotoId = ex.ResultadoId; limpiezaPendiente = true; }
+                    catch { fallidas++; }
                 }
-                else
-                {
-                    _datos.ActualizarCanaletaPlegado(item);
-                    var fallidas = await SubirFotosPendientesAsync(_idSeleccionado);
-                    if (fallidas.Count == 0)
-                    {
-                        ToastNotification.ShowSuccess("Trabajo actualizado correctamente.");
-                        LimpiarSeleccion();
-                    }
-                    else
-                    {
-                        ToastNotification.ShowWarning(
-                            "Trabajo actualizado. No se pudo subir " + fallidas.Count + " foto(s). Las fotos pendientes quedan en pantalla para reintentar.");
-                    }
-                }
-
-                CargarItems();
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                if (fallidas == 0) { ToastNotification.ShowSuccess("Trabajo guardado correctamente."); LimpiarSeleccion(); }
+                else { MarcarComoEdicion(id); await RefrescarFotosConPendientesAsync(id, version); if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; ToastNotification.ShowWarning("Trabajo guardado. " + fallidas + " foto(s) pendientes para reintentar."); }
+                if (limpiezaPendiente) ToastNotification.ShowWarning("Fotos guardadas; queda limpieza de archivos pendiente.");
+                await CargarItemsAsync();
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al guardar: " + ex.Message);
-            }
-            finally
-            {
-                CambiarEstadoGuardado(false);
-            }
+            catch (OperationCanceledException) { }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Operación confirmada; queda limpieza pendiente. " + ex.Message); } }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError("Error al guardar: " + ex.Message); }
+            finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
 
         private async void btnEliminar_Click(object sender, EventArgs e)
         {
-            if (_idSeleccionado < 0) return;
-
-            if (MessageBox.Show("¿Eliminar este registro?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
-                return;
-
-            int idAEliminar = _idSeleccionado;
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos || _idSeleccionado < 0) return;
+            if (MessageBox.Show("¿Eliminar este registro?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            int id = _idSeleccionado, version = _versionSeleccion;
+            _guardando = true; CambiarEstadoGuardado(true);
             try
             {
-                CambiarEstadoGuardado(true);
-                await EliminarFotosDeCanaletaAsync(idAEliminar);
-                await Task.Run(() => _datos.EliminarCanaletaPlegado(idAEliminar));
-                ToastNotification.ShowSuccess("Registro eliminado.");
-                LimpiarSeleccion();
-                CargarItems();
+                await _presenter.EliminarAsync(id, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                ToastNotification.ShowSuccess("Registro eliminado."); LimpiarSeleccion(); await CargarItemsAsync();
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al eliminar: " + ex.Message);
-            }
-            finally
-            {
-                CambiarEstadoGuardado(false);
-            }
+            catch (OperationCanceledException) { }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { LimpiarSeleccion(); ToastNotification.ShowWarning("Eliminación confirmada; queda limpieza pendiente. " + ex.Message); try { await CargarItemsAsync(); } catch (OperationCanceledException) { } catch (Exception error) { if (!IsDisposed && !_cierre.IsCancellationRequested) ToastNotification.ShowError("No se pudo actualizar la lista: " + error.Message); } } }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError("Error al eliminar: " + ex.Message); }
+            finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
 
         private void LimpiarSeleccion()
         {
+            ++_versionSeleccion; ++_versionPreview; _errorFotos = false; _cargandoFotos = false;
             _idSeleccionado = -1;
             txtDescripcion.Clear();
             txtPrecio.Clear();
@@ -522,6 +494,7 @@ namespace SteeLog.Vistas
             btnEliminar.Enabled = false;
             dgvCanaletas.ClearSelection();
             LimpiarFotosUI();
+            CambiarEstadoGuardado(false);
         }
 
         private void MarcarComoEdicion(int id)
@@ -534,9 +507,11 @@ namespace SteeLog.Vistas
 
         private void CambiarEstadoGuardado(bool guardando)
         {
+            guardando = guardando || _guardando || _inicializando || _cargandoFotos || _errorFotos;
             btnGuardar.Enabled = !guardando;
             btnEliminar.Enabled = !guardando && _idSeleccionado >= 0;
             btnAgregarFoto.Enabled = !guardando;
+            dgvCanaletas.Enabled = !_guardando && !_inicializando;
             btnQuitarFoto.Enabled = !guardando && lstFotos.SelectedIndex >= 0;
             Cursor = guardando ? Cursors.WaitCursor : Cursors.Default;
         }
@@ -546,6 +521,7 @@ namespace SteeLog.Vistas
         private void LimpiarFotosUI()
         {
             lstFotos.Items.Clear();
+            picPreview.Image?.Dispose();
             picPreview.Image = null;
             picPreview.Tag = null;
             ActualizarContadorFotos();
@@ -558,185 +534,115 @@ namespace SteeLog.Vistas
             lblContadorFotos.Text = cantidad == 1 ? "1 foto" : cantidad + " fotos";
         }
 
-        private void CargarFotosExistente(int canaletaPlegadoId)
+        private async Task CargarFotosExistenteAsync(int id)
         {
-            lstFotos.Items.Clear();
-            picPreview.Image = null;
-            picPreview.Tag = null;
-
+            int version = ++_versionSeleccion; ++_versionPreview;
+            _cargandoFotos = true; _errorFotos = false; LimpiarFotosUI(); CambiarEstadoGuardado(false);
             try
             {
-                var fotos = _fotoDatos.ObtenerPorCanaleta(canaletaPlegadoId);
-                foreach (var f in fotos)
-                {
-                    var item = new FotoListItem
-                    {
-                        FotoId = f.id,
-                        NombreMostrar = f.nombre_archivo,
-                        BytesLocal = null,
-                        ObjectPath = f.object_path,
-                        ContentType = f.content_type,
-                        TamanioBytes = f.tamanio_bytes
-                    };
-                    lstFotos.Items.Add(item);
-                }
+                var fotos = await _presenter.FotosAsync(id, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                foreach (var f in fotos) lstFotos.Items.Add(new FotoListItem { FotoId=f.Id, NombreMostrar=f.NombreArchivo, ObjectPath=f.ObjectPath, ContentType=f.ContentType, TamanioBytes=f.TamanioBytes });
+                ActualizarContadorFotos(); if (lstFotos.Items.Count > 0) lstFotos.SelectedIndex = 0;
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar fotos: " + ex.Message);
-            }
-
-            ActualizarContadorFotos();
-            btnQuitarFoto.Enabled = false;
-
-            if (lstFotos.Items.Count > 0)
-                lstFotos.SelectedIndex = 0;
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowError("Error al cargar fotos: " + ex.Message); } }
+            finally { if (version == _versionSeleccion) { _cargandoFotos = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); } }
         }
 
         private async void btnAgregarFoto_Click(object sender, EventArgs e)
         {
-            if (!SupabaseStorageService.TokenDisponible())
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos) return;
+            using (var dialogo = new OpenFileDialog { Title = "Seleccionar fotos", Filter = "Imágenes|*.*", Multiselect = true })
             {
-                ToastNotification.ShowWarning("No hay sesión activa. Reinicie sesión para gestionar fotos.");
-                return;
+                if (dialogo.ShowDialog() != DialogResult.OK) return;
+                int version = _versionSeleccion, id = _idSeleccionado, agregadas = 0, rechazadas = 0;
+                _guardando = true; CambiarEstadoGuardado(true);
+                try
+                {
+                    foreach (string archivo in dialogo.FileNames)
+                    {
+                        try
+                        {
+                            var bytes = await LeerArchivoFotoAsync(archivo, _cierre.Token);
+                            var tipo = SteeLog.Core.Application.Canaletas.OperacionesCanaleta.ValidarTipoFoto(bytes);
+                            if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                            lstFotos.Items.Add(new FotoListItem { NombreMostrar=Path.GetFileName(archivo), BytesLocal=bytes, ContentType=tipo, TamanioBytes=bytes.Length });
+                            agregadas++;
+                        }
+                        catch (OperationCanceledException) { throw; }
+                        catch (Exception ex) { if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; rechazadas++; ToastNotification.ShowWarning("No se pudo agregar '" + Path.GetFileName(archivo) + "': " + ex.Message); }
+                    }
+                    if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                    ActualizarContadorFotos(); if (agregadas > 0) lstFotos.SelectedIndex = lstFotos.Items.Count - 1;
+                    if (rechazadas > 0) ToastNotification.ShowWarning(agregadas + " agregada(s), " + rechazadas + " rechazada(s).");
+                    if (agregadas > 0 && id >= 0) await AdjuntarPendientesAsync(id, version);
+                }
+                catch (OperationCanceledException) { }
+                finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
             }
+        }
 
-            using (var ofd = new OpenFileDialog
+        private static async Task<byte[]> LeerArchivoFotoAsync(string ruta, CancellationToken token)
+        {
+            const int maximo = 8 * 1024 * 1024;
+            using (var archivo = new FileStream(ruta, FileMode.Open, FileAccess.Read, FileShare.Read, 81920, true))
             {
-                Title = "Seleccionar fotos",
-                Filter = "Imágenes|*.*",
-                Multiselect = true
-            })
-            {
-                if (ofd.ShowDialog() != DialogResult.OK)
-                    return;
-
-                int agregadas = 0;
-                int rechazadas = 0;
-                foreach (string archivo in ofd.FileNames)
+                if (archivo.Length > maximo) throw new InvalidDataException("La foto supera el tamaño máximo (8 MB).");
+                using (var salida = new MemoryStream())
                 {
-                    if (!File.Exists(archivo))
+                    var bloque = new byte[81920]; int leidos;
+                    while ((leidos = await archivo.ReadAsync(bloque, 0, bloque.Length, token)) != 0)
                     {
-                        rechazadas++;
-                        continue;
+                        if (salida.Length + leidos > maximo) throw new InvalidDataException("La foto supera el tamaño máximo (8 MB).");
+                        salida.Write(bloque, 0, leidos);
                     }
-
-                    byte[] bytes;
-                    try
-                    {
-                        bytes = File.ReadAllBytes(archivo);
-                    }
-                    catch (Exception ex)
-                    {
-                        ToastNotification.ShowError("No se pudo leer '" + Path.GetFileName(archivo) + "': " + ex.Message);
-                        rechazadas++;
-                        continue;
-                    }
-
-                    if (!EsImagenValida(bytes))
-                    {
-                        ToastNotification.ShowWarning("'" + Path.GetFileName(archivo) + "' no se pudo leer como imagen.");
-                        rechazadas++;
-                        continue;
-                    }
-
-                    if (SupabaseStorageService.SuperaTamanoMaximo(bytes.Length))
-                    {
-                        ToastNotification.ShowWarning("'" + Path.GetFileName(archivo) + "' supera el tamaño máximo (8 MB).");
-                        rechazadas++;
-                        continue;
-                    }
-
-                    string nombreSanitizado = SupabaseStorageService.SanitizarNombreArchivo(Path.GetFileName(archivo));
-                    string contentType = SupabaseStorageService.ObtenerContentType(archivo);
-
-                    var item = new FotoListItem
-                    {
-                        FotoId = null,
-                        NombreMostrar = nombreSanitizado,
-                        BytesLocal = bytes,
-                        ContentType = contentType,
-                        TamanioBytes = bytes.Length,
-                        ObjectPath = null
-                    };
-                    lstFotos.Items.Add(item);
-                    agregadas++;
-                }
-
-                if (agregadas > 0)
-                {
-                    ActualizarContadorFotos();
-                    if (lstFotos.Items.Count > 0)
-                        lstFotos.SelectedIndex = lstFotos.Items.Count - 1;
-
-                    if (_idSeleccionado >= 0)
-                        await SubirFotosAgregadasARegistroActualAsync(agregadas);
-                }
-
-                if (rechazadas > 0 && agregadas == 0)
-                {
-                    ToastNotification.ShowWarning("No se agregó ninguna foto (" + rechazadas + " rechazada(s)).");
-                }
-                else if (rechazadas > 0)
-                {
-                    ToastNotification.ShowWarning(agregadas + " agregada(s), " + rechazadas + " rechazada(s).");
+                    return salida.ToArray();
                 }
             }
         }
 
-        private async Task SubirFotosAgregadasARegistroActualAsync(int agregadas)
+        private async Task RefrescarFotosConPendientesAsync(int id, int version)
         {
-            try
-            {
-                CambiarEstadoGuardado(true);
-                var fallidas = await SubirFotosPendientesAsync(_idSeleccionado);
-
-                if (fallidas.Count == 0)
-                {
-                    ToastNotification.ShowSuccess(agregadas == 1
-                        ? "Foto guardada correctamente."
-                        : agregadas + " fotos guardadas correctamente.");
-                    CargarFotosExistente(_idSeleccionado);
-                    CargarItems();
-                    return;
-                }
-
-                RefrescarListaFotos();
-                ToastNotification.ShowWarning(
-                    "No se pudo subir " + fallidas.Count + " foto(s). Quedan marcadas como pendientes para reintentar con Actualizar.");
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al guardar fotos: " + ex.Message);
-            }
-            finally
-            {
-                CambiarEstadoGuardado(false);
-            }
+            var pendientes = ObtenerPendientes();
+            var fotos = await _presenter.FotosAsync(id, _cierre.Token);
+            if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+            ++_versionPreview; LimpiarFotosUI();
+            foreach (var f in fotos) lstFotos.Items.Add(new FotoListItem { FotoId=f.Id, NombreMostrar=f.NombreArchivo, ObjectPath=f.ObjectPath, ContentType=f.ContentType, TamanioBytes=f.TamanioBytes });
+            foreach (var pendiente in pendientes) lstFotos.Items.Add(pendiente);
+            ActualizarContadorFotos(); if (lstFotos.Items.Count > 0) lstFotos.SelectedIndex = 0;
         }
 
-        private bool EsImagenValida(byte[] bytes)
+        private async Task AdjuntarPendientesAsync(int id, int version)
         {
-            if (bytes == null || bytes.Length == 0)
-                return false;
-
+            var pendientes = ObtenerPendientes();
+            _guardando = true; CambiarEstadoGuardado(true);
             try
             {
-                using (var ms = new MemoryStream(bytes))
-                using (Image.FromStream(ms))
+                int fallidas = 0; bool limpiezaPendiente = false;
+                foreach (var foto in pendientes)
                 {
-                    return true;
+                    try { foto.FotoId = await _presenter.AdjuntarAsync(id, foto.NombreMostrar, foto.BytesLocal, _cierre.Token); }
+                    catch (OperationCanceledException) { throw; }
+                    catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException) { throw; }
+                    catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!ex.ResultadoId.HasValue) throw; foto.FotoId = ex.ResultadoId; limpiezaPendiente = true; }
+                    catch { fallidas++; }
                 }
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                if (fallidas > 0) { await RefrescarFotosConPendientesAsync(id, version); if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; AdvertirAdjuntos(fallidas + " foto(s) pendientes para reintentar."); }
+                else { ToastNotification.ShowSuccess("Fotos guardadas correctamente."); await CargarFotosExistenteAsync(id); }
+                if (limpiezaPendiente && !_cierre.IsCancellationRequested && !IsDisposed) AdvertirAdjuntos("Fotos guardadas; queda limpieza de archivos pendiente.");
             }
-            catch
-            {
-                return false;
-            }
+            catch (OperationCanceledException) { }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Operación confirmada; queda limpieza pendiente. " + ex.Message); } }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested) ToastNotification.ShowError("Error al guardar fotos: " + ex.Message); }
+            finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
 
         private async void btnQuitarFoto_Click(object sender, EventArgs e)
         {
-            if (lstFotos.SelectedIndex < 0)
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos || lstFotos.SelectedIndex < 0)
                 return;
 
             var item = lstFotos.SelectedItem as FotoListItem;
@@ -749,6 +655,7 @@ namespace SteeLog.Vistas
             if (item.EsPendiente)
             {
                 lstFotos.Items.Remove(item);
+                picPreview.Image?.Dispose();
                 picPreview.Image = null;
                 picPreview.Tag = null;
                 ActualizarContadorFotos();
@@ -756,50 +663,30 @@ namespace SteeLog.Vistas
                 return;
             }
 
+            int version = _versionSeleccion;
+            _guardando = true; CambiarEstadoGuardado(true);
             try
             {
-                CambiarEstadoGuardado(true);
-
-                if (item.FotoId.HasValue)
-                {
-                    if (!string.IsNullOrWhiteSpace(item.ObjectPath))
-                    {
-                        try
-                        {
-                            await SupabaseStorageService.EliminarAsync(item.ObjectPath);
-                        }
-                        catch (Exception exStorage)
-                        {
-                            ToastNotification.ShowWarning("No se pudo borrar el archivo en Storage. Se quitará el registro igual. " + exStorage.Message);
-                        }
-                    }
-                    await Task.Run(() => _fotoDatos.Eliminar(item.FotoId.Value));
-                }
-
-                lstFotos.Items.Remove(item);
-                picPreview.Image = null;
-                picPreview.Tag = null;
-                ActualizarContadorFotos();
-                btnQuitarFoto.Enabled = lstFotos.SelectedIndex >= 0;
-                ToastNotification.ShowSuccess("Foto eliminada.");
+                await _presenter.EliminarFotoAsync(item.FotoId.Value, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
+                lstFotos.Items.Remove(item); ActualizarContadorFotos(); ToastNotification.ShowSuccess("Foto eliminada.");
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al eliminar foto: " + ex.Message);
-            }
-            finally
-            {
-                CambiarEstadoGuardado(false);
-            }
+            catch (OperationCanceledException) { }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
+            catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { lstFotos.Items.Remove(item); ActualizarContadorFotos(); ToastNotification.ShowWarning("Eliminación confirmada; queda limpieza pendiente. " + ex.Message); } }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError("Error al eliminar foto: " + ex.Message); }
+            finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
 
         private async void lstFotos_SelectedIndexChanged(object sender, EventArgs e)
         {
+            int version = ++_versionPreview;
             var item = lstFotos.SelectedItem as FotoListItem;
-            btnQuitarFoto.Enabled = item != null;
+            btnQuitarFoto.Enabled = item != null && !_guardando && !_cargandoFotos && !_inicializando;
 
             if (item == null)
             {
+                picPreview.Image?.Dispose();
                 picPreview.Image = null;
                 picPreview.Tag = null;
                 return;
@@ -813,11 +700,12 @@ namespace SteeLog.Vistas
 
             if (string.IsNullOrWhiteSpace(item.ObjectPath))
             {
+                picPreview.Image?.Dispose();
                 picPreview.Image = null;
                 return;
             }
 
-            await MostrarPreviewRemotoAsync(item);
+            await MostrarPreviewAsync(item, version);
         }
 
         private void MostrarPreviewDesdeBytes(byte[] bytes)
@@ -835,55 +723,20 @@ namespace SteeLog.Vistas
             {
                 picPreview.Image?.Dispose();
                 picPreview.Image = null;
+                ToastNotification.ShowWarning("No se puede previsualizar esta imagen en este equipo; la foto se conserva.");
             }
         }
 
-        private async Task MostrarPreviewRemotoAsync(FotoListItem item)
+        private async Task MostrarPreviewAsync(FotoListItem item, int version)
         {
             try
             {
-                picPreview.Image = null;
-                string objectPath = item?.ObjectPath;
-                byte[] bytes = await SupabaseStorageService.DescargarAsync(objectPath);
-                if (bytes != null && bytes.Length > 0)
-                {
-                    using (var ms = new MemoryStream(bytes))
-                    using (var imagen = Image.FromStream(ms))
-                    {
-                        picPreview.Image?.Dispose();
-                        picPreview.Image = new Bitmap(imagen);
-                    }
-                }
+                byte[] bytes = await _presenter.LeerFotoAsync(item.ObjectPath, _cierre.Token);
+                if (_cierre.IsCancellationRequested || IsDisposed || version != _versionPreview || lstFotos.SelectedItem != item) return;
+                MostrarPreviewDesdeBytes(bytes);
             }
-            catch (Exception ex)
-            {
-                if (SupabaseStorageService.EsErrorObjetoNoEncontrado(ex))
-                {
-                    QuitarFotoHuerfana(item);
-                    ToastNotification.ShowWarning("La foto ya no existe en Storage. Se quitó el registro de la lista.");
-                    return;
-                }
-
-                ToastNotification.ShowWarning("No se pudo previsualizar la foto: " + ex.Message);
-            }
-        }
-
-        private void QuitarFotoHuerfana(FotoListItem item)
-        {
-            if (item == null)
-                return;
-
-            if (item.FotoId.HasValue)
-                _fotoDatos.Eliminar(item.FotoId.Value);
-
-            if (lstFotos.Items.Contains(item))
-                lstFotos.Items.Remove(item);
-
-            picPreview.Image?.Dispose();
-            picPreview.Image = null;
-            picPreview.Tag = null;
-            ActualizarContadorFotos();
-            btnQuitarFoto.Enabled = lstFotos.SelectedIndex >= 0;
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionPreview) ToastNotification.ShowWarning("No se pudo previsualizar la foto: " + ex.Message); }
         }
 
         private List<FotoListItem> ObtenerPendientes()
@@ -896,75 +749,6 @@ namespace SteeLog.Vistas
                     pendientes.Add(fli);
             }
             return pendientes;
-        }
-
-        private async Task<List<FotoListItem>> SubirFotosPendientesAsync(int canaletaPlegadoId)
-        {
-            var pendientes = ObtenerPendientes();
-            var fallidas = new List<FotoListItem>();
-
-            if (pendientes.Count == 0)
-                return fallidas;
-
-            if (!SupabaseStorageService.TokenDisponible())
-            {
-                ToastNotification.ShowWarning("No hay sesión activa para subir fotos.");
-                return pendientes;
-            }
-
-            int ordenBase = _fotoDatos.ObtenerSiguienteOrden(canaletaPlegadoId);
-            int orden = ordenBase;
-
-            foreach (var fli in pendientes)
-            {
-                string objectPath = null;
-                bool archivoSubido = false;
-                try
-                {
-                    objectPath = SupabaseStorageService.ConstruirObjectPath(canaletaPlegadoId, fli.NombreMostrar);
-                    await SupabaseStorageService.SubirAsync(objectPath, fli.BytesLocal, fli.ContentType);
-                    archivoSubido = true;
-
-                    var foto = new CanaletaPlegadoFoto
-                    {
-                        canaleta_plegado_id = canaletaPlegadoId,
-                        bucket_id = SupabaseStorageService.BucketCanaletasFotos,
-                        object_path = objectPath,
-                        nombre_archivo = fli.NombreMostrar,
-                        content_type = fli.ContentType,
-                        tamanio_bytes = fli.TamanioBytes,
-                        orden = orden
-                    };
-                    int fotoId = _fotoDatos.Guardar(foto);
-                    orden++;
-
-                    fli.FotoId = fotoId;
-                    fli.ObjectPath = objectPath;
-                    fli.BytesLocal = null;
-                    fli.TamanioBytes = foto.tamanio_bytes;
-                }
-                catch (Exception ex)
-                {
-                    if (archivoSubido && !string.IsNullOrWhiteSpace(objectPath))
-                    {
-                        try
-                        {
-                            await SupabaseStorageService.EliminarAsync(objectPath);
-                        }
-                        catch
-                        {
-                        }
-                    }
-
-                    fli.ObjectPath = null;
-                    fli.FotoId = null;
-                    fli.BytesLocal = fli.BytesLocal ?? new byte[0];
-                    fallidas.Add(fli);
-                    ToastNotification.ShowWarning("No se pudo subir '" + fli.NombreMostrar + "': " + ex.Message);
-                }
-            }
-
-            return fallidas;
         }
 
         private void RefrescarListaFotos()
@@ -988,29 +772,5 @@ namespace SteeLog.Vistas
             btnQuitarFoto.Enabled = lstFotos.SelectedIndex >= 0;
         }
 
-        private async Task EliminarFotosDeCanaletaAsync(int canaletaPlegadoId)
-        {
-            try
-            {
-                var fotos = await Task.Run(() => _fotoDatos.ObtenerPorCanaleta(canaletaPlegadoId));
-                foreach (var f in fotos)
-                {
-                    if (!string.IsNullOrWhiteSpace(f.object_path))
-                    {
-                        try
-                        {
-                            await SupabaseStorageService.EliminarAsync(f.object_path);
-                        }
-                        catch
-                        {
-                        }
-                    }
-                }
-                await Task.Run(() => _fotoDatos.EliminarPorCanaleta(canaletaPlegadoId));
-            }
-            catch
-            {
-            }
-        }
     }
 }

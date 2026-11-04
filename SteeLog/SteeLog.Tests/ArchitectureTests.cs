@@ -185,6 +185,45 @@ public class ArchitectureTests
         }
     }
     [Fact]
+    public void Canaletas_views_and_presenter_have_no_legacy_or_technical_dependencies()
+    {
+        using (var host = Read(HostPath))
+        {
+            var guarded = Types(host.MainModule.Types).Where(t =>
+                Owner(t) == "SteeLog.Vistas.Vista_CanaletasPlegados"
+                || Owner(t) == "SteeLog.Presentation.CanaletasPresenter").ToArray();
+            Assert.Contains(guarded, t => t.FullName == "SteeLog.Vistas.Vista_CanaletasPlegados");
+            Assert.Contains(guarded, t => t.FullName == "SteeLog.Presentation.CanaletasPresenter");
+            var offenders = guarded.SelectMany(t => References(t).Select(r => new { owner = Owner(t), dependency = r }))
+                .Where(x => Forbidden(x.dependency)
+                    || x.dependency.FullName == "SteeLog.Servicios.SupabaseStorageService"
+                    || x.dependency.FullName == "SteeLog.Servicios.SupabaseAuthService")
+                .Select(x => x.owner + " -> " + x.dependency.FullName).Distinct().ToArray();
+            Assert.Empty(offenders);
+
+            var reports = Types(host.MainModule.Types).Where(t =>
+                Owner(t) == "SteeLog.Vistas.Reportes.Vista_InformeObra"
+                || Owner(t) == "SteeLog.Reportes.InformeObraPDF");
+            Assert.DoesNotContain(reports.SelectMany(References), t =>
+                t.FullName == "SteeLog.Servicios.SupabaseStorageService"
+                || t.FullName == "SteeLog.Servicios.SupabaseAuthService"
+                || t.FullName == "SteeLog.Datos.CanaletaPlegadoDatos"
+                || t.FullName == "SteeLog.Datos.CanaletaPlegadoFotoDatos");
+        }
+        using (var infrastructure = Read(typeof(SteeLog.Infrastructure.Pdf.InformeObraPDF).Assembly.Location))
+        {
+            var renderer = Types(infrastructure.MainModule.Types).Where(t =>
+                Owner(t) == "SteeLog.Infrastructure.Pdf.InformeObraPDF").ToArray();
+            Assert.NotEmpty(renderer);
+            Assert.DoesNotContain(renderer.SelectMany(References), t =>
+                t.Namespace.StartsWith("Npgsql", StringComparison.Ordinal)
+                || t.Namespace.StartsWith("SteeLog.Infrastructure.Persistence", StringComparison.Ordinal)
+                || t.Namespace.StartsWith("SteeLog.Datos", StringComparison.Ordinal)
+                || t.Namespace.StartsWith("SteeLog.Servicios", StringComparison.Ordinal)
+                || t.FullName == "SteeLog.Core.Application.Identidad.Session");
+        }
+    }
+    [Fact]
     public void Demo_bridges_have_no_http_or_process_launch_dependencies()
     {
         var guarded = new HashSet<string> {

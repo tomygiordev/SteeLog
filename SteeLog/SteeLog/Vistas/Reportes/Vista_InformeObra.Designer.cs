@@ -6,6 +6,7 @@ namespace SteeLog.Vistas.Reportes
 
         protected override void Dispose(bool disposing)
         {
+            if (disposing) CancelarOperaciones();
             if (disposing && (components != null))
             {
                 components.Dispose();

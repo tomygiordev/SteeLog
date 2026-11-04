@@ -22,6 +22,9 @@ using SteeLog.Infrastructure.Movimientos;
 using SteeLog.Core.Application.Activos;
 using SteeLog.Infrastructure.Activos;
 using SteeLog.Core.Application.OrdenesCompra;
+using SteeLog.Core.Application.Canaletas;
+using SteeLog.Core.Application.Reportes;
+using SteeLog.Infrastructure.Canaletas;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IDisposable
@@ -39,6 +42,7 @@ namespace SteeLog.CompositionRoot
         internal IOrdenesPendientesPdf OrdenesPdf { get; }
         internal IRemitoPdf RemitoPdf { get; }
         internal IConteoPdf ConteoPdf { get; }
+        internal IInformeObraPdf InformeObraPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
         private readonly Lazy<LocalConfiguration> configuration;
@@ -61,7 +65,13 @@ namespace SteeLog.CompositionRoot
             OrdenesPdf = new OrdenesPendientesPDF(new RecursosPdfLocales());
             RemitoPdf = new SteeLog.Infrastructure.Pdf.MovimientoPDF(new RecursosPdfLocales());
             ConteoPdf = new SteeLog.Infrastructure.Pdf.ConteoInventarioPDF(new RecursosPdfLocales());
+            InformeObraPdf = new SteeLog.Infrastructure.Pdf.InformeObraPDF(new RecursosPdfLocales());
             registrations.AddSingleton(Updates);
+            registrations.AddSingleton<IArchivosCanaleta>(new LocalCanaletaStorage(Paths.StorageDirectory));
+            registrations.AddScoped<ICanaletasConsulta>(_ => new NpgsqlCanaletasConsulta(Connections));
+            registrations.AddScoped<ICanaletasEscritura, NpgsqlCanaletas>();
+            registrations.AddScoped<ConsultarCanaletas>();
+            registrations.AddScoped<OperacionesCanaleta>();
             registrations.AddSingleton(Session);
             registrations.AddSingleton<IClock>(_ => new BusinessClock(TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time"), () => DateTimeOffset.UtcNow));
             registrations.AddScoped(_ => new NpgsqlUnitOfWork(Connections));

@@ -56,16 +56,6 @@ namespace SteeLog.Datos
         public bool en_obra { get; set; }
     }
 
-    public class InformeCanaletaPlegadoDetalle
-    {
-        public int id { get; set; }
-        public int id_obra { get; set; }
-        public string descripcion { get; set; }
-        public decimal precio { get; set; }
-        public bool pagado { get; set; }
-        public DateTime fecha_creacion { get; set; }
-    }
-
     public class InformeObraDatos
     {
         public static InformeObraResumen CalcularResumen(IEnumerable<InformeMovimientoDetalle> movimientos, bool incluirValorizacion, decimal totalCanaletasPendientes = 0)
@@ -435,46 +425,7 @@ namespace SteeLog.Datos
             return lista;
         }
 
-        public List<InformeCanaletaPlegadoDetalle> ObtenerCanaletasPlegadosObra(int idObra)
-        {
-            var lista = new List<InformeCanaletaPlegadoDetalle>();
-            ConexionDB conexionDB = new ConexionDB();
 
-            using (var conexion = conexionDB.GetConnection())
-            {
-                if (conexion.State == ConnectionState.Closed) conexion.Open();
-
-                const string query = @"
-                    SELECT id, id_obra, descripcion, precio, pagado, fecha_creacion
-                    FROM public.canaletas_plegados
-                    WHERE id_obra = @idObra
-                    ORDER BY fecha_creacion DESC, id DESC
-                ";
-
-                using (var cmd = new NpgsqlCommand(query, conexion))
-                {
-                    cmd.Parameters.AddWithValue("@idObra", idObra);
-
-                    using (var reader = cmd.ExecuteReader())
-                    {
-                        while (reader.Read())
-                        {
-                            lista.Add(new InformeCanaletaPlegadoDetalle
-                            {
-                                id = reader.GetInt32(0),
-                                id_obra = reader.GetInt32(1),
-                                descripcion = reader.IsDBNull(2) ? "" : reader.GetString(2),
-                                precio = reader.IsDBNull(3) ? 0 : reader.GetDecimal(3),
-                                pagado = reader.IsDBNull(4) ? false : reader.GetBoolean(4),
-                                fecha_creacion = reader.IsDBNull(5) ? DateTime.MinValue : reader.GetDateTime(5)
-                            });
-                        }
-                    }
-                }
-            }
-
-            return lista;
-        }
 
         /// <summary>
         /// Obtiene la fecha del primer remito asociado a la obra.

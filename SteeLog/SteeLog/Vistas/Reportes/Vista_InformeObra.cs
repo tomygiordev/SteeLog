@@ -6,6 +6,10 @@ using System.Drawing;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
+using SteeLog.Core.Application.Canaletas;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
 using System.Windows.Forms;
 using SteeLog.Datos;
 using SteeLog.Modelos;
@@ -22,10 +26,34 @@ namespace SteeLog.Vistas.Reportes
         private List<InformeMovimientoDetalle> movimientosActuales = new List<InformeMovimientoDetalle>();
         private List<InformeHerramientaDetalle> herramientasActuales = new List<InformeHerramientaDetalle>();
         private List<InformeInsumoDetalle> insumosActuales = new List<InformeInsumoDetalle>();
-        private List<InformeCanaletaPlegadoDetalle> canaletasPlegadosActuales = new List<InformeCanaletaPlegadoDetalle>();
+        private List<CanaletaLectura> canaletasPlegadosActuales = new List<CanaletaLectura>();
         private readonly ContextMenuStrip menuHerramientas = new ContextMenuStrip();
         private readonly ToolStripMenuItem itemEnviarAGalpon = new ToolStripMenuItem("Enviar herramienta al galpón");
-        private readonly CanaletaPlegadoFotoDatos canaletaFotoDatos = new CanaletaPlegadoFotoDatos();
+        private readonly CancellationTokenSource vida = new CancellationTokenSource();
+        private CancellationTokenSource cargaObra;
+        private int versionObra;
+        private readonly CanaletasPresenter presenterInyectado;
+        private readonly Func<int, string, CancellationToken, Task<LecturasObra>> cargarLegacy;
+        internal Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> GenerarInforme;
+        internal Action<string> AbrirInforme;
+        private CanaletasPresenter Presenter => presenterInyectado ?? new CanaletasPresenter(LocalServices.Current.Executor);
+        internal sealed class LecturasObra
+        {
+            internal List<InformeMovimientoDetalle> Movimientos;
+            internal List<InformeHerramientaDetalle> Herramientas;
+            internal List<InformeInsumoDetalle> Insumos;
+        }
+        internal Vista_InformeObra(CanaletasPresenter presenter, Func<int, string, CancellationToken, Task<LecturasObra>> cargar) : this()
+        { presenterInyectado = presenter; cargarLegacy = cargar; }
+        private Task<LecturasObra> LeerLegacyAsync(int id, string nombre, CancellationToken token)
+        {
+            if (cargarLegacy != null) return cargarLegacy(id, nombre, token);
+            return Task.Run(() => { token.ThrowIfCancellationRequested(); var datos = new InformeObraDatos();
+                return new LecturasObra { Movimientos = datos.ObtenerMovimientosObra(id), Herramientas = datos.ObtenerHerramientasObra(id, nombre), Insumos = datos.ObtenerInsumosObra(id, nombre) }; }, token);
+        }
+        private void HabilitarAcciones(bool habilitado) { panelTabs.Enabled = habilitado; dgvDatos.Enabled = habilitado; btnDescargar.Enabled = habilitado; }
+        private void CancelarOperaciones() { vida.Cancel(); cargaObra?.Cancel(); }
+        protected override void OnFormClosing(FormClosingEventArgs e) { CancelarOperaciones(); base.OnFormClosing(e); }
         private Label lblMateriales;
         private bool mostrarValorizacionActual;
 
@@ -35,7 +63,7 @@ namespace SteeLog.Vistas.Reportes
             ConfigurarResumenUI();
             InicializarMenuHerramientas();
             dgvDatos.CellContentClick += dgvDatos_CellContentClick;
-            CargarObras();
+            Load += (s, e) => CargarObras();
         }
 
         private void ConfigurarResumenUI()
@@ -79,32 +107,40 @@ namespace SteeLog.Vistas.Reportes
             };
         }
 
-        public void Refrescar()
-        {
-            CargarObras();
-            if (cmbObras.SelectedIndex >= 0)
-                CargarDatosObra();
-        }
+        public void Refrescar() { CargarObras(); }
 
-        private void CargarObras()
+        private async void CargarObras()
         {
+            var token = vida.Token;
+            int version = ++versionObra;
+            cargaObra?.Cancel();
             cargando = true;
-            ComunDatos datos = new ComunDatos();
-            DataTable dt = datos.ObtenerListaGenerica("obras");
-            cmbObras.DataSource = dt;
-            cmbObras.DisplayMember = "nombre";
-            cmbObras.ValueMember = "id";
-            cmbObras.SelectedIndex = -1;
-            cargando = false;
+            HabilitarAcciones(false);
+            try
+            {
+                var dt = await Task.Run(() => new ComunDatos().ObtenerListaGenerica("obras"), token);
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                cmbObras.DataSource = dt;
+                cmbObras.DisplayMember = "nombre";
+                cmbObras.ValueMember = "id";
+                cmbObras.SelectedIndex = -1;
+                LimpiarDatos();
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!token.IsCancellationRequested && !IsDisposed && version == versionObra) ToastNotification.ShowError("Error al cargar obras:\n" + ex.Message); }
+            finally { if (!IsDisposed && version == versionObra) cargando = false; }
         }
 
         private void cmbObras_SelectedIndexChanged(object sender, EventArgs e)
         {
             if (cargando) return;
+            versionObra++;
+            cargaObra?.Cancel();
 
             if (cmbObras.SelectedIndex == -1 || cmbObras.SelectedValue == null)
             {
                 LimpiarDatos();
+                HabilitarAcciones(false);
                 return;
             }
 
@@ -115,25 +151,34 @@ namespace SteeLog.Vistas.Reportes
             CargarDatosObra();
         }
 
-        private void CargarDatosObra()
+        private async void CargarDatosObra()
         {
+            cargaObra?.Cancel();
+            cargaObra = CancellationTokenSource.CreateLinkedTokenSource(vida.Token);
+            var token = cargaObra.Token;
+            int version = ++versionObra;
             try
             {
                 int idObra = Convert.ToInt32(cmbObras.SelectedValue);
                 DataRowView drv = (DataRowView)cmbObras.SelectedItem;
                 string nombreObra = drv["nombre"].ToString();
 
-                var datos = new InformeObraDatos();
-
-                movimientosActuales = datos.ObtenerMovimientosObra(idObra);
-                herramientasActuales = datos.ObtenerHerramientasObra(idObra, nombreObra);
-                insumosActuales = datos.ObtenerInsumosObra(idObra, nombreObra);
-                canaletasPlegadosActuales = datos.ObtenerCanaletasPlegadosObra(idObra);
-                mostrarValorizacionActual = SessionManager.Role == UserRole.Admin ||
-                    nombreObra.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0;
+                bool mostrar = SessionManager.Role == UserRole.Admin || nombreObra.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0;
+                HabilitarAcciones(false);
+                var legacyTask = LeerLegacyAsync(idObra, nombreObra, token);
+                var canaletasTask = Presenter.ListarAsync(idObra, token);
+                await Task.WhenAll(legacyTask, canaletasTask);
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                var legacy = await legacyTask;
+                movimientosActuales = legacy.Movimientos;
+                herramientasActuales = legacy.Herramientas;
+                insumosActuales = legacy.Insumos;
+                canaletasPlegadosActuales = (await canaletasTask).ToList();
+                mostrarValorizacionActual = mostrar;
+                HabilitarAcciones(true);
                 decimal totalCanaletasPendientes = canaletasPlegadosActuales
-                    .Where(c => !c.pagado)
-                    .Sum(c => c.precio);
+                    .Where(c => !c.Pagado)
+                    .Sum(c => c.Precio);
                 InformeObraResumen resumen = InformeObraDatos.CalcularResumen(movimientosActuales, mostrarValorizacionActual, totalCanaletasPendientes);
 
                 // Actualizar resumen
@@ -147,8 +192,10 @@ namespace SteeLog.Vistas.Reportes
                 // Cargar la tab activa
                 CargarTab(tabActual);
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
                 lblEstado.ForeColor = Color.FromArgb(220, 53, 69);
                 lblEstado.Text = "Error al cargar datos";
                 ToastNotification.ShowError("Error al cargar datos de la obra:\n" + ex.Message);
@@ -623,20 +670,19 @@ namespace SteeLog.Vistas.Reportes
                 dt.Columns.Add("Precio", typeof(decimal));
 
             var ordenadas = canaletasPlegadosActuales
-                .OrderByDescending(c => c.fecha_creacion)
-                .ThenByDescending(c => c.id)
+                .OrderByDescending(c => c.FechaCreacion)
+                .ThenByDescending(c => c.Id)
                 .ToList();
-            var conteosFotos = canaletaFotoDatos.ObtenerConteosPorCanaletas(ordenadas.Select(c => c.id));
 
             foreach (var item in ordenadas)
             {
-                int cantidadFotos = conteosFotos.ContainsKey(item.id) ? conteosFotos[item.id] : 0;
+                int cantidadFotos = item.CantidadFotos;
                 string textoFotos = cantidadFotos == 0 ? "Sin fotos" : "Ver (" + cantidadFotos + ")";
 
                 if (mostrarValorizacionActual)
-                    dt.Rows.Add(item.id, item.fecha_creacion.ToString("dd/MM/yyyy"), item.descripcion, item.pagado, textoFotos, item.precio);
+                    dt.Rows.Add(item.Id, item.FechaCreacion.ToString("dd/MM/yyyy"), item.Descripcion, item.Pagado, textoFotos, item.Precio);
                 else
-                    dt.Rows.Add(item.id, item.fecha_creacion.ToString("dd/MM/yyyy"), item.descripcion, item.pagado, textoFotos);
+                    dt.Rows.Add(item.Id, item.FechaCreacion.ToString("dd/MM/yyyy"), item.Descripcion, item.Pagado, textoFotos);
             }
 
             if (mostrarValorizacionActual && dt.Rows.Count > 0)
@@ -647,7 +693,7 @@ namespace SteeLog.Vistas.Reportes
                     "TOTAL CANALETAS / PLEGADOS",
                     false,
                     "",
-                    canaletasPlegadosActuales.Where(c => !c.pagado).Sum(c => c.precio));
+                    canaletasPlegadosActuales.Where(c => !c.Pagado).Sum(c => c.Precio));
             }
 
             dgvDatos.DataSource = dt;
@@ -735,29 +781,24 @@ namespace SteeLog.Vistas.Reportes
             MostrarFotosCanaleta(idCanaleta);
         }
 
-        private void MostrarFotosCanaleta(int idCanaleta)
+        private async void MostrarFotosCanaleta(int idCanaleta)
         {
+            int version = versionObra;
+            var token = vida.Token;
             try
             {
-                var fotos = canaletaFotoDatos.ObtenerPorCanaleta(idCanaleta);
-                if (fotos.Count == 0)
-                {
-                    ToastNotification.ShowWarning("Esta canaleta/plegado no tiene fotos cargadas.");
-                    return;
-                }
-
-                using (var visor = new VisorFotosCanaletaForm(fotos))
-                    visor.ShowDialog(this);
+                var fotos = await Presenter.FotosAsync(idCanaleta, token);
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                if (fotos.Count == 0) { ToastNotification.ShowWarning("Esta canaleta/plegado no tiene fotos cargadas."); return; }
+                using (var visor = new VisorFotosCanaletaForm(fotos.ToList(), Presenter)) visor.ShowDialog(this);
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudieron cargar las fotos:\n" + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!token.IsCancellationRequested && !IsDisposed && version == versionObra) ToastNotification.ShowError("No se pudieron cargar las fotos:\n" + ex.Message); }
         }
 
         // ======================== PDF ========================
 
-        private void btnDescargar_Click(object sender, EventArgs e)
+        private async void btnDescargar_Click(object sender, EventArgs e)
         {
             if (cmbObras.SelectedIndex == -1)
             {
@@ -774,31 +815,38 @@ namespace SteeLog.Vistas.Reportes
                 if (modal.ShowDialog() != DialogResult.OK)
                     return;
 
-                try
-                {
-                    lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
-                    lblEstado.Text = "Generando...";
-                    Application.DoEvents();
+                await GenerarInformeAsync(idObra, nombreObra, modal.FechaDesde, modal.FechaHasta);
 
-                    string tempPath = Path.Combine(
-                        Path.GetTempPath(),
-                        $"InformeObra_{nombreObra.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
-
-                    InformeObraPDF generador = new InformeObraPDF();
-                    generador.Generar(tempPath, idObra, nombreObra, modal.FechaDesde, modal.FechaHasta);
-
-                    lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
-                    lblEstado.Text = "✓ PDF generado";
-
-                    Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
-                }
-                catch (Exception ex)
-                {
-                    lblEstado.ForeColor = Color.FromArgb(220, 53, 69);
-                    lblEstado.Text = "Error al generar";
-                    ToastNotification.ShowError("Error al generar el informe:\n" + ex.Message);
-                }
             }
+        }
+
+        internal async Task GenerarInformeAsync(int idObra, string nombreObra, DateTime? desde, DateTime? hasta)
+        {
+            int version = versionObra;
+            var token = cargaObra?.Token ?? vida.Token;
+            btnDescargar.Enabled = false;
+            try
+            {
+                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
+                lblEstado.Text = "Generando...";
+                string ruta = Path.Combine(Path.GetTempPath(), $"InformeObra_{nombreObra.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+                if (GenerarInforme != null) await GenerarInforme(ruta, idObra, nombreObra, desde, hasta, token);
+                else await new InformeObraPDF().GenerarAsync(ruta, idObra, nombreObra, desde, hasta, token);
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
+                lblEstado.Text = "✓ PDF generado";
+                if (AbrirInforme != null) AbrirInforme(ruta);
+                else Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                lblEstado.ForeColor = Color.FromArgb(220, 53, 69);
+                lblEstado.Text = "Error al generar";
+                ToastNotification.ShowError("Error al generar el informe:\n" + ex.Message);
+            }
+            finally { if (!IsDisposed && !token.IsCancellationRequested && version == versionObra) btnDescargar.Enabled = true; }
         }
 
         private void InicializarMenuHerramientas()
@@ -877,15 +925,19 @@ namespace SteeLog.Vistas.Reportes
 
         private class VisorFotosCanaletaForm : Form
         {
-            private readonly List<CanaletaPlegadoFoto> fotos;
+            private readonly List<FotoCanaletaLectura> fotos;
+            private readonly CanaletasPresenter presenter;
+            private readonly CancellationTokenSource vidaVisor = new CancellationTokenSource();
+            private int versionFoto;
             private readonly ListBox lstFotos = new ListBox();
             private readonly PictureBox picFoto = new PictureBox();
             private readonly Label lblEstado = new Label();
             private readonly Button btnCerrar = new Button();
 
-            public VisorFotosCanaletaForm(List<CanaletaPlegadoFoto> fotos)
+            public VisorFotosCanaletaForm(List<FotoCanaletaLectura> fotos, CanaletasPresenter presenter)
             {
-                this.fotos = fotos ?? new List<CanaletaPlegadoFoto>();
+                this.presenter = presenter;
+                this.fotos = fotos ?? new List<FotoCanaletaLectura>();
                 ConfigurarUI();
                 CargarLista();
             }
@@ -916,7 +968,7 @@ namespace SteeLog.Vistas.Reportes
                 lstFotos.BorderStyle = BorderStyle.FixedSingle;
                 lstFotos.Font = new Font("Segoe UI", 10F);
                 lstFotos.IntegralHeight = false;
-                lstFotos.DisplayMember = nameof(CanaletaPlegadoFoto.nombre_archivo);
+                lstFotos.DisplayMember = nameof(FotoCanaletaLectura.NombreArchivo);
                 lstFotos.SelectedIndexChanged += lstFotos_SelectedIndexChanged;
 
                 picFoto.Dock = DockStyle.Fill;
@@ -951,38 +1003,37 @@ namespace SteeLog.Vistas.Reportes
 
             private async void lstFotos_SelectedIndexChanged(object sender, EventArgs e)
             {
-                var foto = lstFotos.SelectedItem as CanaletaPlegadoFoto;
+                var foto = lstFotos.SelectedItem as FotoCanaletaLectura;
                 if (foto == null)
                     return;
 
                 await MostrarFotoAsync(foto);
             }
 
-            private async Task MostrarFotoAsync(CanaletaPlegadoFoto foto)
+            private async Task MostrarFotoAsync(FotoCanaletaLectura foto)
             {
-                if (!SupabaseStorageService.TokenDisponible())
-                {
-                    lblEstado.Text = "No hay sesión activa para ver fotos. Reinicie sesión.";
-                    return;
-                }
-
+                int version = ++versionFoto;
+                var token = vidaVisor.Token;
                 try
                 {
-                    lblEstado.Text = "Cargando " + (foto.nombre_archivo ?? "foto") + "...";
+                    lblEstado.Text = "Cargando " + (foto.NombreArchivo ?? "foto") + "...";
                     picFoto.Image?.Dispose();
                     picFoto.Image = null;
 
-                    byte[] bytes = await SupabaseStorageService.DescargarAsync(foto.object_path);
+                    byte[] bytes = await presenter.LeerFotoAsync(foto.ObjectPath, token);
+                    if (token.IsCancellationRequested || IsDisposed || version != versionFoto) return;
                     using (var ms = new MemoryStream(bytes))
                     using (var imagen = Image.FromStream(ms))
                     {
                         picFoto.Image = new Bitmap(imagen);
                     }
 
-                    lblEstado.Text = (foto.nombre_archivo ?? "foto") + " - " + FormatearTamanio(foto.tamanio_bytes);
+                    lblEstado.Text = (foto.NombreArchivo ?? "foto") + " - " + FormatearTamanio(foto.TamanioBytes);
                 }
+                catch (OperationCanceledException) { }
                 catch (Exception ex)
                 {
+                    if (token.IsCancellationRequested || IsDisposed || version != versionFoto) return;
                     lblEstado.Text = "No se pudo cargar la foto.";
                     ToastNotification.ShowWarning("No se pudo cargar la foto:\n" + ex.Message);
                 }
@@ -1002,10 +1053,10 @@ namespace SteeLog.Vistas.Reportes
                 return (bytes / 1024m / 1024m).ToString("0.##") + " MB";
             }
 
+            protected override void OnFormClosing(FormClosingEventArgs e) { vidaVisor.Cancel(); base.OnFormClosing(e); }
             protected override void Dispose(bool disposing)
             {
-                if (disposing)
-                    picFoto.Image?.Dispose();
+                if (disposing) { vidaVisor.Cancel(); picFoto.Image?.Dispose(); }
 
                 base.Dispose(disposing);
             }

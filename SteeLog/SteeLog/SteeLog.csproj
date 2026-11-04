@@ -176,8 +176,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Datos\CategoriaDatos.cs" />
-    <Compile Include="Datos\CanaletaPlegadoDatos.cs" />
-    <Compile Include="Datos\CanaletaPlegadoFotoDatos.cs" />
     <Compile Include="Datos\ComunDatos.cs" />
     <Compile Include="Datos\ConexionDB.cs" />
     <Compile Include="Datos\FleteDatos.cs" />
@@ -192,8 +190,6 @@
     <Compile Include="Datos\ReporteStockDatos.cs" />
     <Compile Include="Datos\SortableBindingList.cs" />
     <Compile Include="Modelos\Categoria.cs" />
-    <Compile Include="Modelos\CanaletaPlegado.cs" />
-    <Compile Include="Modelos\CanaletaPlegadoFoto.cs" />
     <Compile Include="Modelos\Flete.cs" />
     <Compile Include="Modelos\KardexItem.cs" />
     <Compile Include="Modelos\Material.cs" />
@@ -560,6 +556,7 @@
     <Compile Include="Presentation\RecortesPresenter.cs" />
     <Compile Include="Presentation\MaterialesPresenter.cs" />
     <Compile Include="Presentation\ConteosPresenter.cs" />
+    <Compile Include="Presentation\CanaletasPresenter.cs" />
     <Compile Include="Presentation\InventarioPresenter.cs" />
     <Compile Include="Presentation\OrdenesMapeo.cs" />
     <Compile Include="Presentation\CargaVigente.cs" />

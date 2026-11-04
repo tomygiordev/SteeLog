@@ -97,7 +97,6 @@ internal static class BrandingSmoke
         var now = DateTime.Today;
         var cases = new[] {
             new object[] { typeof(KardexPDF), new object[] { "Material demo", now, now } },
-            new object[] { typeof(InformeObraPDF), new object[] { "Obra demo", 0, 0m, false, null, null } },
             new object[] { asm.GetType("SteeLog.Vistas.Vista_ReporteStock", true), new object[0] }
         };
         foreach (var item in cases)
@@ -133,6 +132,23 @@ internal static class BrandingSmoke
                 Check(text.Contains(value), "Ordenes pendientes: falta " + value + ": " + text);
         }
         string conteo = Path.Combine(output, "Conteo-real.pdf");
+        var informeRenderer = servicesType.GetProperty("InformeObraPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
+        var informeGenerar = informeRenderer.GetType().GetMethod("Generar");
+        var snapshotType = informeGenerar.GetParameters()[1].ParameterType;
+        var snapshot = Activator.CreateInstance(snapshotType);
+        snapshotType.GetProperty("NombreObra").SetValue(snapshot, "Obra demo", null);
+        foreach (string field in new[] { "Movimientos", "Herramientas", "Insumos", "Canaletas", "Resumen" })
+        {
+            var property = snapshotType.GetProperty(field);
+            property.SetValue(snapshot, Activator.CreateInstance(property.PropertyType), null);
+        }
+        string informe = Path.Combine(output, "Informe-obra-real.pdf");
+        informeGenerar.Invoke(informeRenderer, new[] { (object)informe, snapshot });
+        VerifyPdf(informe);
+        using (var reader = new PdfReader(informe)) {
+            string content = PdfTextExtractor.GetTextFromPage(reader, 1);
+            Check(content.Contains("INFORME DE OBRA") && content.Contains("SteeLog"), "Informe de obra sin marca o título");
+        }
         var rendererConteo = servicesType.GetProperty("ConteoPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
         var generarConteo = rendererConteo.GetType().GetMethod("Generar");
         var parametrosConteo = generarConteo.GetParameters();
