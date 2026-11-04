@@ -8,6 +8,10 @@ La solución `SteeLog/SteeLog.sln`, el proyecto `SteeLog/SteeLog/SteeLog.csproj`
 
 La procedencia, los prompts y las variantes de la marca están en [Resources/Branding](SteeLog/SteeLog/Resources/Branding/README.md). Esta separación visual no certifica la anonimización de datos de bases existentes ni del historial del repositorio.
 
+## Exposición académica (F9 en verificación)
+
+La preparación nueva, aislada de instalaciones existentes, está en [Guía de demo y defensa](docs/arquitectura/GUIA_DEMO_Y_DEFENSA.md). Usa esquema/seed propios, paquete saneado y una DB/volumen nuevos con GUID; no modifica el Compose histórico descrito abajo. La evidencia y los pendientes reales están en [Verificación F9](docs/arquitectura/VERIFICACION_F9.md). No se declara aún validación offline integral ni Designer aprobado.
+
 ---
 
 ## 🚀 Características Principales

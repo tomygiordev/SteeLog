@@ -50,6 +50,7 @@ namespace SteeLog.CompositionRoot
         internal IReporteStockPdf ReporteStockPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
+        internal string ReportsDirectory { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SteeLog", "Reportes");
         private readonly Lazy<LocalConfiguration> configuration;
         private readonly Lazy<PostgresConnectionFactory> connections;
         internal LocalConfiguration Configuration => configuration.Value;
@@ -157,6 +158,17 @@ namespace SteeLog.CompositionRoot
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;
         public void Dispose() => provider.Dispose();
-        internal static LocalServices Create() => new LocalServices(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+        internal static LocalServices Create() => CreateForEnvironment(AppDomain.CurrentDomain.BaseDirectory, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"));
+        internal static LocalServices CreateForEnvironment(string executableDirectory, string demoRoot)
+        {
+            if (string.IsNullOrWhiteSpace(demoRoot))
+                return new LocalServices(executableDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
+            if (!Path.IsPathRooted(demoRoot) || Path.GetPathRoot(demoRoot).Length <= 2) throw new InvalidOperationException("STEELOG_DEMO_ROOT debe ser una ruta absoluta de una instalación demo preparada.");
+            var root = Path.GetFullPath(demoRoot);
+            var marker = Path.Combine(root, ".steelog-demo");
+            if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != "steelog-demo-v1")
+                throw new InvalidOperationException("Falta el marcador del directorio de datos demo. No se usará el perfil personal como fallback.");
+            return new LocalServices(executableDirectory, root, root) { ReportsDirectory = Path.Combine(root, "SteeLog", "Reportes") };
+        }
     }
 }

@@ -1,0 +1,36 @@
+{
+  "origen": "docker/init/01-schema.sql",
+  "sha256_origen": "737ce287d439649227b876369bfd02cb8b509255a949bd92918a2359feb8fc2e",
+  "tablas": [
+    "canaletas_plegados",
+    "canaletas_plegados_fotos",
+    "categorias",
+    "conteos_inventario",
+    "conteos_inventario_detalle",
+    "fletes",
+    "herramienta_movimientos",
+    "herramientas",
+    "insumo_movimientos",
+    "insumos",
+    "materiales",
+    "materiales_proveedores",
+    "movimientomaterial",
+    "movimientos",
+    "obras",
+    "ordenes_compra",
+    "ordenes_compra_detalle",
+    "proveedores",
+    "recortes",
+    "reporte_stock_materiales",
+    "reporte_stock_secciones",
+    "tipo_movimiento",
+    "ubicacion"
+  ],
+  "funciones": [
+    "set_movimientos_timestamps",
+    "set_ordenes_compra_updated_at"
+  ],
+  "migraciones_incorporadas": [
+    "F4_insumo_movimientos_snapshot.sql"
+  ]
+}

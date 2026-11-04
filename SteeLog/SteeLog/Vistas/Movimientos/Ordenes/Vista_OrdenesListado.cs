@@ -384,7 +384,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             try
             {
                 
-                string directorio = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SteeLog", "Reportes");
+                string directorio = LocalServices.Current.ReportsDirectory;
                 if (!Directory.Exists(directorio))
                     Directory.CreateDirectory(directorio);
 
