@@ -17,7 +17,7 @@ namespace SteeLog.Core.Application.Activos
     public sealed class ConsultarHerramientas
     {
         private readonly Session actor; private readonly IHerramientasConsulta consulta;
-        public ConsultarHerramientas(Session actor,IHerramientasConsulta consulta) { this.actor=actor; this.consulta=consulta; }
+        public ConsultarHerramientas(Session actor,IHerramientasConsulta consulta) { this.actor=actor ?? throw new ArgumentNullException(nameof(actor)); this.consulta=consulta ?? throw new ArgumentNullException(nameof(consulta)); }
         public Task<IReadOnlyList<HerramientaLectura>> HerramientasAsync(CancellationToken token=default) { actor.Require(Role.Galpon); return consulta.HerramientasAsync(token); }
         public Task<IReadOnlyList<ObraHerramientaLectura>> ObrasAsync(CancellationToken token=default) { actor.Require(Role.Galpon); return consulta.ObrasAsync(token); }
         public Task<IReadOnlyList<HistorialHerramientaLectura>> HistorialAsync(CancellationToken token=default) { actor.Require(Role.Galpon); return consulta.HistorialAsync(token); }

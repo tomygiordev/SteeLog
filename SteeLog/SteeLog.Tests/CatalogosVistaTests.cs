@@ -5,6 +5,8 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using System.Linq;
+using SteeLog.Core.Application.Activos;
 using SteeLog.Core.Application.Catalogos;
 using SteeLog.Presentation;
 using Xunit;
@@ -22,6 +24,21 @@ namespace SteeLog.Tests
                 Llamadas++;
                 if (typeof(TResult) == typeof(IReadOnlyList<CategoriaCatalogo>)) return (TResult)(object)await Consultas.Dequeue().Task;
                 throw new InvalidOperationException("No debe ejecutarse una escritura");
+            }
+        }
+        private sealed class EjecutorHerramientas : IUseCaseExecutor
+        {
+            public readonly List<HerramientaLectura> Herramientas = new List<HerramientaLectura>();
+            public readonly List<ObraHerramientaLectura> Obras = new List<ObraHerramientaLectura>();
+            public Task<TResult> ExecuteAsync<TUseCase, TResult>(Func<TUseCase, Task<TResult>> accion) where TUseCase : class
+            {
+                if (typeof(TResult) == typeof(IReadOnlyList<HerramientaLectura>))
+                    return Task.FromResult((TResult)(object)Herramientas);
+                if (typeof(TResult) == typeof(IReadOnlyList<ObraHerramientaLectura>))
+                    return Task.FromResult((TResult)(object)Obras);
+                if (typeof(TResult) == typeof(IReadOnlyList<HistorialHerramientaLectura>))
+                    return Task.FromResult((TResult)(object)new List<HistorialHerramientaLectura>());
+                return Task.FromResult(default(TResult));
             }
         }
         private sealed class EjecutorGenerico : IUseCaseExecutor
@@ -164,6 +181,88 @@ namespace SteeLog.Tests
                     tipo.GetMethod("OnFormClosed", Privado).Invoke(vista, new object[] { new FormClosedEventArgs(CloseReason.UserClosing) });
                     Assert.True(cierre.IsCancellationRequested);
                     carga.SetResult(ListaVacia(singular)); Application.DoEvents(); Assert.Equal(0, ejecutor.Escrituras);
+                }
+            });
+        }
+        [Fact]
+        public void VistaHerramientasLimpiaEstadoHistoricoAlCambiarFilaODeseleccionar()
+        {
+            Sta(() => {
+                var ejecutor = new EjecutorHerramientas();
+                ejecutor.Herramientas.Add(new HerramientaLectura { Id = 1, Nombre = "Herramienta 1", Estado = "En Reparación", ObraId = null, Obra = "Galpón", Observaciones = "" });
+                ejecutor.Herramientas.Add(new HerramientaLectura { Id = 2, Nombre = "Herramienta 2", Estado = "Óptima", ObraId = null, Obra = "Galpón", Observaciones = "" });
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas", true);
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { ejecutor }, null)) {
+                    var handle = vista.Handle;
+                    tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
+                    var grid = (DataGridView)tipo.GetField("dgvHerramientas", Privado).GetValue(vista);
+                    var cboEstado = (ComboBox)tipo.GetField("cboEstado", Privado).GetValue(vista);
+                    var cellClick = tipo.GetMethod("dgvHerramientas_CellClick", Privado);
+
+                    Esperar(() => grid.Rows.Count == 2);
+                    Assert.Equal(3, cboEstado.Items.Count);
+
+                    // Seleccionar fila 0 (estado no canónico: "En Reparación")
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 0) });
+                    Assert.Equal("En Reparación", cboEstado.SelectedItem?.ToString());
+                    Assert.Contains("En Reparación", cboEstado.Items.Cast<object>().Select(x => x.ToString()));
+
+                    // Cambiar a fila 1 (estado canónico: "Óptima") -> debe limpiar "En Reparación"
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 1) });
+                    Assert.Equal("Óptima", cboEstado.SelectedItem?.ToString());
+                    Assert.DoesNotContain("En Reparación", cboEstado.Items.Cast<object>().Select(x => x.ToString()));
+                    Assert.Equal(3, cboEstado.Items.Count);
+
+                    // Volver a fila 0 ("En Reparación")
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 0) });
+                    Assert.Equal("En Reparación", cboEstado.SelectedItem?.ToString());
+                    Assert.Contains("En Reparación", cboEstado.Items.Cast<object>().Select(x => x.ToString()));
+
+                    // Deseleccionar (clic en la misma fila 0 ejecuta LimpiarSeleccion)
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 0) });
+                    Assert.Equal("Óptima", cboEstado.SelectedItem?.ToString());
+                    Assert.DoesNotContain("En Reparación", cboEstado.Items.Cast<object>().Select(x => x.ToString()));
+                    Assert.Equal(3, cboEstado.Items.Count);
+                }
+            });
+        }
+        [Fact]
+        public void VistaHerramientasBloqueaCellClickDuranteOcupada()
+        {
+            Sta(() => {
+                var ejecutor = new EjecutorHerramientas();
+                ejecutor.Herramientas.Add(new HerramientaLectura { Id = 1, Nombre = "Herramienta 1", Estado = "Óptima", ObraId = null, Obra = "Galpón", Observaciones = "" });
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas", true);
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { ejecutor }, null)) {
+                    var handle = vista.Handle;
+                    tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
+                    var grid = (DataGridView)tipo.GetField("dgvHerramientas", Privado).GetValue(vista);
+                    var txtNombre = (Control)tipo.GetField("txtNombre", Privado).GetValue(vista);
+                    var btnEliminar = (Control)tipo.GetField("btnEliminar", Privado).GetValue(vista);
+                    var cellClick = tipo.GetMethod("dgvHerramientas_CellClick", Privado);
+
+                    Esperar(() => grid.Rows.Count == 1);
+                    Assert.False(btnEliminar.Enabled);
+
+                    // Establecer ocupada = true
+                    ((IHerramientasVista)vista).SetOcupada(true);
+
+                    // Clic en fila 0 mientras está ocupada debe ignorarse completamente
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 0) });
+                    Assert.Equal("", txtNombre.Text);
+                    Assert.False(btnEliminar.Enabled);
+                    var idSeleccionado = (int)tipo.GetField("idSeleccionado", Privado).GetValue(vista);
+                    Assert.Equal(-1, idSeleccionado);
+
+                    // Desbloquear ocupada = false
+                    ((IHerramientasVista)vista).SetOcupada(false);
+
+                    // Ahora el clic debe procesarse correctamente
+                    cellClick.Invoke(vista, new object[] { grid, new DataGridViewCellEventArgs(0, 0) });
+                    Assert.Equal("Herramienta 1", txtNombre.Text);
+                    Assert.True(btnEliminar.Enabled);
+                    idSeleccionado = (int)tipo.GetField("idSeleccionado", Privado).GetValue(vista);
+                    Assert.Equal(1, idSeleccionado);
                 }
             });
         }

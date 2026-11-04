@@ -16,7 +16,7 @@ namespace SteeLog.Presentation
     public sealed class HerramientasPresenter
     {
         private readonly IUseCaseExecutor executor; private readonly IHerramientasVista vista; private int ocupado;
-        public HerramientasPresenter(IUseCaseExecutor executor,IHerramientasVista vista) { this.executor=executor; this.vista=vista; }
+        public HerramientasPresenter(IUseCaseExecutor executor,IHerramientasVista vista) { this.executor=executor ?? throw new ArgumentNullException(nameof(executor)); this.vista=vista ?? throw new ArgumentNullException(nameof(vista)); }
         private async Task<int?> Ejecutar(Func<Task<int>> operacion, Func<bool> vigente)
         {
             if(Interlocked.CompareExchange(ref ocupado,1,0)!=0) return null;

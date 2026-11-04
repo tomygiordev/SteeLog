@@ -32,7 +32,20 @@ namespace SteeLog.Vistas
         public void SetOcupada(bool valor) { ocupada=valor; ActualizarControles(); }
         public void MostrarError(Exception error) { if (!IsDisposed && !cierre.IsCancellationRequested) avisar(error.Message); }
         private bool Vigente(int revision) => !IsDisposed && !cierre.IsCancellationRequested && cargas.EsActual(revision);
-        private void ActualizarControles() { if(IsDisposed || cierre.IsCancellationRequested) return; btnGuardar.Enabled=inicializada && !leyendo && !ocupada; btnEliminar.Enabled=inicializada && !leyendo && !ocupada && idSeleccionado!=-1; btnVerHerramientas.Enabled=obrasCargadas; btnVerHistorial.Enabled=obrasCargadas; txtNombre.Enabled=inicializada && !leyendo; txtObservaciones.Enabled=inicializada && !leyendo; cboEstado.Enabled=inicializada && !leyendo; cboObra.Enabled=inicializada && !leyendo; dgvHerramientas.Enabled=inicializada && !leyendo; }
+        private void ActualizarControles()
+        {
+            if (IsDisposed || cierre.IsCancellationRequested) return;
+            bool listo = inicializada && !leyendo && !ocupada;
+            btnGuardar.Enabled = listo;
+            btnEliminar.Enabled = listo && idSeleccionado != -1;
+            btnVerHerramientas.Enabled = obrasCargadas && !leyendo && !ocupada;
+            btnVerHistorial.Enabled = obrasCargadas && !leyendo && !ocupada;
+            txtNombre.Enabled = listo;
+            txtObservaciones.Enabled = listo;
+            cboEstado.Enabled = listo;
+            cboObra.Enabled = listo;
+            dgvHerramientas.Enabled = listo;
+        }
         private void CerrarCargas() { cargas.Cerrar(); if(!cierre.IsCancellationRequested) cierre.Cancel(); }
         private PrintDocument printDocument1;
         private Color tabActiveColor = Color.FromArgb(25, 135, 84);
@@ -65,20 +78,20 @@ namespace SteeLog.Vistas
 
         private async void Vista_Herramientas_Load(object sender, EventArgs e)
         {
-            int revision=cargas.Iniciar(); leyendo=true; ActualizarControles();
+            leyendo = true; ActualizarControles();
             try
             {
                 CargarComboEstado();
-                var datosObras=await Presenter.ObrasAsync(cierre.Token);
-                if(!Vigente(revision)) return;
-                obras=datosObras.Select(x=>new Obra { id=x.Id,nombre=x.Nombre }).ToList();
+                var datosObras = await Presenter.ObrasAsync(cierre.Token);
+                if (IsDisposed || cierre.IsCancellationRequested) return;
+                obras = datosObras.Select(x => new Obra { id = x.Id, nombre = x.Nombre }).ToList();
                 CargarComboObras();
-                obrasCargadas=true;
+                obrasCargadas = true;
                 await CargarHerramientas();
             }
-            catch(OperationCanceledException) { }
-            catch(Exception ex) { if(Vigente(revision)) MostrarError(ex); }
-            finally { if(Vigente(revision)) { leyendo=false; ActualizarControles(); } }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!IsDisposed && !cierre.IsCancellationRequested) MostrarError(ex); }
+            finally { if (!obrasCargadas && !IsDisposed && !cierre.IsCancellationRequested) { leyendo = false; ActualizarControles(); } }
         }
 
         // ===================== COMBOS =====================
@@ -371,6 +384,7 @@ namespace SteeLog.Vistas
 
         private async void btnVerHerramientas_Click(object sender, EventArgs e)
         {
+            if (!obrasCargadas || leyendo || ocupada) return;
             vistaHistorialActiva = false;
             panelGrid.Visible = true;
             panelGridHistorial.Visible = false;
@@ -382,6 +396,7 @@ namespace SteeLog.Vistas
 
         private async void btnVerHistorial_Click(object sender, EventArgs e)
         {
+            if (!obrasCargadas || leyendo || ocupada) return;
             vistaHistorialActiva = true;
             panelGrid.Visible = false;
             panelGridHistorial.Visible = true;
@@ -409,7 +424,7 @@ namespace SteeLog.Vistas
             idSeleccionado = -1;
             txtNombre.Clear();
             txtObservaciones.Clear();
-            cboEstado.SelectedIndex = 0;
+            CargarComboEstado();
             cboObra.SelectedIndex = 0;
             btnGuardar.Text = "Guardar";
             btnEliminar.Enabled = false;
@@ -418,6 +433,7 @@ namespace SteeLog.Vistas
 
         private void dgvHerramientas_CellClick(object sender, DataGridViewCellEventArgs e)
         {
+            if (!inicializada || leyendo || ocupada) return;
             if (e.RowIndex < 0) return;
 
             var fila = dgvHerramientas.Rows[e.RowIndex];
@@ -436,15 +452,12 @@ namespace SteeLog.Vistas
                 txtNombre.Text = fila.Cells["nombre"].Value.ToString();
                 txtObservaciones.Text = fila.Cells["observaciones"].Value?.ToString() ?? "";
 
-                string estado = fila.Cells["estado"].Value.ToString();
-                if (!cboEstado.Items.Contains(estado)) cboEstado.Items.Add(estado);
-                for (int i = 0; i < cboEstado.Items.Count; i++)
+                CargarComboEstado();
+                string estado = fila.Cells["estado"].Value?.ToString() ?? "";
+                if (!string.IsNullOrEmpty(estado))
                 {
-                    if (cboEstado.Items[i].ToString() == estado)
-                    {
-                        cboEstado.SelectedIndex = i;
-                        break;
-                    }
+                    if (!cboEstado.Items.Contains(estado)) cboEstado.Items.Add(estado);
+                    cboEstado.SelectedItem = estado;
                 }
 
                 var idObraVal = fila.Cells["id_obra"].Value;
@@ -467,7 +480,7 @@ namespace SteeLog.Vistas
                 }
 
                 btnGuardar.Text = "Actualizar";
-                btnEliminar.Enabled = true;
+                ActualizarControles();
             }
         }
 
@@ -483,9 +496,9 @@ namespace SteeLog.Vistas
                 return;
             }
 
-            string estado = cboEstado.SelectedItem.ToString();
-            var obraSeleccionada = (Obra)cboObra.SelectedItem;
-            int? idObra = obraSeleccionada.id == 0 ? (int?)null : obraSeleccionada.id;
+            string estado = cboEstado.SelectedItem?.ToString() ?? "";
+            var obraSeleccionada = cboObra.SelectedItem as Obra;
+            int? idObra = (obraSeleccionada == null || obraSeleccionada.id == 0) ? (int?)null : obraSeleccionada.id;
             string observaciones = txtObservaciones.Text.Trim();
 
             string _msg = idSeleccionado == -1 ? "¿Crear esta herramienta?" : "¿Actualizar esta herramienta?";

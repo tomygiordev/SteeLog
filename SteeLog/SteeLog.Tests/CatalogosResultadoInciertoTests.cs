@@ -46,7 +46,36 @@ namespace SteeLog.Tests
                 Assert.Equal(0, uow.Commits); Assert.Equal(1, uow.Rollbacks);
             }
         }
+        [Fact] public async Task CancelacionDuranteCommitNoSeClasificaComoIncierta()
+        {
+            var uow = new UowCancelado(); var repo = new HerramientasRepo();
+            var servicio = new GestionarHerramientas(Sesion(), uow, repo);
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => servicio.CrearAsync("Taladro", "Óptima", null, ""));
+            Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
+        }
+        [Fact] public async Task CatalogoCancelacionDuranteCommitNoSeClasificaComoIncierta()
+        {
+            var uow = new UowCancelado(); var repo = new CatalogosRepo();
+            var servicio = new GestionarCatalogos(Sesion(), uow, repo, new Fletes());
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => servicio.CrearCategoriaAsync("A", false));
+            Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
+        }
+        [Fact] public void ConstructoresValidanArgumentosNulos()
+        {
+            var uow = new Uow(); var repo = new HerramientasRepo();
+            Assert.Throws<ArgumentNullException>(() => new GestionarHerramientas(null, uow, repo));
+            Assert.Throws<ArgumentNullException>(() => new GestionarHerramientas(Sesion(), null, repo));
+            Assert.Throws<ArgumentNullException>(() => new GestionarHerramientas(Sesion(), uow, null));
+            Assert.Throws<ArgumentNullException>(() => new ConsultarHerramientas(null, null));
+        }
         private static Session Sesion() { var s = new Session(); s.Start(new Identity("a", Role.Galpon)); return s; }
+        private sealed class UowCancelado : IUnitOfWork
+        {
+            public int Commits, Rollbacks;
+            public Task BeginAsync(CancellationToken token=default) => Task.CompletedTask;
+            public Task CommitAsync(CancellationToken token=default) { Commits++; throw new OperationCanceledException(); }
+            public Task RollbackAsync() { Rollbacks++; return Task.CompletedTask; }
+        }
         private sealed class Uow : IUnitOfWork
         {
             public readonly Exception ErrorCommit = new Exception("respuesta perdida"); public bool Confirmado; public int Commits, Rollbacks;

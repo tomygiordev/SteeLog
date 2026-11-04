@@ -31,6 +31,13 @@ Se retiraron `ComunDatos`, `CategoriaDatos`, `ObraDatos`, `ProveedorDatos` y `Fl
 
 El inventario de dependencias temporales disminuye de **163 a 116 pares**, sin incorporaciones. Se obtiene contrastando las referencias reales del assembly con el inventario anterior; las pruebas inspeccionan también tipos anidados y máquinas de estado async. Hay una guarda específica para herramientas y catálogos, para la ausencia de `ComunDatos` y para que el informe no vuelva al escritor legacy de herramientas.
 
+### Ajustes de calidad y robustez
+
+- **UI Herramientas (`Vista_Herramientas.cs`):** Limpieza canónica de `cboEstado` en `LimpiarSeleccion` y `dgvHerramientas_CellClick` para evitar contaminación cruzada de estados históricos entre filas. Deshabilitación de controles y alternancia de pestañas durante lectura o escritura activa (`!leyendo && !ocupada`). Eliminación del doble incremento de revisión en `Load`. Bloqueo de `dgvHerramientas_CellClick` cuando la vista está ocupada. Salvaguarda contra `NullReferenceException` en `btnGuardar_Click`.
+- **Application (`GestionarHerramientas.cs`, `Catalogos.cs`, `ConsultarHerramientas.cs`, `HerramientasPresenter.cs`):** Exclusión de `OperationCanceledException` de `ResultadoEscrituraInciertoException` en confirmaciones de commit. Eliminación de llamada redundante a `h.Editar` en `CrearAsync`. Validaciones de nulidad en constructores con `ArgumentNullException`.
+- **Infrastructure (`NpgsqlHerramientas.cs`, `NpgsqlHerramientasConsulta.cs`):** Preservación de comportamiento legacy en `RegistrarHistorialAsync` distinguiendo `null` ('Galpón') de obras inexistentes ('Desconocida'). Timeouts explícitos de 15 segundos en comandos SQL y validación de nulidad en constructores.
+- **Tests (`CatalogosVistaTests.cs`, `CatalogosResultadoInciertoTests.cs`):** Cobertura agregada para aislamiento de estados históricos en `cboEstado`, bloqueo de grilla ante vista ocupada, descarte de falsos positivos en excepciones canceladas de commit y validación de dependencias nulas en constructores.
+
 ## Verificación propia de root
 
 Los runners SQL utilizan clústeres PostgreSQL 17 efímeros propios, tmpfs, puertos loopback dinámicos y DB `steelog_test_<GUID>`. Verifican identidad de contenedor y DB, sondas SQL exit 0/1 por API Docker, copias TEMP sin bin/obj compartidos, hashes de DLL versionadas, TRX sin omitidos y limpieza limitada a sus recursos. El runner F7 no aplica migraciones; las de F4 en sus runners existentes solo se aplican al clúster efímero que crean.
