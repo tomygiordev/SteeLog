@@ -8,9 +8,6 @@ using iTextSharp.text;
 using iTextSharp.text.pdf;
 using PdfTextExtractor = iTextSharp.text.pdf.parser.PdfTextExtractor;
 using SteeLog;
-using SteeLog.Datos;
-using SteeLog.Modelos;
-using SteeLog.Reportes;
 using SteeLog.Vistas;
 
 internal static class BrandingSmoke
@@ -95,21 +92,41 @@ internal static class BrandingSmoke
             form.Close();
         }
         var now = DateTime.Today;
-        var cases = new[] {
-            new object[] { typeof(KardexPDF), new object[] { "Material demo", now, now } },
-            new object[] { asm.GetType("SteeLog.Vistas.Vista_ReporteStock", true), new object[0] }
-        };
-        foreach (var item in cases)
-        {
-            var type = (Type)item[0]; var method = type.GetMethod("AgregarEncabezado", BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static);
-            Check(method != null, type.Name); string path = Path.Combine(output, type.Name + ".pdf");
-            using (var doc = new Document(PageSize.A4)) using (var stream = File.Create(path))
-            { PdfWriter.GetInstance(doc, stream); doc.Open(); var parameters = new List<object> { doc }; parameters.AddRange((object[])item[1]); method.Invoke(method.IsStatic ? null : Activator.CreateInstance(type), parameters.ToArray()); doc.Close(); }
-            VerifyPdf(path);
-        }
         string ordenes = Path.Combine(output, "Ordenes-pendientes-real.pdf");
         var servicesType = asm.GetType("SteeLog.CompositionRoot.LocalServices", true);
         var services = servicesType.GetProperty("Current", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null, null);
+        foreach (var property in new[] { "KardexPdf", "ReporteStockPdf" })
+        {
+            var report = servicesType.GetProperty(property, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
+            var method = report.GetType().GetMethod("Generar");
+            var data = Activator.CreateInstance(method.GetParameters()[1].ParameterType);
+            string collection = property == "KardexPdf" ? "Historial" : "Filas";
+            var listProperty = data.GetType().GetProperty(collection);
+            var rows = (System.Collections.IList)Activator.CreateInstance(listProperty.PropertyType);
+            listProperty.SetValue(data, rows, null);
+            if (property == "KardexPdf")
+            {
+                Fill(data, "MaterialNombre", "Perfil demo", "FechaInicio", now, "FechaFin", now, "MostrarColumnaSaldo", true);
+                var row = Activator.CreateInstance(listProperty.PropertyType.GetGenericArguments()[0]);
+                Fill(row, "fecha", now, "tipo_movimiento", "Entrada", "cantidad", 2m, "saldo", 4m, "origen", "Galpón", "destino", "Obra demo", "nombre_material", "Perfil demo");
+                rows.Add(row);
+            }
+            else
+            {
+                Fill(data, "TotalMateriales", "1", "TotalStockBajo", "0");
+                var columnsProperty = data.GetType().GetProperty("Columnas");
+                var columns = (System.Collections.IList)Activator.CreateInstance(columnsProperty.PropertyType);
+                columnsProperty.SetValue(data, columns, null);
+                var column = Activator.CreateInstance(columnsProperty.PropertyType.GetGenericArguments()[0]);
+                Fill(column, "Nombre", "nombre", "Titulo", "Material"); columns.Add(column);
+                var row = Activator.CreateInstance(listProperty.PropertyType.GetGenericArguments()[0]);
+                Fill(row, "Valores", new List<string> { "Perfil demo" }); rows.Add(row);
+            }
+            string path = Path.Combine(output, property + "-real.pdf");
+            method.Invoke(report, new[] { (object)path, data }); VerifyPdf(path);
+            using (var reader = new PdfReader(path))
+                Check(PdfTextExtractor.GetTextFromPage(reader, 1).Contains("Perfil demo"), property + " sin datos reales del fixture");
+        }
         var renderer = servicesType.GetProperty("OrdenesPdf", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);
         var generarOrdenes = renderer.GetType().GetMethod("Generar");
         var itemType = generarOrdenes.GetParameters()[1].ParameterType.GetGenericArguments()[0];
@@ -192,9 +209,12 @@ internal static class BrandingSmoke
             var texto = PdfTextExtractor.GetTextFromPage(reader, 1);
             Check(texto.Contains("Insumo demo") && texto.Contains("R-123"), "Remito sin datos esperados: " + texto);
         }
-        string kardex = Path.Combine(output, "Kardex-real.pdf");
-        KardexPDF.Generar(kardex, new List<KardexItem>(), "Material demo", now, now, false, false); VerifyPdf(kardex);
         Console.WriteLine("OK: headers, Kardex, conteo, remito y ordenes con datos, resources, icon and forms");
+    }
+    static void Fill(object target, params object[] pairs)
+    {
+        for (int i = 0; i < pairs.Length; i += 2)
+            target.GetType().GetProperty((string)pairs[i]).SetValue(target, pairs[i + 1], null);
     }
     static void VerifyPdf(string path)
     {

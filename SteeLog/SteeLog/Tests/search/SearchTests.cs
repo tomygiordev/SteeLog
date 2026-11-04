@@ -22,9 +22,10 @@ class SearchTests {
    object search=Activator.CreateInstance(type,new object[]{parent,top,new Action<Form>(f=>f.Dispose())});
    var snap=Activator.CreateInstance(type.GetNestedType("Snapshot",BindingFlags.NonPublic),true);
    foreach(string part in new[]{"Materiales","Recortes","Herramientas","Insumos"}) {
-    string model=part=="Materiales"?"Material":part=="Recortes"?"Recorte":part=="Herramientas"?"Herramienta":"Insumo";
-    var mt=asm.GetType("SteeLog.Modelos."+model); var list=(IList)Activator.CreateInstance(typeof(System.Collections.Generic.List<>).MakeGenericType(mt));
-    if(model=="Material"){var m=Activator.CreateInstance(mt);mt.GetProperty("nombre").SetValue(m,"Perfil Prueba");list.Add(m);} Set(snap,part,list);
+    string model=part=="Materiales"?"MaterialInventarioLectura":part=="Recortes"?"RecorteLectura":part=="Herramientas"?"HerramientaLectura":"InsumoLectura";
+    var application=Assembly.Load("SteeLog.Application");
+    var mt=application.GetType("SteeLog.Core.Application."+(part=="Materiales"||part=="Recortes"?"Inventario.":"Activos.")+model); var list=(IList)Activator.CreateInstance(typeof(System.Collections.Generic.List<>).MakeGenericType(mt));
+    if(model=="MaterialInventarioLectura"){var m=Activator.CreateInstance(mt);mt.GetProperty("Nombre").SetValue(m,"Perfil Prueba");list.Add(m);} Set(snap,part,list);
    }
    Set(search,"_cache",snap);Set(search,"_cacheTimestampUtc",DateTime.UtcNow);
    var input=(Control)Get(search,"_txtBusqueda"); input.Text="perfil";

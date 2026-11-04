@@ -8,6 +8,8 @@ using System.Linq;
 using System.Runtime.InteropServices; 
 using System.Text;
 using System.Threading.Tasks;
+using System.Threading;
+using SteeLog.Core.Application.Inventario;
 using System.Windows.Forms;
 using SteeLog.Servicios;
 using SteeLog.Vistas;
@@ -20,8 +22,18 @@ namespace SteeLog
 {
     public partial class VistaGeneral : Form
     {
-        public VistaGeneral()
+        public VistaGeneral() : this(null, null, null) { }
+
+        internal VistaGeneral(Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
+            Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock)
         {
+            _tokenCierreStock = _cierreStock.Token;
+            _consultarStock = consultarStock ?? ConsultarStockAsync;
+            _esperarStock = esperarStock ?? (token => Task.Delay(1000, token));
+            _mostrarStock = mostrarStock ?? ((cantidad, abrir) => ToastNotification.ShowWarning(
+                $"¡Atención! Hay {cantidad} materiales con stock bajo. CLICK AQUÍ para verlos.", abrir));
+            FormClosed += (s, args) => CerrarStock();
+            Disposed += (s, args) => CerrarStock();
             InitializeComponent();
             this.Text = "SteeLog - Sistema de Gestión de Inventario";
             hideSubMenu();
@@ -122,34 +134,50 @@ namespace SteeLog
             this.Shown += VistaGeneral_Shown;
         }
 
+        private readonly CancellationTokenSource _cierreStock = new CancellationTokenSource();
+        private readonly CancellationToken _tokenCierreStock;
+        private int _stockCerrado;
+
+        private void CerrarStock()
+        {
+            if (Interlocked.Exchange(ref _stockCerrado, 1) != 0) return;
+            _cierreStock.Cancel();
+            _cierreStock.Dispose();
+        }
+        private readonly Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> _consultarStock;
+        private readonly Func<CancellationToken, Task> _esperarStock;
+        private readonly Action<int, Action> _mostrarStock;
+
+        private static Task<IReadOnlyList<MaterialInventarioLectura>> ConsultarStockAsync(CancellationToken token)
+        {
+            var presenter = new SteeLog.Presentation.MaterialesPresenter(SteeLog.CompositionRoot.LocalServices.Current.Executor);
+            return presenter.ListarAsync(new FiltroMaterialLectura { SoloStockBajo = true }, token);
+        }
+
         private async void VistaGeneral_Shown(object sender, EventArgs e)
         {
-            // Pequeño retardo para que la interfaz se muestre primero y el toast se asome despues suavemente
-            await Task.Delay(1000);
-
-            // 2. Chequear stock bajo
             try
             {
-                var materiales = new SteeLog.Datos.MaterialDatos().obtenerMateriales();
-                int countBajoStock = materiales.Count(m => m.stockMinimo > 0 && m.stockActual <= m.stockMinimo);
-                
+                var token = _tokenCierreStock;
+                await _esperarStock(token);
+                token.ThrowIfCancellationRequested();
+                var materiales = await _consultarStock(token);
+                if (token.IsCancellationRequested || IsDisposed || Disposing) return;
+                int countBajoStock = materiales.Count;
                 if (countBajoStock > 0)
                 {
-                    ToastNotification.ShowWarning(
-                        $"¡Atención! Hay {countBajoStock} materiales con stock bajo. CLICK AQUÍ para verlos.",
-                        () => 
+                    _mostrarStock(countBajoStock, () =>
                         {
-                            using (var modal = new ModalStockBajo())
-                            {
-                                modal.ShowDialog(this);
-                            }
-                        }
-                    );
+                            if (token.IsCancellationRequested || IsDisposed || Disposing) return;
+                            using (var modal = new ModalStockBajo()) modal.ShowDialog(this);
+                        });
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                Console.WriteLine("Error al chequear stock inicial: " + ex.Message);
+                if (!IsDisposed && !Disposing)
+                    Console.WriteLine("Error al chequear stock inicial: " + ex.Message);
             }
         }
         

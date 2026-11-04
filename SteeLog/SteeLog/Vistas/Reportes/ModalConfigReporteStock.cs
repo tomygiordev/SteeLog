@@ -4,15 +4,26 @@ using System.Drawing;
 using System.Linq;
 using System.Text;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using SteeLog.CompositionRoot;
+using SteeLog.Presentation;
+using SteeLog.Core.Application.Reportes;
+using System.Threading;
 using SteeLog.Modelos;
 
 namespace SteeLog.Vistas.Reportes
 {
     public class ModalConfigReporteStock : Form
     {
-        private readonly ReporteStockDatos datos = new ReporteStockDatos();
-        private readonly MaterialDatos materialDatos = new MaterialDatos();
+        private readonly ReporteStockPresenter presenter;
+        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
+        private Action<string> avisarError = mensaje => ToastNotification.ShowError(mensaje);
+        private Action<string> avisarExito = mensaje => ToastNotification.ShowSuccess(mensaje);
+        private readonly CancellationTokenSource vida = new CancellationTokenSource();
+        private bool cargado;
+        private object identidadDatos;
+        private bool guardando;
+        private void CancelarOperaciones() { if (!vida.IsCancellationRequested) vida.Cancel(); }
+        protected override void Dispose(bool disposing) { if (disposing) CancelarOperaciones(); base.Dispose(disposing); }
 
         private readonly ListBox lstSecciones = new ListBox();
         private readonly TextBox txtNombreSeccion = new TextBox();
@@ -26,8 +37,9 @@ namespace SteeLog.Vistas.Reportes
 
         private bool actualizandoUI;
 
-        public ModalConfigReporteStock()
+        public ModalConfigReporteStock(ReporteStockPresenter presenter)
         {
+            this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             Text = "Configurar secciones del reporte de stock";
             StartPosition = FormStartPosition.CenterParent;
             Size = new Size(1100, 720);
@@ -37,7 +49,15 @@ namespace SteeLog.Vistas.Reportes
             Font = new Font("Bahnschrift Light", 10F);
 
             CrearInterfaz();
-            CargarDatos();
+            Load += (s, e) => CargarDatos();
+            FormClosed += (s, e) => CancelarOperaciones();
+        }
+
+        internal ModalConfigReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Action<string> avisarError, Action<string> avisarExito) : this(presenter)
+        {
+            this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
+            this.avisarError = avisarError ?? throw new ArgumentNullException(nameof(avisarError));
+            this.avisarExito = avisarExito ?? throw new ArgumentNullException(nameof(avisarExito));
         }
 
         private void CrearInterfaz()
@@ -265,46 +285,28 @@ namespace SteeLog.Vistas.Reportes
             return boton;
         }
 
-        private void CargarDatos(int? seleccionarSeccionId = null)
+        private async void CargarDatos(int? seleccionarSeccionId = null)
         {
+            cargado = false;
+            identidadDatos = null;
+            var identidad = identidadActual();
             try
             {
+                var lista = await presenter.MaterialesAsync(vida.Token);
+                var configuracion = await presenter.SeccionesAsync(vida.Token);
+                if (vida.IsCancellationRequested || IsDisposed || !ReferenceEquals(identidad, identidadActual())) return;
                 actualizandoUI = true;
-                materialesDisponibles = materialDatos.obtenerMateriales()
-                    .OrderBy(m => m.nombre_categoria)
-                    .ThenBy(m => m.nombre)
-                    .ToList();
-
-                secciones.Clear();
-                seccionesEliminadas.Clear();
-
-                foreach (var seccion in datos.ObtenerSecciones())
-                {
-                    var asignados = datos.ObtenerMaterialesSeccion(seccion.id);
-                    var materiales = asignados
-                        .OrderBy(m => m.orden)
-                        .Select(m => CrearMaterialSeleccionado(m.idMaterial))
-                        .Where(m => m != null)
-                        .ToList();
-
-                    secciones.Add(new SeccionEditable
-                    {
-                        id = seccion.id,
-                        nombre = seccion.nombre,
-                        Materiales = materiales
-                    });
-                }
-
+                materialesDisponibles = lista.Select(m => new Material { id = m.Id, nombre = m.Nombre, nombre_categoria = m.Categoria }).OrderBy(m => m.nombre_categoria).ThenBy(m => m.nombre).ToList();
+                secciones.Clear(); seccionesEliminadas.Clear();
+                foreach (var seccion in configuracion)
+                    secciones.Add(new SeccionEditable { id = seccion.Id, nombre = seccion.Nombre, Materiales = seccion.Materiales.Select(CrearMaterialSeleccionado).Where(m => m != null).ToList() });
                 RefrescarSecciones(seleccionarSeccionId);
+                identidadDatos = identidad;
+                cargado = true;
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo cargar la configuración de secciones del reporte de stock. " + ex.Message);
-            }
-            finally
-            {
-                actualizandoUI = false;
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed) avisarError("No se pudo cargar la configuración de secciones del reporte de stock. " + ex.Message); }
+            finally { actualizandoUI = false; }
         }
 
         private void RefrescarSecciones(int? seleccionarSeccionId = null)
@@ -554,46 +556,25 @@ namespace SteeLog.Vistas.Reportes
             lstMaterialesSeccion.SelectedItem = material;
         }
 
-        private void GuardarTodo()
+        private async void GuardarTodo()
         {
+            if (!cargado || guardando || vida.IsCancellationRequested || !ReferenceEquals(identidadDatos, identidadActual())) return;
             try
             {
                 ValidarConfiguracion();
-
-                foreach (var idSeccion in seccionesEliminadas.Distinct().ToList())
-                {
-                    datos.EliminarSeccion(idSeccion);
-                }
-
-                for (int i = 0; i < secciones.Count; i++)
-                {
-                    var seccion = secciones[i];
-                    seccion.nombre = (seccion.nombre ?? string.Empty).Trim();
-                    seccion.id = datos.GuardarSeccion(seccion.id, seccion.nombre, i + 1);
-                }
-
-                foreach (var seccion in secciones)
-                {
-                    var materiales = seccion.Materiales
-                        .Select((material, indice) => new ReporteStockMaterialConfigurado
-                        {
-                            idMaterial = material.idMaterial,
-                            orden = indice + 1
-                        })
-                        .ToList();
-
-                    datos.GuardarMaterialesSeccion(seccion.id, materiales);
-                }
-
-                seccionesEliminadas.Clear();
-                int? seccionId = SeccionActual != null && SeccionActual.id != 0 ? SeccionActual.id : (int?)null;
-                CargarDatos(seccionId);
-                ToastNotification.ShowSuccess("Configuración de secciones guardada.");
+                var snapshot = secciones.Select(s => new SteeLog.Core.Application.Reportes.ReporteStockSeccion { Id = s.id, Nombre = s.nombre, Materiales = s.Materiales.Select(m => m.idMaterial).ToList() }).ToArray();
+                var eliminadas = seccionesEliminadas.ToArray();
+                var identidad = identidadActual();
+                guardando = true;
+                Enabled = false;
+                await presenter.GuardarAsync(snapshot, eliminadas, vida.Token);
+                if (vida.IsCancellationRequested || IsDisposed || !ReferenceEquals(identidad, identidadActual())) return;
+                CargarDatos();
+                avisarExito("Configuración de secciones guardada.");
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo guardar la configuración del reporte: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed) avisarError("No se pudo guardar la configuración del reporte: " + ex.Message); }
+            finally { guardando = false; if (!IsDisposed && !vida.IsCancellationRequested) Enabled = true; }
         }
 
         private void ValidarConfiguracion()

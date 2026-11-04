@@ -13,7 +13,7 @@ foreach ($config in @('Debug', 'Release')) {
  & $msbuild (Join-Path $root 'SteeLog.csproj') /t:Build "/p:Configuration=$config" "/p:OutputPath=$out\" "/p:BaseIntermediateOutputPath=$obj\" /v:quiet /nologo; CheckNative
 }
 Copy-Item (Join-Path $dir 'Debug\*') $build -Recurse -Force
-& $csc /nologo /target:exe "/out:$build\ConfigurationTests.exe" "/reference:$build\SteeLog.exe" "/reference:$root\..\packages\Npgsql.5.0.18\lib\netstandard2.0\Npgsql.dll" /reference:netstandard.dll (Join-Path $PSScriptRoot 'ConfigurationTests.cs'); CheckNative
+& $csc /nologo /target:exe "/out:$build\ConfigurationTests.exe" "/reference:$build\SteeLog.exe" /reference:System.Data.dll (Join-Path $PSScriptRoot 'ConfigurationTests.cs'); CheckNative
 Copy-Item (Join-Path $build 'SteeLog.exe.config') (Join-Path $build 'ConfigurationTests.exe.config')
 foreach ($mode in @('override','fallback','malformed','empty','invalid','leak','failure')) {
  $scenario = Join-Path $dir $mode; Copy-Item $build $scenario -Recurse

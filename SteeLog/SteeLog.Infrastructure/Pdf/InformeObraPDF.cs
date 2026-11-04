@@ -78,23 +78,6 @@ namespace SteeLog.Infrastructure.Pdf
             }
         }
 
-        private static decimal CalcularValorMovimientos(IEnumerable<InformeMovimientoDetallePdf> movimientos)
-        {
-            return (movimientos ?? Enumerable.Empty<InformeMovimientoDetallePdf>())
-                .GroupBy(m => m.id_movimiento)
-                .Sum(grupo =>
-                {
-                    string tipo = (grupo.First().tipo_movimiento ?? "").ToUpperInvariant();
-                    decimal precioTotal = grupo.Max(m => m.precio_total);
-                    decimal totalDetalles = grupo.Sum(m => m.cantidad * m.precio_unitario);
-
-                    if (tipo.Contains("COMPRA EVENTUAL") && totalDetalles == 0 && precioTotal > 0)
-                        return precioTotal;
-
-                    return totalDetalles;
-                });
-        }
-
         private void AgregarEncabezado(Document doc, string nombreObra, int cantRemitos, decimal totalPendiente, bool mostrarValorizacion, MarcaPdf marca, DateTime? desde = null, DateTime? hasta = null)
         {
             PdfPTable headerTable = new PdfPTable(2);
@@ -283,7 +266,7 @@ namespace SteeLog.Infrastructure.Pdf
                 }
 
                 bool alternar = false;
-                decimal subtotal = CalcularValorMovimientos(grupo);
+                decimal subtotal = ValorizacionInformeObra.CalcularValor(grupo);
 
                 var itemsAgrupados = grupo
                     .GroupBy(m => new {
@@ -305,7 +288,7 @@ namespace SteeLog.Infrastructure.Pdf
 
                         decimal cantidadTotal = g.Sum(x => x.cantidad);
                         decimal precioUnitario = g.Key.PrecioUnitario;
-                        decimal totalFila = cantidadTotal * precioUnitario;
+                        decimal totalFila = ValorizacionInformeObra.ValorDetalle(cantidadTotal, precioUnitario);
 
                         return new {
                             Fecha = g.Key.Fecha,

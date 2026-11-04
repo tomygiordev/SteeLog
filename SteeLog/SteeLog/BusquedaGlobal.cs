@@ -8,8 +8,10 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows.Forms;
-using SteeLog.Datos;
-using SteeLog.Modelos;
+using SteeLog.Core.Application.Inventario;
+using SteeLog.Core.Application.Activos;
+using SteeLog.CompositionRoot;
+using SteeLog.Presentation;
 using SteeLog.Servicios;
 using System.Data;
 
@@ -25,13 +27,16 @@ namespace SteeLog
         private Timer _timerDebounce;
         internal sealed class Snapshot
         {
-            internal List<Material> Materiales;
-            internal List<Recorte> Recortes;
-            internal List<Herramienta> Herramientas;
-            internal List<Insumo> Insumos;
+            internal IReadOnlyList<MaterialInventarioLectura> Materiales;
+            internal IReadOnlyList<RecorteLectura> Recortes;
+            internal IReadOnlyList<HerramientaLectura> Herramientas;
+            internal IReadOnlyList<InsumoLectura> Insumos;
         }
         private readonly object _cacheGate = new object();
-        private readonly Func<Snapshot> _loader;
+        private readonly Func<Task<Snapshot>> _loader;
+        private Task<Snapshot> _loading;
+        private readonly System.Threading.CancellationTokenSource _cierre = new System.Threading.CancellationTokenSource();
+        private readonly System.Threading.CancellationToken _tokenCierre;
         private Snapshot _cache;
         private DateTime _cacheTimestampUtc = DateTime.MinValue;
         private Timer _timerLostFocus;
@@ -39,13 +44,17 @@ namespace SteeLog
         private int _searchVersion = 0;
 
         public BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
-            : this(parentForm, panelMaximizar, openChildForm, CargarSnapshot)
+            : this(parentForm, panelMaximizar, openChildForm, (Func<Task<Snapshot>>)null)
         {
         }
 
         internal BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Snapshot> loader)
+            : this(parentForm, panelMaximizar, openChildForm, loader == null ? null : (Func<Task<Snapshot>>)(() => Task.Run(loader))) { }
+
+        private BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Task<Snapshot>> loader)
         {
-            _loader = loader ?? throw new ArgumentNullException(nameof(loader));
+            _tokenCierre = _cierre.Token;
+            _loader = loader ?? CargarSnapshotAsync;
             _parentForm = parentForm;
             _panelMaximizar = panelMaximizar;
             _openChildForm = openChildForm;
@@ -259,28 +268,28 @@ namespace SteeLog
             List<ResultadoBusqueda> resultados;
             try
             {
-                resultados = await Task.Run(() =>
+                resultados = await Task.Run(async () =>
                 {
-                    Snapshot snapshot = ObtenerSnapshot();
+                    Snapshot snapshot = await ObtenerSnapshotAsync().ConfigureAwait(false);
 
                     var candidatos = new List<(ResultadoBusqueda item, int estricto, int fuzzy)>();
 
                     foreach (var m in snapshot.Materiales)
                     {
-                        string textoBusqueda = $"material materiales {m.nombre} {m.nombre_categoria}";
-                        var puntajes = CalcularPuntajes(query, m.nombre, textoBusqueda);
+                        string textoBusqueda = $"material materiales {m.Nombre} {m.Categoria}";
+                        var puntajes = CalcularPuntajes(query, m.Nombre, textoBusqueda);
                         if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
                             candidatos.Add((new ResultadoBusqueda
                             {
-                                Nombre = m.nombre,
+                                Nombre = m.Nombre,
                                 Tipo = "Material",
                                 Extra = ocultarCantidades
-                                    ? SessionManager.ObtenerEstadoStockMaterial(m.stockActual)
-                                    : $"Stock: {m.stockActual:N0}",
+                                    ? SessionManager.ObtenerEstadoStockMaterial(m.Stock)
+                                    : $"Stock: {m.Stock:N0}",
                                 Detalles = ocultarCantidades
-                                    ? $"Categoría: {m.nombre_categoria}\nDisponibilidad: {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
-                                    : $"Categoría: {m.nombre_categoria}\nStock Actual: {m.stockActual:N0}\nStock Mínimo: {m.stockMinimo:N0}",
+                                    ? $"Categoría: {m.Categoria}\nDisponibilidad: {SessionManager.ObtenerEstadoStockMaterial(m.Stock)}"
+                                    : $"Categoría: {m.Categoria}\nStock Actual: {m.Stock:N0}\nStock Mínimo: {m.Minimo:N0}",
                                 Icono = "📦",
                                 Color = Color.FromArgb(39, 174, 96)
                             }, puntajes.estricto, puntajes.fuzzy));
@@ -290,20 +299,20 @@ namespace SteeLog
                     foreach (var r in snapshot.Recortes)
                     {
                         string dimensiones = FormatearDimensiones(r);
-                        if (r.ancho > 0) dimensiones += " " + r.ancho;
-                        if (r.altura > 0) dimensiones += " " + r.altura;
-                        if (r.medida > 0) dimensiones += " " + r.medida.ToString("0.##");
-                        string textoBusqueda = $"recorte recortes {r.nombre_material} {r.nombre_categoria} {dimensiones}";
-                        var puntajes = CalcularPuntajes(query, r.nombre_material, textoBusqueda);
+                        if (r.Ancho > 0) dimensiones += " " + r.Ancho;
+                        if (r.Altura > 0) dimensiones += " " + r.Altura;
+                        if (r.Medida > 0) dimensiones += " " + r.Medida.ToString("0.##");
+                        string textoBusqueda = $"recorte recortes {r.Material} {r.Categoria} {dimensiones}";
+                        var puntajes = CalcularPuntajes(query, r.Material, textoBusqueda);
                         if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
                             string dimensionesDisplay = FormatearDimensiones(r);
                             candidatos.Add((new ResultadoBusqueda
                             {
-                                Nombre = r.nombre_material,
+                                Nombre = r.Material,
                                 Tipo = "Recorte",
-                                Extra = $"{dimensionesDisplay} • Cantidad: {r.cantidad:N0}",
-                                Detalles = $"Material: {r.nombre_material}\nCategoría: {r.nombre_categoria}\nDimensiones: {dimensionesDisplay}\nCantidad: {r.cantidad:N0}",
+                                Extra = $"{dimensionesDisplay} • Cantidad: {r.Cantidad:N0}",
+                                Detalles = $"Material: {r.Material}\nCategoría: {r.Categoria}\nDimensiones: {dimensionesDisplay}\nCantidad: {r.Cantidad:N0}",
                                 Icono = "✂️",
                                 Color = Color.Orange
                             }, puntajes.estricto, puntajes.fuzzy));
@@ -312,16 +321,16 @@ namespace SteeLog
 
                     foreach (var h in snapshot.Herramientas)
                     {
-                        string textoBusqueda = $"herramienta herramientas {h.nombre} {h.estado} {h.nombre_obra} {h.observaciones}";
-                        var puntajes = CalcularPuntajes(query, h.nombre, textoBusqueda);
+                        string textoBusqueda = $"herramienta herramientas {h.Nombre} {h.Estado} {h.Obra} {h.Observaciones}";
+                        var puntajes = CalcularPuntajes(query, h.Nombre, textoBusqueda);
                         if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
                             candidatos.Add((new ResultadoBusqueda
                             {
-                                Nombre = h.nombre,
+                                Nombre = h.Nombre,
                                 Tipo = "Herramienta",
-                                Extra = h.estado + (string.IsNullOrEmpty(h.nombre_obra) ? "" : $" | {h.nombre_obra}"),
-                                Detalles = $"Estado: {h.estado}\nUbicación actual: {(string.IsNullOrEmpty(h.nombre_obra) ? "Galpón" : h.nombre_obra)}\nObservaciones: {(string.IsNullOrEmpty(h.observaciones) ? "Ninguna" : h.observaciones)}",
+                                Extra = h.Estado + (string.IsNullOrEmpty(h.Obra) ? "" : $" | {h.Obra}"),
+                                Detalles = $"Estado: {h.Estado}\nUbicación actual: {(string.IsNullOrEmpty(h.Obra) ? "Galpón" : h.Obra)}\nObservaciones: {(string.IsNullOrEmpty(h.Observaciones) ? "Ninguna" : h.Observaciones)}",
                                 Icono = "🔧",
                                 Color = Color.FromArgb(52, 152, 219)
                             }, puntajes.estricto, puntajes.fuzzy));
@@ -330,17 +339,17 @@ namespace SteeLog
 
                     foreach (var ins in snapshot.Insumos)
                     {
-                        string textoBusqueda = $"insumo insumos {ins.nombre} {ins.nombre_obra} {ins.observaciones}";
-                        var puntajes = CalcularPuntajes(query, ins.nombre, textoBusqueda);
+                        string textoBusqueda = $"insumo insumos {ins.Nombre} {ins.Obra} {ins.Observaciones}";
+                        var puntajes = CalcularPuntajes(query, ins.Nombre, textoBusqueda);
                         if (puntajes.estricto > 0 || puntajes.fuzzy > 0)
                         {
-                            string estadoInsumo = ins.consumido ? "Consumido" : (string.IsNullOrEmpty(ins.nombre_obra) ? "Disponible" : "En Obra");
+                            string estadoInsumo = ins.Consumido ? "Consumido" : (string.IsNullOrEmpty(ins.Obra) ? "Disponible" : "En Obra");
                             candidatos.Add((new ResultadoBusqueda
                             {
-                                Nombre = ins.nombre,
+                                Nombre = ins.Nombre,
                                 Tipo = "Insumo",
-                                Extra = ins.consumido ? "Consumido" : (ins.nombre_obra ?? "Galpón"),
-                                Detalles = $"Estado: {estadoInsumo}\nUbicación: {(string.IsNullOrEmpty(ins.nombre_obra) ? "Galpón" : ins.nombre_obra)}",
+                                Extra = ins.Consumido ? "Consumido" : (ins.Obra ?? "Galpón"),
+                                Detalles = $"Estado: {estadoInsumo}\nUbicación: {(string.IsNullOrEmpty(ins.Obra) ? "Galpón" : ins.Obra)}",
                                 Icono = "🧱",
                                 Color = Color.FromArgb(243, 156, 18)
                             }, puntajes.estricto, puntajes.fuzzy));
@@ -387,28 +396,43 @@ namespace SteeLog
             MostrarResultados(resultados, query);
         }
 
-        private static Snapshot CargarSnapshot()
+        private async Task<Snapshot> CargarSnapshotAsync()
         {
-            return new Snapshot
-            {
-                Materiales = new MaterialDatos().obtenerMateriales(),
-                Recortes = new RecorteDatos().ObtenerRecortes(),
-                Herramientas = new HerramientaDatos().GetHerramientas(),
-                Insumos = new InsumoDatos().GetInsumos()
-            };
+            var token = _tokenCierre;
+            token.ThrowIfCancellationRequested();
+            var executor = LocalServices.Current.Executor;
+            var materiales = executor.ExecuteAsync<ConsultarMateriales, IReadOnlyList<MaterialInventarioLectura>>(x => x.ListarAsync(null, token));
+            var recortes = executor.ExecuteAsync<ConsultarRecortes, IReadOnlyList<RecorteLectura>>(x => x.ListarAsync(token: token));
+            var herramientas = executor.ExecuteAsync<ConsultarHerramientas, IReadOnlyList<HerramientaLectura>>(x => x.HerramientasAsync(token));
+            var insumos = executor.ExecuteAsync<ConsultarInsumos, IReadOnlyList<InsumoLectura>>(x => x.InsumosAsync(token));
+            await Task.WhenAll(materiales, recortes, herramientas, insumos).ConfigureAwait(false);
+            return new Snapshot { Materiales = await materiales.ConfigureAwait(false), Recortes = await recortes.ConfigureAwait(false),
+                Herramientas = await herramientas.ConfigureAwait(false), Insumos = await insumos.ConfigureAwait(false) };
         }
 
-        private Snapshot ObtenerSnapshot()
+        private async Task<Snapshot> ObtenerSnapshotAsync()
         {
+            Task<Snapshot> loading;
             lock (_cacheGate)
             {
                 if (_cache != null && (DateTime.UtcNow - _cacheTimestampUtc).TotalSeconds <= 10) return _cache;
-                var nuevo = _loader();
+                loading = _loading ?? (_loading = _loader());
+            }
+            try
+            {
+                var nuevo = await loading.ConfigureAwait(false);
                 if (nuevo == null || nuevo.Materiales == null || nuevo.Recortes == null || nuevo.Herramientas == null || nuevo.Insumos == null)
                     throw new InvalidOperationException("No se pudieron cargar los datos de búsqueda.");
-                _cache = nuevo;
-                _cacheTimestampUtc = DateTime.UtcNow;
+                lock (_cacheGate)
+                {
+                    if (ReferenceEquals(_loading, loading)) { _cache = nuevo; _cacheTimestampUtc = DateTime.UtcNow; _loading = null; }
+                }
                 return nuevo;
+            }
+            catch
+            {
+                lock (_cacheGate) { if (ReferenceEquals(_loading, loading)) _loading = null; }
+                throw;
             }
         }
 
@@ -438,6 +462,8 @@ namespace SteeLog
         {
             if (_disposed) return;
             _disposed = true;
+            _cierre.Cancel();
+            _cierre.Dispose();
             ++_searchVersion;
             _parentForm.Disposed -= ParentDisposed;
             _parentForm.KeyDown -= ParentKeyDown;
@@ -572,16 +598,16 @@ namespace SteeLog
                 .ToArray();
         }
 
-        private static string FormatearDimensiones(Recorte r)
+        private static string FormatearDimensiones(RecorteLectura r)
         {
-            if (r.ancho > 0 && r.altura > 0)
-                return $"{r.ancho} x {r.altura}";
-            if (r.medida > 0)
-                return r.medida.ToString("0.##");
-            if (r.ancho > 0)
-                return r.ancho.ToString("0.##");
-            if (r.altura > 0)
-                return r.altura.ToString("0.##");
+            if (r.Ancho > 0 && r.Altura > 0)
+                return $"{r.Ancho} x {r.Altura}";
+            if (r.Medida > 0)
+                return r.Medida.ToString("0.##");
+            if (r.Ancho > 0)
+                return r.Ancho.ToString("0.##");
+            if (r.Altura > 0)
+                return r.Altura.ToString("0.##");
             return "-";
         }
 

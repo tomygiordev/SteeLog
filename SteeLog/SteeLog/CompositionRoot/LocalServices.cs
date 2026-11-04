@@ -27,6 +27,7 @@ using SteeLog.Core.Application.Reportes;
 using SteeLog.Infrastructure.Canaletas;
 using SteeLog.Core.Application.Catalogos;
 using SteeLog.Infrastructure.Catalogos;
+using SteeLog.Infrastructure.Reportes;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IDisposable
@@ -45,6 +46,8 @@ namespace SteeLog.CompositionRoot
         internal IRemitoPdf RemitoPdf { get; }
         internal IConteoPdf ConteoPdf { get; }
         internal IInformeObraPdf InformeObraPdf { get; }
+        internal IKardexPdf KardexPdf { get; }
+        internal IReporteStockPdf ReporteStockPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
         private readonly Lazy<LocalConfiguration> configuration;
@@ -68,6 +71,8 @@ namespace SteeLog.CompositionRoot
             RemitoPdf = new SteeLog.Infrastructure.Pdf.MovimientoPDF(new RecursosPdfLocales());
             ConteoPdf = new SteeLog.Infrastructure.Pdf.ConteoInventarioPDF(new RecursosPdfLocales());
             InformeObraPdf = new SteeLog.Infrastructure.Pdf.InformeObraPDF(new RecursosPdfLocales());
+            KardexPdf = new SteeLog.Infrastructure.Pdf.KardexPDF(new RecursosPdfLocales());
+            ReporteStockPdf = new SteeLog.Infrastructure.Pdf.ReporteStockPDF(new RecursosPdfLocales());
             registrations.AddSingleton(Updates);
             registrations.AddSingleton<IArchivosCanaleta>(new LocalCanaletaStorage(Paths.StorageDirectory));
             registrations.AddScoped<ICanaletasConsulta>(_ => new NpgsqlCanaletasConsulta(Connections));
@@ -112,6 +117,14 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<ICatalogosEscritura, NpgsqlCatalogos>();
             registrations.AddScoped<ConsultarCatalogos>();
             registrations.AddScoped<GestionarCatalogos>();
+            registrations.AddScoped<IKardexConsulta>(_ => new NpgsqlKardexConsulta(Connections));
+            registrations.AddScoped<ConsultarKardex>();
+            registrations.AddScoped<IInformeObraConsulta>(_ => new NpgsqlInformeObraConsulta(Connections));
+            registrations.AddScoped<ConsultarInformeObra>();
+            registrations.AddScoped<IReporteStockConsulta>(_ => new NpgsqlReporteStockConsulta(Connections));
+            registrations.AddScoped<IReporteStockConfiguracion, NpgsqlReporteStockConfiguracion>();
+            registrations.AddScoped<ConsultarReporteStock>();
+            registrations.AddScoped<GuardarReporteStockConfiguracion>();
             registrations.AddScoped<IRemitoConsulta>(_ => new NpgsqlRemitoConsulta(Connections));
             registrations.AddScoped<ConsultarRemito>();
             registrations.AddScoped<ICatalogosMovimientoConsulta>(_ => new NpgsqlCatalogosMovimientoConsulta(Connections));
@@ -143,8 +156,6 @@ namespace SteeLog.CompositionRoot
         internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;
-        internal void EnsureConnectionFactory() { var unused = Connections; }
-        internal Npgsql.NpgsqlConnection CreateConnection() => Connections.Create();
         public void Dispose() => provider.Dispose();
         internal static LocalServices Create() => new LocalServices(AppDomain.CurrentDomain.BaseDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
     }

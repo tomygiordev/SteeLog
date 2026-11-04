@@ -1,15 +1,17 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using iTextSharp.text;
 using iTextSharp.text.pdf;
-using SteeLog.Modelos;
+using SteeLog.Core.Application.Reportes;
 
-namespace SteeLog.Reportes
+namespace SteeLog.Infrastructure.Pdf
 {
-    public class KardexPDF
+    public sealed class KardexPDF : IKardexPdf
     {
+        private readonly IRecursosPdf recursos;
+        public KardexPDF(IRecursosPdf recursos) { this.recursos = recursos ?? throw new ArgumentNullException(nameof(recursos)); }
         // ── Paleta corporativa (igual que MovimientoPDF) ──────────────────────
         private static readonly BaseColor COLOR_VERDE_OSCURO  = new BaseColor(25,  50,  35);
         private static readonly BaseColor COLOR_VERDE_HEADER  = new BaseColor(35,  63,  43);
@@ -49,34 +51,25 @@ namespace SteeLog.Reportes
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        public static void Generar(
-            string rutaDestino,
-            List<KardexItem> historial,
-            string materialNombre,
-            DateTime fechaInicio,
-            DateTime fechaFin,
-            bool mostrarColumnaMaterial,
-            bool mostrarColumnaSaldo)
+        public void Generar(string rutaDestino, KardexSnapshot snapshot)
         {
-            Document doc = new Document(PageSize.A4, 40, 40, 40, 55);
-            PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(rutaDestino, FileMode.Create));
-            writer.PageEvent = new PieKardex();
-            doc.Open();
-
-            // ─── ENCABEZADO ───────────────────────────────────────────────────
-            AgregarEncabezado(doc, materialNombre, fechaInicio, fechaFin);
-
-            // ─── TABLA DE MOVIMIENTOS ─────────────────────────────────────────
-            AgregarTablaMovimientos(doc, historial, mostrarColumnaMaterial, mostrarColumnaSaldo);
-
-            // ─── RESUMEN / PIE ────────────────────────────────────────────────
-            AgregarResumen(doc, historial, mostrarColumnaSaldo);
-
-            doc.Close();
+            if (snapshot == null) throw new ArgumentNullException(nameof(snapshot));
+            if (snapshot.Historial == null) throw new ArgumentException("Historial requerido.", nameof(snapshot));
+            var marca = recursos.Capturar();
+            using (var stream = new FileStream(rutaDestino, FileMode.Create))
+            using (var doc = new Document(PageSize.A4, 40, 40, 40, 55))
+            {
+                var writer = PdfWriter.GetInstance(doc, stream);
+                writer.PageEvent = new PieKardex(marca);
+                doc.Open();
+                AgregarEncabezado(doc, snapshot.MaterialNombre, snapshot.FechaInicio, snapshot.FechaFin, marca);
+                AgregarTablaMovimientos(doc, snapshot.Historial, snapshot.MostrarColumnaMaterial, snapshot.MostrarColumnaSaldo);
+                AgregarResumen(doc, snapshot.Historial, snapshot.MostrarColumnaSaldo);
+            }
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        private static void AgregarEncabezado(Document doc, string materialNombre, DateTime inicio, DateTime fin)
+        private static void AgregarEncabezado(Document doc, string materialNombre, DateTime inicio, DateTime fin, MarcaPdf marca)
         {
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -85,7 +78,7 @@ namespace SteeLog.Reportes
             // ── IZQUIERDA: logo + datos empresa ───────────────────────────────
             PdfPCell cellIzq = new PdfPCell { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
 
-            cellIzq.AddElement(Branding.PdfLogo(150, 62));
+            var logo = Image.GetInstance(marca.LogoPng); logo.ScaleToFit(150, 62); logo.Alignment = Element.ALIGN_LEFT; cellIzq.AddElement(logo);
 
             cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8 });
             cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2 });
@@ -101,7 +94,7 @@ namespace SteeLog.Reportes
                 new Font(Font.FontFamily.HELVETICA, 10, Font.NORMAL, COLOR_TEXTO))
                 { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
             cellDer.AddElement(new Paragraph(
-                $"Generado: {DateTime.Now:dd/MM/yyyy HH:mm}",
+                $"Generado: {marca.FechaLocal:dd/MM/yyyy HH:mm}",
                 new Font(Font.FontFamily.HELVETICA, 9, Font.NORMAL, new BaseColor(120, 120, 120)))
                 { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 2 });
             headerTable.AddCell(cellDer);
@@ -121,11 +114,12 @@ namespace SteeLog.Reportes
             PdfPTable tabla = new PdfPTable(cols);
             tabla.WidthPercentage = 100;
             tabla.SpacingAfter = 15;
+            tabla.HeaderRows = 2;
 
             if (mostrarMaterial && mostrarSaldo)
-                tabla.SetWidths(new float[] { 10f, 22f, 15f, 10f, 14f, 14f, 15f });
+                tabla.SetWidths(new float[] { 13f, 20f, 15f, 10f, 14f, 14f, 14f });
             else if (mostrarMaterial)
-                tabla.SetWidths(new float[] { 11f, 25f, 18f, 12f, 17f, 17f });
+                tabla.SetWidths(new float[] { 13f, 23f, 18f, 12f, 17f, 17f });
             else if (mostrarSaldo)
                 tabla.SetWidths(new float[] { 12f, 22f, 12f, 16f, 16f, 22f });
             else
@@ -169,7 +163,10 @@ namespace SteeLog.Reportes
             {
                 BaseColor bg = alt ? COLOR_FONDO_FILA : COLOR_BLANCO;
 
-                tabla.AddCell(FilaCelda(item.fecha.ToString("dd/MM/yyyy"), Element.ALIGN_CENTER, bg, fntCelda));
+                var celdaFecha = FilaCelda(item.fecha.ToString("dd/MM/yyyy"), Element.ALIGN_CENTER, bg, fntCelda);
+                celdaFecha.PaddingLeft = celdaFecha.PaddingRight = 3;
+                celdaFecha.NoWrap = true;
+                tabla.AddCell(celdaFecha);
 
                 if (mostrarMaterial)
                     tabla.AddCell(FilaCelda(item.nombre_material ?? "-", Element.ALIGN_LEFT, bg, fntCelda));
@@ -219,7 +216,7 @@ namespace SteeLog.Reportes
                 BackgroundColor = COLOR_VERDE_ACCENT,
                 Border = Rectangle.NO_BORDER,
                 Padding = 5,
-                Colspan = 3
+                Colspan = mostrarSaldo ? 3 : 2
             };
             tRes.AddCell(hRes);
 
@@ -252,7 +249,7 @@ namespace SteeLog.Reportes
                 BackgroundColor = COLOR_FONDO_FILA,
                 BorderColor     = COLOR_GRIS_CLARO,
                 Padding         = 6,
-                Colspan         = 2,
+                Colspan         = t.NumberOfColumns - 1,
                 HorizontalAlignment = Element.ALIGN_RIGHT
             });
             var fnt = new Font(
@@ -269,8 +266,10 @@ namespace SteeLog.Reportes
     }
 
     // ── PIE DE PÁGINA ─────────────────────────────────────────────────────────
-    public class PieKardex : PdfPageEventHelper
+    internal sealed class PieKardex : PdfPageEventHelper
     {
+        private readonly MarcaPdf marca;
+        public PieKardex(MarcaPdf marca) { this.marca = marca; }
         public override void OnEndPage(PdfWriter writer, Document document)
         {
             PdfContentByte cb = writer.DirectContent;
@@ -286,7 +285,7 @@ namespace SteeLog.Reportes
             cb.SetFontAndSize(bf, 8);
             cb.SetColorFill(new BaseColor(120, 120, 120));
             cb.ShowTextAligned(Element.ALIGN_LEFT,
-                "SteeLog - Sistema de Gestión de Inventario — Kardex generado " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"),
+                marca.Pie + " — Kardex generado " + marca.FechaLocal.ToString("dd/MM/yyyy HH:mm"),
                 document.LeftMargin, document.Bottom - 28, 0);
             cb.ShowTextAligned(Element.ALIGN_RIGHT,
                 "Pág. " + writer.PageNumber,

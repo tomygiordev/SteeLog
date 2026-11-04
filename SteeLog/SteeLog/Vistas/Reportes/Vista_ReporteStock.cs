@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -7,12 +7,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
+
 using SteeLog.Presentation;
 using SteeLog.Modelos;
 using SteeLog.Servicios;
-using iTextSharp.text;
-using iTextSharp.text.pdf;
+using SteeLog.CompositionRoot;
+using SteeLog.Core.Application.Inventario;
+using SteeLog.Core.Application.Reportes;
+using System.Threading;
 using System.IO;
 using OfficeOpenXml;
 using System.Windows.Forms.DataVisualization.Charting;
@@ -27,7 +29,20 @@ namespace SteeLog.Vistas
         private Guna.UI2.WinForms.Guna2Button btnConfigurarSecciones;
         private bool panelesVisibles = false;
         private int panelDashboardHeight;
-        private readonly ReporteStockDatos reporteStockDatos = new ReporteStockDatos();
+        private ReporteStockPresenter presenter;
+        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
+        private Func<bool> esAdmin = () => SessionManager.Role == UserRole.Admin;
+        private Func<string> elegirPdf = ElegirDestinoPdf;
+        private Action<string> abrirPdf = ruta => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ruta) { UseShellExecute = true });
+        private Action<string> avisarError = mensaje => ToastNotification.ShowError(mensaje);
+        private Action<string> avisarExito = mensaje => ToastNotification.ShowSuccess(mensaje);
+        private readonly CancellationTokenSource vida = new CancellationTokenSource();
+        private CancellationTokenSource carga;
+        private int version;
+        private bool exportando;
+        private object identidadDatos;
+        private FiltroMaterialParams filtroActual;
+        private void CancelarOperaciones() { if (!vida.IsCancellationRequested) vida.Cancel(); carga?.Cancel(); }
 
         public Vista_ReporteStock()
         {
@@ -35,12 +50,25 @@ namespace SteeLog.Vistas
             this.Load += Vista_ReporteStock_Load;
             dgvMateriales.CellPainting += dgvMateriales_CellPainting;
             dgvMateriales.SelectionChanged += dgvMateriales_SelectionChanged;
-            CargarMateriales();
-            CrearBotonTogglePaneles();
+            FormClosed += (s, e) => CancelarOperaciones();
+        }
+
+        internal Vista_ReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Func<bool> esAdmin, Func<string> elegirPdf, Action<string> abrirPdf, Action<string> avisarError, Action<string> avisarExito) : this()
+        {
+            this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+            this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
+            this.esAdmin = esAdmin ?? throw new ArgumentNullException(nameof(esAdmin));
+            this.elegirPdf = elegirPdf ?? throw new ArgumentNullException(nameof(elegirPdf));
+            this.abrirPdf = abrirPdf ?? throw new ArgumentNullException(nameof(abrirPdf));
+            this.avisarError = avisarError ?? throw new ArgumentNullException(nameof(avisarError));
+            this.avisarExito = avisarExito ?? throw new ArgumentNullException(nameof(avisarExito));
         }
 
         private void Vista_ReporteStock_Load(object sender, EventArgs e)
         {
+            if (presenter == null) presenter = new ReporteStockPresenter(LocalServices.Current.Executor, LocalServices.Current.ReporteStockPdf);
+            CrearBotonTogglePaneles();
+            CargarMateriales();
             panelDashboardHeight = panelDashboard.Height;
             panelDashboard.Visible = false;
             materiales.Top = panelDashboard.Top;
@@ -67,7 +95,7 @@ namespace SteeLog.Vistas
             panelAntiParpadeo6.Controls.Add(btnTogglePaneles, 1, 0);
             btnTogglePaneles.Anchor = AnchorStyles.Right;
 
-            if (SessionManager.Role == UserRole.Admin)
+            if (esAdmin())
             {
                 btnConfigurarSecciones = new Guna.UI2.WinForms.Guna2Button
                 {
@@ -88,7 +116,7 @@ namespace SteeLog.Vistas
 
         private void BtnConfigurarSecciones_Click(object sender, EventArgs e)
         {
-            using (var modal = new Reportes.ModalConfigReporteStock())
+            using (var modal = new Reportes.ModalConfigReporteStock(presenter))
                 modal.ShowDialog(this);
             CargarMateriales(txtFiltroMaterial.Text.Trim(), toggleStockBajo.Checked);
         }
@@ -115,46 +143,33 @@ namespace SteeLog.Vistas
             materiales.Height = this.ClientSize.Height - materiales.Top;
         }
 
-        private void CargarMateriales(string nombre = null, bool soloStockBajo = false, FiltroMaterialParams filtro = null)
+        private async void CargarMateriales(string nombre = null, bool soloStockBajo = false, FiltroMaterialParams filtro = null)
         {
+            if (presenter == null || vida.IsCancellationRequested) return;
+            if (filtro != null) filtroActual = filtro;
+            carga?.Cancel();
+            var anterior = carga;
+            carga = CancellationTokenSource.CreateLinkedTokenSource(vida.Token);
+            anterior?.Dispose();
+            var token = carga.Token;
+            int solicitud = ++version;
+            var identidad = identidadActual();
+            dgvMateriales.DataSource = null;
+            identidadDatos = null;
+            var f = filtroActual;
+            var consulta = new FiltroMaterialLectura { Nombre = nombre ?? f?.Nombre, SoloStockBajo = soloStockBajo || (f?.SoloStockBajo ?? false), Desde = f?.DesdeCantidad, Hasta = f?.HastaCantidad, Categorias = f?.IdsCategoria, Proveedores = f?.IdsProveedor };
             try
             {
-                MaterialDatos datos = new MaterialDatos();
-                List<Material> listaMateriales;
-                if (reporteStockDatos.TieneConfiguracion())
-                {
-                    listaMateriales = reporteStockDatos.ObtenerMaterialesReporte(nombre, soloStockBajo);
-                    if (filtro != null)
-                    {
-                        var idsFiltrados = new HashSet<int>(datos.obtenerMateriales(filtro).Select(m => m.id));
-                        listaMateriales = listaMateriales.Where(m => idsFiltrados.Contains(m.id)).ToList();
-                    }
-
-                    AplicarCabecerasDeSeccion(listaMateriales);
-                    listaMateriales = ConstruirFilasConSeparadores(listaMateriales);
-                }
-                else if (soloStockBajo)
-                {
-                    listaMateriales = datos.ObtenerMaterialesStockBajoPriorizados();
-                    if (!string.IsNullOrWhiteSpace(nombre))
-                        listaMateriales = listaMateriales.Where(m => m.nombre.IndexOf(nombre, StringComparison.OrdinalIgnoreCase) >= 0).ToList();
-                }
-                else
-                {
-                    listaMateriales = filtro != null ? datos.obtenerMateriales(filtro) : datos.obtenerMateriales(nombre);
-                }
-                dgvMateriales.DataSource = new SortableBindingList<Material>(listaMateriales);
-
-
-                ConfigurarGrid();
-                AplicarAlturaFilasEspeciales();
-                CalcularTotales();
-                ActualizarGrafico();
+                var items = await presenter.ListarAsync(consulta, token);
+                if (token.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
+                var lista = items.Select(i => new Material { id = i.Material.Id, nombre = i.Material.Nombre, id_categoria = i.Material.CategoriaId, nombre_categoria = i.Material.Categoria, precioUnitario = i.Material.Precio, stockActual = i.Material.Stock, stockMinimo = i.Material.Minimo, cantidadUsada = i.Material.CantidadUsada, cantidadMovimientos = i.Material.CantidadMovimientos, reporteSeccion = i.Seccion, reporteOrdenSeccion = i.OrdenSeccion, reporteOrdenMaterial = i.OrdenMaterial }).ToList();
+                AplicarCabecerasDeSeccion(lista);
+                dgvMateriales.DataSource = new SortableBindingList<Material>(ConstruirFilasConSeparadores(lista));
+                ConfigurarGrid(); AplicarAlturaFilasEspeciales(); CalcularTotales(); ActualizarGrafico();
+                identidadDatos = identidad;
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("No se pudo cargar los materiales: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!token.IsCancellationRequested && !IsDisposed && solicitud == version) avisarError("No se pudo cargar los materiales: " + ex.Message); }
         }
 
         private List<Material> ConstruirFilasConSeparadores(List<Material> materiales)
@@ -206,8 +221,8 @@ namespace SteeLog.Vistas
 
         private void ConfigurarGrid()
         {
-            bool mostrarPrecios = SessionManager.Role == UserRole.Admin;
-            bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+            bool mostrarPrecios = esAdmin();
+            bool ocultarCantidades = !esAdmin();
 
             dgvMateriales.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvMateriales.MultiSelect = false;
@@ -375,7 +390,7 @@ namespace SteeLog.Vistas
                         return;
                     }
 
-                    if (SessionManager.DebeOcultarCantidadesStockMateriales
+                    if (!esAdmin()
                         && dgvMateriales.Columns[e.ColumnIndex].Name == "stockActual")
                     {
                         e.Value = SessionManager.ObtenerEstadoStockMaterial(item.stockActual);
@@ -526,18 +541,21 @@ namespace SteeLog.Vistas
 
         private void btnExportarExcel_Click(object sender, EventArgs e)
         {
+            if (identidadDatos == null || !ReferenceEquals(identidadDatos, identidadActual())) return;
              if (dgvMateriales.Rows.Count == 0)
             {
                 ToastNotification.ShowWarning("No hay datos para exportar.");
                 return;
             }
 
+            int versionExportacion = version;
             SaveFileDialog save = new SaveFileDialog();
             save.Filter = "Excel Files (*.xlsx)|*.xlsx";
             save.FileName = "ReporteStock_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
 
             if (save.ShowDialog() == DialogResult.OK)
             {
+                if (IsDisposed || vida.IsCancellationRequested || versionExportacion != version || !ReferenceEquals(identidadDatos, identidadActual())) return;
                 try
                 {
                     using (ExcelPackage excel = new ExcelPackage())
@@ -579,7 +597,7 @@ namespace SteeLog.Vistas
                             for (int j = 0; j < visibleColumns.Count; j++)
                             {
                                 object cellValue = dgvMateriales.Rows[i].Cells[visibleColumns[j].Index].Value;
-                                if (SessionManager.DebeOcultarCantidadesStockMateriales && visibleColumns[j].Name == "stockActual")
+                                if (!esAdmin() && visibleColumns[j].Name == "stockActual")
                                     cellValue = SessionManager.ObtenerEstadoStockMaterial(material.stockActual);
                                 ws.Cells[i + 2, j + 1].Value = cellValue;
 
@@ -637,202 +655,47 @@ namespace SteeLog.Vistas
             CargarMateriales(filtro: filtro);
         }
 
-        private static void AgregarEncabezado(Document doc)
+        private async void btnExportarPDF_Click(object sender, EventArgs e)
         {
-                    // Encabezado
-                    PdfPTable headerTable = new PdfPTable(2);
-                    headerTable.WidthPercentage = 100;
-                    headerTable.SetWidths(new float[] { 45f, 55f });
-
-                    // ======= IZQUIERDA: LOGO Y DATOS DE EMPRESA =======
-                    PdfPCell cellIzq = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP };
-
-                    // Logo cargado desde recurso embebido
-                    cellIzq.AddElement(Branding.PdfLogo(150, 62));
-
-                    // Datos de la empresa
-                    var fntDir = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 8, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
-                    var fntTributo = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 7, iTextSharp.text.Font.NORMAL, new BaseColor(80, 80, 80));
-
-                    cellIzq.AddElement(new Paragraph("SteeLog — Sistema de gestión de inventario", fntDir) { SpacingBefore = 8, Alignment = Element.ALIGN_LEFT });
-                    cellIzq.AddElement(new Paragraph("Proyecto académico · Datos de demostración", fntTributo) { SpacingBefore = 2, Alignment = Element.ALIGN_LEFT });
-                    cellIzq.AddElement(new Paragraph("SteeLog - Logística y Stock", fntTributo) { SpacingBefore = 1, Alignment = Element.ALIGN_LEFT });
-
-                    headerTable.AddCell(cellIzq);
-
-                    // ======= DERECHA: TÍTULO Y SUBTÍTULO =======
-                    PdfPCell cellDer = new PdfPCell() { Border = iTextSharp.text.Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
-                    var fntTitle = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 20, iTextSharp.text.Font.BOLD, new BaseColor(25, 50, 35));
-                    var fntSub = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 11, iTextSharp.text.Font.NORMAL, new BaseColor(100, 100, 100));
-
-                    cellDer.AddElement(new Paragraph("REPORTE DE STOCK", fntTitle) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0 });
-                    cellDer.AddElement(new Paragraph("Inventario al " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), fntSub) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
-
-                    headerTable.AddCell(cellDer);
-
-                    doc.Add(headerTable);
-
-                    PdfPTable lineaSep = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 5, SpacingAfter = 15 };
-                    lineaSep.AddCell(new PdfPCell { Border = iTextSharp.text.Rectangle.BOTTOM_BORDER, BorderColor = new BaseColor(25, 135, 84), BorderWidth = 2, FixedHeight = 3 });
-                    doc.Add(lineaSep);
-
-        }
-
-        private void btnExportarPDF_Click(object sender, EventArgs e)
-        {
-            if (dgvMateriales.Rows.Count == 0)
+            if (exportando || identidadDatos == null || !ReferenceEquals(identidadDatos, identidadActual()) || dgvMateriales.DataSource == null || dgvMateriales.Rows.Count == 0) return;
+            int versionExportacion = version;
+            string destino = elegirPdf();
+            if (string.IsNullOrEmpty(destino)) return;
+            if (IsDisposed || vida.IsCancellationRequested || versionExportacion != version || !ReferenceEquals(identidadDatos, identidadActual())) return;
             {
-                ToastNotification.ShowWarning("No hay datos para exportar.");
-                return;
-            }
-
-            SaveFileDialog save = new SaveFileDialog();
-            save.Filter = "PDF Files (*.pdf)|*.pdf";
-            save.FileName = "ReporteStock_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".pdf";
-
-            if (save.ShowDialog() == DialogResult.OK)
-            {
+                var columnas = dgvMateriales.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
+                var snapshot = new ReporteStockSnapshot { TotalMateriales = lblTotalVal.Text, TotalStockBajo = lblBajoVal.Text,
+                    Columnas = columnas.Select(c => new ReporteStockColumnaPdf { Nombre = c.Name, Titulo = c.HeaderText }).ToList() };
+                foreach (DataGridViewRow row in dgvMateriales.Rows)
+                {
+                    if (row.IsNewRow) continue;
+                    var mat = row.DataBoundItem as Material;
+                    if (mat == null) continue;
+                    snapshot.Filas.Add(mat.esFilaSeparadora ? new ReporteStockFilaPdf { Seccion = mat.tituloSeparador ?? "" } : new ReporteStockFilaPdf {
+                        StockBajo = mat.stockMinimo > 0 && mat.stockActual <= mat.stockMinimo,
+                        Valores = columnas.Select(c => row.Cells[c.Index].FormattedValue?.ToString() ?? "").ToList() });
+                }
+                int solicitud = version;
+                var identidad = identidadActual();
+                var temporal = Path.Combine(Path.GetTempPath(), "ReporteStock_" + Guid.NewGuid().ToString("N") + ".pdf");
+                exportando = true;
                 try
                 {
-                    // Crear documento con los mismos márgenes que MovimientoPDF
-                    Document doc = new Document(PageSize.A4, 40, 40, 40, 60);
-                    PdfWriter writer = PdfWriter.GetInstance(doc, new FileStream(save.FileName, FileMode.Create));
-
-                    writer.PageEvent = new PieReporteStock();
-
-                    doc.Open();
-
-                    AgregarEncabezado(doc);
-
-                    // Información global
-                    PdfPTable infoTable = new PdfPTable(4) { WidthPercentage = 100, SpacingAfter = 20 };
-                    infoTable.SetWidths(new float[] { 22f, 28f, 22f, 28f });
-                    var fntEtiq = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 10, iTextSharp.text.Font.BOLD, new BaseColor(80, 80, 80));
-                    var fntVal = new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 10, iTextSharp.text.Font.NORMAL, new BaseColor(33, 37, 41));
-                    BaseColor bgFila = new BaseColor(245, 248, 246);
-                    BaseColor borderC = new BaseColor(230, 230, 230);
-
-                    infoTable.AddCell(new PdfPCell(new Phrase("Total Materiales:", fntEtiq)) { BackgroundColor = bgFila, BorderColor = borderC, Padding = 8, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    infoTable.AddCell(new PdfPCell(new Phrase(lblTotalVal.Text, fntVal)) { BackgroundColor = BaseColor.WHITE, BorderColor = borderC, Padding = 8 });
-                    infoTable.AddCell(new PdfPCell(new Phrase("Stock Bajo:", fntEtiq)) { BackgroundColor = bgFila, BorderColor = borderC, Padding = 8, HorizontalAlignment = Element.ALIGN_RIGHT });
-                    infoTable.AddCell(new PdfPCell(new Phrase(lblBajoVal.Text, fntVal)) { BackgroundColor = BaseColor.WHITE, BorderColor = borderC, Padding = 8 });
-                    doc.Add(infoTable);
-
-                    // Tabla
-                    var visibleColumns = dgvMateriales.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
-                    PdfPTable table = new PdfPTable(visibleColumns.Count);
-                    table.WidthPercentage = 100;
-
-                    // Ajustar anchos proporcionalmente (basado en el grid si es posible o equilibrado)
-                    float[] widths = new float[visibleColumns.Count];
-                    for (int i = 0; i < visibleColumns.Count; i++) widths[i] = 1f; 
-                    table.SetWidths(widths);
-
-                    // Cabeceras
-                    foreach (var col in visibleColumns)
-                    {
-                        PdfPCell cell = new PdfPCell(new Phrase(col.HeaderText, new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 9, iTextSharp.text.Font.BOLD, BaseColor.WHITE)));
-                        cell.BackgroundColor = new BaseColor(35, 63, 43);
-                        cell.HorizontalAlignment = Element.ALIGN_CENTER;
-                        cell.Border = iTextSharp.text.Rectangle.NO_BORDER;
-                        cell.Padding = 6;
-                        table.AddCell(cell);
-                    }
-
-                    // Datos
-                    bool alt = false;
-                    foreach (DataGridViewRow row in dgvMateriales.Rows)
-                    {
-                        if (row.IsNewRow) continue;
-                        var material = row.DataBoundItem as Material;
-                        if (material != null && material.esFilaSeparadora)
-                        {
-                            var celdaSeccion = new PdfPCell(new Phrase(
-                                material.tituloSeparador?.ToUpperInvariant() ?? string.Empty,
-                                new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 10, iTextSharp.text.Font.BOLD, BaseColor.WHITE)))
-                            {
-                                Colspan = visibleColumns.Count,
-                                BackgroundColor = new BaseColor(24, 74, 53),
-                                Border = iTextSharp.text.Rectangle.NO_BORDER,
-                                Padding = 7
-                            };
-                            table.AddCell(celdaSeccion);
-                            alt = false;
-                            continue;
-                        }
-                        BaseColor bgColor = alt ? new BaseColor(245, 248, 246) : BaseColor.WHITE;
-
-                        foreach (var col in visibleColumns)
-                        {
-                            string cellValue = row.Cells[col.Index].FormattedValue?.ToString() ?? "";
-                            PdfPCell cell = new PdfPCell(new Phrase(cellValue, new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 9, iTextSharp.text.Font.NORMAL, new BaseColor(33, 37, 41))));
-                            cell.VerticalAlignment = Element.ALIGN_MIDDLE;
-                            cell.HorizontalAlignment = col.Name == "precioUnitario" || col.Name == "valorTotal"
-                                ? Element.ALIGN_RIGHT
-                                : (col.Name.Contains("stock") ? Element.ALIGN_CENTER : Element.ALIGN_LEFT);
-                            cell.BackgroundColor = bgColor;
-                            cell.Border = iTextSharp.text.Rectangle.BOX;
-                            cell.BorderColor = new BaseColor(230, 230, 230);
-                            cell.BorderWidth = 0.5f;
-                            cell.Padding = 5;
-
-                            // Si el stock es bajo
-                            if (col.Name == "stockActual")
-                            {
-                                if (row.DataBoundItem is Material mat && mat.stockMinimo > 0 && mat.stockActual <= mat.stockMinimo)
-                                {
-                                    cell.BackgroundColor = new BaseColor(255, 235, 235); // Fondo rojizo suave
-                                    cell.Phrase = new Phrase(cellValue, new iTextSharp.text.Font(iTextSharp.text.Font.FontFamily.HELVETICA, 9, iTextSharp.text.Font.BOLD, new BaseColor(200, 30, 30)));
-                                }
-                            }
-
-                            table.AddCell(cell);
-                        }
-                        alt = !alt;
-                    }
-
-                    doc.Add(table);
-                    doc.Close();
-
-                    ToastNotification.ShowSuccess("Reporte exportado correctamente a PDF.");
-
-                    // Autoabrir PDF
-                    try {
-                        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo()
-                        {
-                            FileName = save.FileName,
-                            UseShellExecute = true
-                        });
-                    } catch { }
+                    await presenter.GenerarAsync(temporal, snapshot, vida.Token);
+                    if (vida.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
+                    File.Copy(temporal, destino, true);
+                    avisarExito("Reporte exportado correctamente a PDF.");
+                    try { abrirPdf(destino); } catch { }
                 }
-                catch (Exception ex)
-                {
-                    ToastNotification.ShowError("Error al exportar PDF: " + ex.Message);
-                }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed && solicitud == version) avisarError("Error al exportar PDF: " + ex.Message); }
+                finally { exportando = false; try { if (File.Exists(temporal)) File.Delete(temporal); } catch { } }
             }
         }
-    }
-
-    public class PieReporteStock : PdfPageEventHelper
-    {
-        public override void OnEndPage(PdfWriter writer, Document document)
+        private static string ElegirDestinoPdf()
         {
-            PdfContentByte cb = writer.DirectContent;
-            BaseFont bf = BaseFont.CreateFont(BaseFont.HELVETICA_OBLIQUE, BaseFont.CP1252, BaseFont.NOT_EMBEDDED);
-
-            // Línea separadora inferior
-            cb.SetColorStroke(new BaseColor(25, 135, 84));
-            cb.SetLineWidth(1f);
-            cb.MoveTo(document.LeftMargin, document.Bottom - 15);
-            cb.LineTo(document.PageSize.Width - document.RightMargin, document.Bottom - 15);
-            cb.Stroke();
-
-            cb.BeginText();
-            cb.SetFontAndSize(bf, 8);
-            cb.SetColorFill(new BaseColor(120, 120, 120));
-            cb.ShowTextAligned(Element.ALIGN_LEFT, "SteeLog - Sistema de Gestión de Inventario — Generado " + DateTime.Now.ToString("dd/MM/yyyy HH:mm"), document.LeftMargin, document.Bottom - 28, 0);
-            cb.ShowTextAligned(Element.ALIGN_RIGHT, "Página " + writer.PageNumber, document.PageSize.Width - document.RightMargin, document.Bottom - 28, 0);
-            cb.EndText();
+            using (var save = new SaveFileDialog { Filter = "PDF Files (*.pdf)|*.pdf", FileName = "ReporteStock_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".pdf" })
+                return save.ShowDialog() == DialogResult.OK ? save.FileName : null;
         }
     }
 }

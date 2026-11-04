@@ -153,17 +153,16 @@ public class ArchitectureTests
         }
     }
     [Fact]
-    public void Host_legacy_type_dependencies_match_explicit_retirement_inventory()
+    public void Host_has_zero_legacy_dependencies_and_zero_retirement_exceptions()
     {
         using (var host = Read(HostPath))
         {
             var actual = Violations(host);
             var inventory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "LegacyDependencies.txt");
             var entries = File.ReadAllLines(inventory).Where(x => !string.IsNullOrWhiteSpace(x) && !x.StartsWith("#")).ToArray();
-            Assert.All(entries, x => Assert.Matches(@"^F[3-8] \| [^*]+ -> [^*]+$", x));
-            Assert.Equal(entries.Length, entries.Distinct().Count());
-            var expected = entries.Select(x => x.Substring(x.IndexOf(" | ", StringComparison.Ordinal) + 3));
-            Assert.Equal(expected.OrderBy(x => x, StringComparer.Ordinal), actual);
+            Assert.Empty(entries);
+            Assert.Empty(actual);
+            Assert.DoesNotContain(host.MainModule.AssemblyReferences, r => r.Name == "Npgsql" || r.Name.Equals("itextsharp", StringComparison.OrdinalIgnoreCase));
         }
     }
     [Fact]

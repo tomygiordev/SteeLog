@@ -13,7 +13,7 @@ using SteeLog.Core.Application.Activos;
 using SteeLog.Presentation;
 using SteeLog.CompositionRoot;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using SteeLog.Core.Application.Reportes;
 using SteeLog.Modelos;
 using SteeLog.Reportes;
 using SteeLog.Servicios;
@@ -25,9 +25,9 @@ namespace SteeLog.Vistas.Reportes
     {
         private string tabActual = "movimientos";
         private bool cargando = false;
-        private List<InformeMovimientoDetalle> movimientosActuales = new List<InformeMovimientoDetalle>();
-        private List<InformeHerramientaDetalle> herramientasActuales = new List<InformeHerramientaDetalle>();
-        private List<InformeInsumoDetalle> insumosActuales = new List<InformeInsumoDetalle>();
+        private List<InformeMovimientoDetallePdf> movimientosActuales = new List<InformeMovimientoDetallePdf>();
+        private List<InformeHerramientaDetallePdf> herramientasActuales = new List<InformeHerramientaDetallePdf>();
+        private List<InformeInsumoDetallePdf> insumosActuales = new List<InformeInsumoDetallePdf>();
         private List<CanaletaLectura> canaletasPlegadosActuales = new List<CanaletaLectura>();
         private readonly ContextMenuStrip menuHerramientas = new ContextMenuStrip();
         private readonly ToolStripMenuItem itemEnviarAGalpon = new ToolStripMenuItem("Enviar herramienta al galpón");
@@ -35,27 +35,29 @@ namespace SteeLog.Vistas.Reportes
         private CancellationTokenSource cargaObra;
         private int versionObra;
         private readonly CanaletasPresenter presenterInyectado;
-        private readonly Func<int, string, CancellationToken, Task<LecturasObra>> cargarLegacy;
+        private readonly Func<int, string, CancellationToken, Task<LecturasObra>> cargarLecturas;
         internal Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> GenerarInforme;
         internal Action<string> AbrirInforme;
         internal Func<CancellationToken, Task<IReadOnlyList<ObraCatalogo>>> ConsultarObras;
         internal Func<int, CancellationToken, Task<int>> RetornarHerramienta;
         internal Action<string> AvisarRetorno;
         private bool retornandoHerramienta;
+        private bool generandoInforme;
         private CanaletasPresenter Presenter => presenterInyectado ?? new CanaletasPresenter(LocalServices.Current.Executor);
         internal sealed class LecturasObra
         {
-            internal List<InformeMovimientoDetalle> Movimientos;
-            internal List<InformeHerramientaDetalle> Herramientas;
-            internal List<InformeInsumoDetalle> Insumos;
+            internal List<InformeMovimientoDetallePdf> Movimientos;
+            internal List<InformeHerramientaDetallePdf> Herramientas;
+            internal List<InformeInsumoDetallePdf> Insumos;
+            internal bool Mostrar;
         }
         internal Vista_InformeObra(CanaletasPresenter presenter, Func<int, string, CancellationToken, Task<LecturasObra>> cargar) : this()
-        { presenterInyectado = presenter; cargarLegacy = cargar; }
-        private Task<LecturasObra> LeerLegacyAsync(int id, string nombre, CancellationToken token)
+        { presenterInyectado = presenter; cargarLecturas = cargar; }
+        private async Task<LecturasObra> LeerDatosAsync(int id, string nombre, CancellationToken token)
         {
-            if (cargarLegacy != null) return cargarLegacy(id, nombre, token);
-            return Task.Run(() => { token.ThrowIfCancellationRequested(); var datos = new InformeObraDatos();
-                return new LecturasObra { Movimientos = datos.ObtenerMovimientosObra(id), Herramientas = datos.ObtenerHerramientasObra(id, nombre), Insumos = datos.ObtenerInsumosObra(id, nombre) }; }, token);
+            if (cargarLecturas != null) return await cargarLecturas(id, nombre, token);
+            var lecturas = await new InformeObraPresenter(LocalServices.Current.Executor, LocalServices.Current.InformeObraPdf).LecturasAsync(id, nombre, token);
+            return new LecturasObra { Movimientos = lecturas.Movimientos, Herramientas = lecturas.Herramientas, Insumos = lecturas.Insumos, Mostrar = lecturas.MostrarValorizacion };
         }
         private void HabilitarAcciones(bool habilitado) { panelTabs.Enabled = habilitado; dgvDatos.Enabled = habilitado; btnDescargar.Enabled = habilitado; }
         private void CancelarOperaciones() { vida.Cancel(); cargaObra?.Cancel(); }
@@ -174,23 +176,22 @@ namespace SteeLog.Vistas.Reportes
                 DataRowView drv = (DataRowView)cmbObras.SelectedItem;
                 string nombreObra = drv["nombre"].ToString();
 
-                bool mostrar = SessionManager.Role == UserRole.Admin || nombreObra.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0;
                 HabilitarAcciones(false);
-                var legacyTask = LeerLegacyAsync(idObra, nombreObra, token);
+                var lecturasTask = LeerDatosAsync(idObra, nombreObra, token);
                 var canaletasTask = Presenter.ListarAsync(idObra, token);
-                await Task.WhenAll(legacyTask, canaletasTask);
+                await Task.WhenAll(lecturasTask, canaletasTask);
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
-                var legacy = await legacyTask;
-                movimientosActuales = legacy.Movimientos;
-                herramientasActuales = legacy.Herramientas;
-                insumosActuales = legacy.Insumos;
+                var lecturas = await lecturasTask;
+                movimientosActuales = lecturas.Movimientos;
+                herramientasActuales = lecturas.Herramientas;
+                insumosActuales = lecturas.Insumos;
                 canaletasPlegadosActuales = (await canaletasTask).ToList();
-                mostrarValorizacionActual = mostrar;
+                mostrarValorizacionActual = lecturas.Mostrar;
                 HabilitarAcciones(true);
                 decimal totalCanaletasPendientes = canaletasPlegadosActuales
                     .Where(c => !c.Pagado)
                     .Sum(c => c.Precio);
-                InformeObraResumen resumen = InformeObraDatos.CalcularResumen(movimientosActuales, mostrarValorizacionActual, totalCanaletasPendientes);
+                InformeObraResumenPdf resumen = ConsultarInformeObra.Resumir(movimientosActuales, mostrarValorizacionActual, totalCanaletasPendientes);
 
                 // Actualizar resumen
                 lblRemitos.Text = "Remitos: " + resumen.CantRemitos;
@@ -331,11 +332,10 @@ namespace SteeLog.Vistas.Reportes
                 .ThenBy(m => m.fecha)
                 .ToList();
 
-            var comprasEventualesMostradas = new HashSet<int>();
-            var comprasEventualesConPrecioIndividual = new HashSet<int>(
-                movimientosActuales.Where(m => m.es_compra_eventual && m.precio_unitario > 0).Select(m => m.id_movimiento));
-            foreach (var m in ordenados)
+            var totalesFilas = mostrarValorizacionActual ? ValorizacionInformeObra.ValoresFilas(ordenados, movimientosActuales) : null;
+            for (int i = 0; i < ordenados.Count; i++)
             {
+                var m = ordenados[i];
                 string material = m.material;
                 if (m.esrecorte && !string.IsNullOrEmpty(m.medida_recorte))
                     material += " [RECORTE: " + m.medida_recorte + "]";
@@ -355,13 +355,8 @@ namespace SteeLog.Vistas.Reportes
 
                 if (mostrarValorizacionActual)
                 {
-                    bool esCompraEventual = (m.tipo_movimiento ?? "").IndexOf("COMPRA EVENTUAL", StringComparison.OrdinalIgnoreCase) >= 0;
-                    decimal totalFila = m.cantidad * m.precio_unitario;
-                    if (esCompraEventual && m.precio_total > 0 && !comprasEventualesConPrecioIndividual.Contains(m.id_movimiento))
-                        totalFila = comprasEventualesMostradas.Add(m.id_movimiento) ? m.precio_total : 0;
-
                     valores.Add(m.precio_unitario);
-                    valores.Add(totalFila);
+                    valores.Add(totalesFilas[i]);
                 }
 
                 dt.Rows.Add(valores.ToArray());
@@ -532,28 +527,11 @@ namespace SteeLog.Vistas.Reportes
 
             foreach (var grupo in grupos)
             {
-                decimal enviado  = grupo
-                    .Where(m => m.destino != null && m.destino.Equals(nombreObra, StringComparison.OrdinalIgnoreCase))
-                    .Sum(m => m.cantidad);
-                decimal devuelto = grupo
-                    .Where(m => m.origen != null && m.origen.Equals(nombreObra, StringComparison.OrdinalIgnoreCase))
-                    .Sum(m => m.cantidad);
-                decimal neto = enviado - devuelto;
-                decimal precioUnitario = grupo
-                    .OrderByDescending(m => m.fecha)
-                    .Select(m => m.precio_unitario)
-                    .FirstOrDefault();
-                decimal valorEnviado = grupo
-                    .Where(m => m.destino != null && m.destino.Equals(nombreObra, StringComparison.OrdinalIgnoreCase))
-                    .Sum(m => m.cantidad * m.precio_unitario);
-                decimal valorDevuelto = grupo
-                    .Where(m => m.origen != null && m.origen.Equals(nombreObra, StringComparison.OrdinalIgnoreCase))
-                    .Sum(m => m.cantidad * m.precio_unitario);
-
+                var balance = ValorizacionInformeObra.BalanceMaterial(grupo, nombreObra);
                 if (mostrarValorizacionActual)
-                    dt.Rows.Add(grupo.Key, enviado, devuelto, neto, precioUnitario, valorEnviado - valorDevuelto);
+                    dt.Rows.Add(grupo.Key, balance.Enviado, balance.Devuelto, balance.Neto, balance.PrecioUnitario, balance.ValorNeto);
                 else
-                    dt.Rows.Add(grupo.Key, enviado, devuelto, neto);
+                    dt.Rows.Add(grupo.Key, balance.Enviado, balance.Devuelto, balance.Neto);
             }
 
             if (mostrarValorizacionActual && dt.Rows.Count > 0)
@@ -613,11 +591,10 @@ namespace SteeLog.Vistas.Reportes
                 .OrderByDescending(m => m.fecha)
                 .ToList();
 
-            var comprasEventualesMostradas = new HashSet<int>();
-            var comprasEventualesConPrecioIndividual = new HashSet<int>(
-                eventuales.Where(m => m.es_compra_eventual && m.precio_unitario > 0).Select(m => m.id_movimiento));
-            foreach (var m in eventuales)
+            var totalesFilas = mostrarValorizacionActual ? ValorizacionInformeObra.ValoresFilas(eventuales, eventuales) : null;
+            for (int i = 0; i < eventuales.Count; i++)
             {
+                var m = eventuales[i];
                 var valores = new List<object>
                 {
                     m.material,
@@ -628,13 +605,8 @@ namespace SteeLog.Vistas.Reportes
 
                 if (mostrarValorizacionActual)
                 {
-                    bool esCompraEventual = (m.tipo_movimiento ?? "").IndexOf("COMPRA EVENTUAL", StringComparison.OrdinalIgnoreCase) >= 0;
-                    decimal totalFila = m.cantidad * m.precio_unitario;
-                    if (esCompraEventual && m.precio_total > 0 && !comprasEventualesConPrecioIndividual.Contains(m.id_movimiento))
-                        totalFila = comprasEventualesMostradas.Add(m.id_movimiento) ? m.precio_total : 0;
-
                     valores.Add(m.precio_unitario);
-                    valores.Add(totalFila);
+                    valores.Add(totalesFilas[i]);
                 }
 
                 dt.Rows.Add(valores.ToArray());
@@ -811,6 +783,7 @@ namespace SteeLog.Vistas.Reportes
 
         private async void btnDescargar_Click(object sender, EventArgs e)
         {
+            if (generandoInforme) return;
             if (cmbObras.SelectedIndex == -1)
             {
                 ToastNotification.ShowWarning("Seleccione una obra.");
@@ -821,9 +794,10 @@ namespace SteeLog.Vistas.Reportes
             DataRowView drv = (DataRowView)cmbObras.SelectedItem;
             string nombreObra = drv["nombre"].ToString();
 
+            int version = versionObra;
             using (var modal = new ModalFechasInformeObra(idObra))
             {
-                if (modal.ShowDialog() != DialogResult.OK)
+                if (modal.ShowDialog(this) != DialogResult.OK || vida.IsCancellationRequested || IsDisposed || version != versionObra)
                     return;
 
                 await GenerarInformeAsync(idObra, nombreObra, modal.FechaDesde, modal.FechaHasta);
@@ -833,6 +807,8 @@ namespace SteeLog.Vistas.Reportes
 
         internal async Task GenerarInformeAsync(int idObra, string nombreObra, DateTime? desde, DateTime? hasta)
         {
+            if (generandoInforme || vida.IsCancellationRequested) return;
+            generandoInforme = true;
             int version = versionObra;
             var token = cargaObra?.Token ?? vida.Token;
             btnDescargar.Enabled = false;
@@ -857,7 +833,7 @@ namespace SteeLog.Vistas.Reportes
                 lblEstado.Text = "Error al generar";
                 ToastNotification.ShowError("Error al generar el informe:\n" + ex.Message);
             }
-            finally { if (!IsDisposed && !token.IsCancellationRequested && version == versionObra) btnDescargar.Enabled = true; }
+            finally { generandoInforme = false; if (!IsDisposed && !token.IsCancellationRequested && version == versionObra) btnDescargar.Enabled = true; }
         }
 
         private void InicializarMenuHerramientas()

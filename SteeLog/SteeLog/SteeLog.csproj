@@ -105,23 +105,14 @@
     <Reference Include="Microsoft.Extensions.Primitives, Version=10.0.0.2, Culture=neutral, PublicKeyToken=adb9793829ddae60, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Extensions.Primitives.10.0.2\lib\net462\Microsoft.Extensions.Primitives.dll</HintPath>
     </Reference>
-    <Reference Include="Npgsql, Version=5.0.18.0, Culture=neutral, PublicKeyToken=5d8b90d52f46fda7, processorArchitecture=MSIL">
-      <HintPath>..\packages\Npgsql.5.0.18\lib\netstandard2.0\Npgsql.dll</HintPath>
-    </Reference>
     <Reference Include="System.Resources.Extensions">
       <SpecificVersion>False</SpecificVersion>
       <HintPath>..\packages\System.Resources.Extensions.6.0.0\lib\net461\System.Resources.Extensions.dll</HintPath>
-    </Reference>
-    <Reference Include="BouncyCastle.Crypto">
-      <HintPath>packages\BouncyCastle.Crypto.dll</HintPath>
     </Reference>
     <Reference Include="EPPlus">
       <HintPath>packages\EPPlus.dll</HintPath>
     </Reference>
     <Reference Include="System.Windows.Forms.DataVisualization" />
-    <Reference Include="itextsharp">
-      <HintPath>packages\itextsharp.dll</HintPath>
-    </Reference>
     <Reference Include="System">
       <HintPath>..\..\..\..\..\..\..\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.8\System.dll</HintPath>
     </Reference>
@@ -175,18 +166,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Datos\ConexionDB.cs" />
-    <Compile Include="Datos\MaterialDatos.cs" />
-    <Compile Include="Datos\HerramientaDatos.cs" />
-    <Compile Include="Datos\InsumoDatos.cs" />
-    <Compile Include="Datos\InformeObraDatos.cs" />
-    <Compile Include="Datos\MovimientoDatos.cs" />
-    <Compile Include="Datos\RecorteDatos.cs" />
-    <Compile Include="Datos\ReporteStockDatos.cs" />
-    <Compile Include="Datos\SortableBindingList.cs" />
+    <Compile Include="Presentation\SortableBindingList.cs" />
     <Compile Include="Modelos\Categoria.cs" />
     <Compile Include="Modelos\Flete.cs" />
-    <Compile Include="Modelos\KardexItem.cs" />
     <Compile Include="Modelos\Material.cs" />
     <Compile Include="Modelos\Obra.cs" />
     <Compile Include="Modelos\Movimiento.cs" />
@@ -202,7 +184,6 @@
     <Compile Include="Modelos\Recorte.cs" />
     <Compile Include="Modelos\HistorialMovimiento.cs" />
     <Compile Include="Modelos\ReporteOrdenPendienteItem.cs" />
-    <Compile Include="Modelos\ReporteStockConfiguracion.cs" />
     <Compile Include="IRefrescable.cs" />
     <Compile Include="MovimientoDraftService.cs" />
     <Compile Include="ToastNotification.cs">
@@ -367,7 +348,6 @@
     </Compile>
     <Compile Include="Branding.cs" />
     <Compile Include="Reportes\InformeObraPDF.cs" />
-    <Compile Include="Reportes\KardexPDF.cs" />
     <Compile Include="Vistas\Reportes\ModalFechasInformeObra.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -550,6 +530,9 @@
     <Compile Include="Presentation\InsumosPresenter.cs" />
     <Compile Include="Presentation\HerramientasPresenter.cs" />
     <Compile Include="Presentation\CatalogosPresenter.cs" />
+    <Compile Include="Presentation\KardexPresenter.cs" />
+    <Compile Include="Presentation\InformeObraPresenter.cs" />
+    <Compile Include="Presentation\ReporteStockPresenter.cs" />
     <Compile Include="Presentation\RecortesPresenter.cs" />
     <Compile Include="Presentation\MaterialesPresenter.cs" />
     <Compile Include="Presentation\ConteosPresenter.cs" />

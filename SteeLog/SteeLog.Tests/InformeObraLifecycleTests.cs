@@ -151,5 +151,26 @@ namespace SteeLog.Tests
                 tcs.SetResult(true); Esperar(task); Assert.False(abierto); if(!cerrar) form.Dispose();
             });
         }
+        [Fact]
+        public void GeneracionEnCursoImpideDobleEnvio()
+        {
+            Sta(() => {
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
+                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                    var handle = form.Handle;
+                    var pendiente = new TaskCompletionSource<bool>();
+                    int envios = 0, abiertos = 0;
+                    Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> generar = (ruta, id, nombre, desde, hasta, token) => { envios++; return pendiente.Task; };
+                    tipo.GetField("GenerarInforme", Private).SetValue(form, generar);
+                    tipo.GetField("AbrirInforme", Private).SetValue(form, new Action<string>(_ => abiertos++));
+                    var metodo = tipo.GetMethod("GenerarInformeAsync", Private);
+                    var primero = (Task)metodo.Invoke(form, new object[] { 1, "Obra", null, null });
+                    Esperar((Task)metodo.Invoke(form, new object[] { 1, "Obra", null, null }));
+                    Assert.Equal(1, envios);
+                    pendiente.SetResult(true); Esperar(primero);
+                    Assert.Equal(1, abiertos);
+                }
+            });
+        }
     }
 }

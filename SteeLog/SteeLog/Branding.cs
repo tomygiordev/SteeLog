@@ -16,12 +16,5 @@ namespace SteeLog
             }
         }
 
-        internal static iTextSharp.text.Image PdfLogo(float width, float height)
-        {
-            var logo = iTextSharp.text.Image.GetInstance(Read("steelog-logo-dark.png"));
-            logo.ScaleToFit(width, height);
-            logo.Alignment = iTextSharp.text.Element.ALIGN_LEFT;
-            return logo;
-        }
     }
 }

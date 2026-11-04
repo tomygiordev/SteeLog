@@ -7,9 +7,11 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using CancellationTokenSource = System.Threading.CancellationTokenSource;
+using SteeLog.CompositionRoot;
+using SteeLog.Core.Application.Reportes;
 using SteeLog.Presentation;
-using SteeLog.Modelos;
+
 using SteeLog;
 using SteeLog.Servicios;
 using System.IO;
@@ -29,8 +31,27 @@ namespace SteeLog.Vistas
         // --- Búsqueda Inteligente ---
         private Timer _timerDebounce;
         private Panel _panelResultados;
-        private List<Material> _materialesFull = new List<Material>();
-        private Material _materialSeleccionado = null;
+        private List<KardexMaterial> _materialesFull = new List<KardexMaterial>();
+        private KardexMaterial _materialSeleccionado = null;
+
+        private KardexPresenter presenter;
+        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
+        private Func<bool> ocultarSaldo = () => SessionManager.DebeOcultarCantidadesStockMateriales;
+        private Action<string> abrirPdf = ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
+        private readonly CancellationTokenSource vida = new CancellationTokenSource();
+        private CancellationTokenSource carga;
+        private int version;
+        private bool exportando;
+        private bool eliminando;
+        private Func<bool> confirmarEliminacion = () => MessageBox.Show("¿Está seguro de eliminar este movimiento? Esto revertirá el stock.", "Confirmar Eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+        private Action<string> avisarEliminacionExitosa = mensaje => ToastNotification.ShowSuccess(mensaje);
+        private Action<string> avisarEliminacionFallida = mensaje => ToastNotification.ShowError(mensaje);
+        private void CancelarOperaciones()
+        {
+            if (!vida.IsCancellationRequested) vida.Cancel();
+            if (carga != null) carga.Cancel();
+            _timerDebounce?.Stop();
+        }
 
         public Vista_Kardex()
         {
@@ -38,7 +59,15 @@ namespace SteeLog.Vistas
             InitializeCustomControls();
             this.Load += Vista_Kardex_Load;
             ConfigurarGrid();
-            CargarMateriales();
+            FormClosed += (s, e) => CancelarOperaciones();
+        }
+
+        internal Vista_Kardex(KardexPresenter presenter, Func<object> identidadActual, Func<bool> ocultarSaldo, Action<string> abrirPdf) : this()
+        {
+            this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+            this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
+            this.ocultarSaldo = ocultarSaldo ?? throw new ArgumentNullException(nameof(ocultarSaldo));
+            this.abrirPdf = abrirPdf ?? throw new ArgumentNullException(nameof(abrirPdf));
         }
 
         private void InitializeCustomControls()
@@ -303,7 +332,7 @@ namespace SteeLog.Vistas
         private void EjecutarBusqueda(string query)
         {
             string qLower = query.ToLower();
-            List<Material> filtrados;
+            List<KardexMaterial> filtrados;
 
             if (string.IsNullOrEmpty(qLower))
             {
@@ -323,7 +352,7 @@ namespace SteeLog.Vistas
             MostrarResultados(filtrados, query);
         }
 
-        private void MostrarResultados(List<Material> resultados, string query)
+        private void MostrarResultados(List<KardexMaterial> resultados, string query)
         {
             _panelResultados.SuspendLayout();
             _panelResultados.Controls.Clear();
@@ -353,7 +382,7 @@ namespace SteeLog.Vistas
             _panelResultados.ResumeLayout();
         }
 
-        private Panel CrearItemResultado(Material m)
+        private Panel CrearItemResultado(KardexMaterial m)
         {
             var panel = new Panel
             {
@@ -405,7 +434,7 @@ namespace SteeLog.Vistas
             return panel;
         }
 
-        private void SeleccionarMaterial(Material m)
+        private void SeleccionarMaterial(KardexMaterial m)
         {
             _materialSeleccionado = m;
             txtBuscadorMaterial.Text = m == null ? "" : m.nombre;
@@ -438,26 +467,37 @@ namespace SteeLog.Vistas
         // Limpiar ya no es necesario como método separado:
         // basta con destildar los toggles, que disparan CargarKardex automáticamente.
 
-        private void BtnDescargarPDF_Click(object sender, EventArgs e)
+        private async void BtnDescargarPDF_Click(object sender, EventArgs e)
         {
+            if (exportando || presenter == null || vida.IsCancellationRequested) return;
+            string ruta = null;
+            bool abierto = false;
             try
             {
                 if (dgvKardex.DataSource == null) { ToastNotification.ShowWarning("No hay datos para exportar."); return; }
-                List<KardexItem> historial = ((SortableBindingList<KardexItem>)dgvKardex.DataSource).ToList();
+                var historial = ((SortableBindingList<KardexItem>)dgvKardex.DataSource).ToList();
                 if (historial.Count == 0) { ToastNotification.ShowWarning("No hay registros en el filtrado actual."); return; }
-
-                string tempPath = Path.Combine(Path.GetTempPath(), $"Kardex_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
-                string materialName = lblMaterialNombre.Text;
-                bool mostrarMaterial = (dgvKardex.Columns["nombre_material"] != null && dgvKardex.Columns["nombre_material"].Visible);
-                bool mostrarSaldo = !SessionManager.DebeOcultarCantidadesStockMateriales;
-                DateTime pdfInicio = chkDesde.Checked ? dtpInicio.Value.Date
-                    : (historial.Count > 0 ? historial.Min(h => h.fecha).Date : DateTime.Today);
-                DateTime pdfFin = chkHasta.Checked ? dtpFin.Value.Date
-                    : (historial.Count > 0 ? historial.Max(h => h.fecha).Date : DateTime.Today);
-                SteeLog.Reportes.KardexPDF.Generar(tempPath, historial, materialName, pdfInicio, pdfFin, mostrarMaterial, mostrarSaldo);
-                Process.Start(new ProcessStartInfo(tempPath) { UseShellExecute = true });
+                int solicitud = version;
+                var identidad = identidadActual();
+                ruta = Path.Combine(Path.GetTempPath(), $"Kardex_{Guid.NewGuid():N}.pdf");
+                var snapshot = new KardexSnapshot {
+                    Historial = historial, MaterialNombre = lblMaterialNombre.Text,
+                    MostrarColumnaMaterial = dgvKardex.Columns["nombre_material"] != null && dgvKardex.Columns["nombre_material"].Visible,
+                    MostrarColumnaSaldo = !ocultarSaldo(),
+                    FechaInicio = chkDesde.Checked ? dtpInicio.Value.Date : historial.Min(h => h.fecha).Date,
+                    FechaFin = chkHasta.Checked ? dtpFin.Value.Date : historial.Max(h => h.fecha).Date
+                };
+                exportando = true; btnDescargarPDF.Enabled = false;
+                await presenter.GenerarAsync(ruta, snapshot, vida.Token);
+                if (!vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual()))
+                {
+                    abrirPdf(ruta);
+                    abierto = true;
+                }
             }
-            catch (Exception ex) { ToastNotification.ShowError("Error al generar PDF: " + ex.Message); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!vida.IsCancellationRequested) ToastNotification.ShowError("Error al generar PDF: " + ex.Message); }
+            finally { if (!abierto && ruta != null) { try { if (File.Exists(ruta)) File.Delete(ruta); } catch (IOException) { } catch (UnauthorizedAccessException) { } } exportando = false; if (!IsDisposed && !vida.IsCancellationRequested) btnDescargarPDF.Enabled = true; }
         }
 
         private void BtnDescargarExcel_Click(object sender, EventArgs e)
@@ -469,7 +509,7 @@ namespace SteeLog.Vistas
                 if (historial.Count == 0) { ToastNotification.ShowWarning("No hay registros en el filtrado actual."); return; }
 
                 string tempPath = Path.Combine(Path.GetTempPath(), $"Kardex_{DateTime.Now:yyyyMMdd_HHmmss}.xlsx");
-                bool mostrarSaldo = !SessionManager.DebeOcultarCantidadesStockMateriales;
+                bool mostrarSaldo = !ocultarSaldo();
 
                 using (var pkg = new OfficeOpenXml.ExcelPackage())
                 {
@@ -558,7 +598,8 @@ namespace SteeLog.Vistas
 
         private void Vista_Kardex_Load(object sender, EventArgs e)
         {
-            // Default load all
+            if (presenter == null) presenter = new KardexPresenter(LocalServices.Current.Executor, LocalServices.Current.KardexPdf);
+            CargarMateriales();
             CargarKardex();
         }
 
@@ -646,49 +687,62 @@ namespace SteeLog.Vistas
             dgvKardex.CellContentClick += DgvKardex_CellContentClick;
         }
 
-        private void DgvKardex_CellContentClick(object sender, DataGridViewCellEventArgs e)
+        private async void DgvKardex_CellContentClick(object sender, DataGridViewCellEventArgs e)
         {
-            if (e.RowIndex >= 0 && dgvKardex.Columns[e.ColumnIndex].Name == "btnEliminar")
-            {
-                if (MessageBox.Show("¿Está seguro de eliminar este movimiento? Esto revertirá el stock.", "Confirmar Eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes)
-                {
-                    try
-                    {
-                        var item = (KardexItem)dgvKardex.Rows[e.RowIndex].DataBoundItem;
-                        MovimientoDatos datos = new MovimientoDatos();
-                        datos.EliminarMovimiento(item.id_movimiento, item.id_material, item.cantidad, item.tipo_movimiento);
-                        
-                        ToastNotification.ShowSuccess("Movimiento eliminado correctamente.");
-                        CargarKardex(); // Refresh
-                    }
-                    catch (Exception ex)
-                    {
-                        ToastNotification.ShowError("Error al eliminar: " + ex.Message);
-                    }
-                }
-            }
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || dgvKardex.Columns[e.ColumnIndex].Name != "btnEliminar") return;
+            var item = dgvKardex.Rows[e.RowIndex].DataBoundItem as KardexItem;
+            if (item != null) await EliminarAsync(item);
         }
 
-        // BtnFiltrar_Click eliminado: los toggles y DatePickers disparan CargarKardex directamente.
-
-        private void CargarMateriales()
+        private async Task EliminarAsync(KardexItem item)
         {
+            if (eliminando || presenter == null || vida.IsCancellationRequested || IsDisposed) return;
+            eliminando = true;
+            int solicitud = version;
+            object identidad = identidadActual();
+            int id = item.id_movimiento;
             try
             {
-                MaterialDatos datos = new MaterialDatos();
-                _materialesFull = datos.obtenerMateriales();
+                if (!confirmarEliminacion() || !ContextoVigente(solicitud, identidad)) return;
+                await presenter.EliminarAsync(id, vida.Token);
+                if (!ContextoVigente(solicitud, identidad)) return;
+                avisarEliminacionExitosa("Movimiento eliminado correctamente.");
+                CargarKardex();
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error cargando materiales: " + ex.Message);
+                if (ContextoVigente(solicitud, identidad)) avisarEliminacionFallida("Error al eliminar: " + ex.Message);
             }
+            finally { eliminando = false; }
+        }
+
+        private bool ContextoVigente(int solicitud, object identidad)
+        {
+            return !vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual());
+        }
+        // BtnFiltrar_Click eliminado: los toggles y DatePickers disparan CargarKardex directamente.
+
+        private async void CargarMateriales()
+        {
+            var identidad = identidadActual();
+            try { var materiales = await presenter.MaterialesAsync(vida.Token); if (!vida.IsCancellationRequested && !IsDisposed && ReferenceEquals(identidad, identidadActual())) _materialesFull = materiales; }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed && ReferenceEquals(identidad, identidadActual())) ToastNotification.ShowError("Error cargando materiales: " + ex.Message); }
         }
 
         // Ya no usamos este evento, el buscador maneja la selección
         // private void cmbMateriales_SelectedIndexChanged(object sender, EventArgs e) { ... }
 
-        private void CargarKardex(int? idMaterialParam = null) 
+        private async void CargarKardex(int? idMaterialParam = null)
         {
+            if (presenter == null || vida.IsCancellationRequested) return;
+            if (carga != null) { carga.Cancel(); carga.Dispose(); }
+            carga = CancellationTokenSource.CreateLinkedTokenSource(vida.Token);
+            var token = carga.Token;
+            int solicitud = ++version;
+            dgvKardex.DataSource = null;
+            var identidad = identidadActual();
             try
             {
                 int? idMaterial = _materialSeleccionado?.id;
@@ -698,8 +752,8 @@ namespace SteeLog.Vistas
                 DateTime? inicio = chkDesde.Checked ? (DateTime?)dtpInicio.Value.Date : null;
                 DateTime? fin = chkHasta.Checked ? (DateTime?)dtpFin.Value.Date.AddDays(1).AddTicks(-1) : null;
 
-                MovimientoDatos datos = new MovimientoDatos();
-                List<KardexItem> historial = datos.ObtenerKardex(idMaterial, inicio ?? DateTime.MinValue, fin ?? DateTime.MaxValue);
+                List<KardexItem> historial = await presenter.HistorialAsync(idMaterial, inicio ?? DateTime.MinValue, fin ?? DateTime.MaxValue, token);
+                if (token.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
                 
                 dgvKardex.DataSource = new SortableBindingList<KardexItem>(historial);
 
@@ -740,7 +794,7 @@ namespace SteeLog.Vistas
                 }
                 if (dgvKardex.Columns["saldo"] != null)
                 {
-                    dgvKardex.Columns["saldo"].Visible = !SessionManager.DebeOcultarCantidadesStockMateriales;
+                    dgvKardex.Columns["saldo"].Visible = !ocultarSaldo();
                     dgvKardex.Columns["saldo"].HeaderText = "Stock Resultante";
                     dgvKardex.Columns["saldo"].FillWeight = 15;
                     dgvKardex.Columns["saldo"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -763,9 +817,10 @@ namespace SteeLog.Vistas
                     dgvKardex.Columns["btnEliminar"].DisplayIndex = dgvKardex.Columns.Count - 1;
                 }
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                 ToastNotification.ShowError("Error al cargar historial: " + ex.Message);
+                 if (!token.IsCancellationRequested && solicitud == version && !IsDisposed && ReferenceEquals(identidad, identidadActual())) ToastNotification.ShowError("Error al cargar historial: " + ex.Message);
             }
         }
     }
