@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -8,8 +10,11 @@ using Npgsql;
 using SteeLog.Core.Application.Identidad;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Core.Application.Reportes;
+using SteeLog.Domain.Inventario;
+using SteeLog.Domain.Reportes;
 using SteeLog.Infrastructure.Canaletas;
 using SteeLog.Infrastructure.Inventario;
+using SteeLog.Infrastructure.Pdf;
 using SteeLog.Infrastructure.Persistence;
 using SteeLog.Infrastructure.Reportes;
 using Xunit;
@@ -54,6 +59,33 @@ public sealed class ReportesIntegrationTests
     }
     static NpgsqlReporteStockConsulta Stock() => new NpgsqlReporteStockConsulta(Factory());
 
+    private sealed class TestRecursosPdf : IRecursosPdf
+    {
+        private static readonly byte[] LogoPngValido = Convert.FromBase64String("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=");
+        public MarcaPdf Capturar() => new MarcaPdf
+        {
+            LogoPng = LogoPngValido,
+            FechaLocal = new DateTime(2026, 10, 15, 10, 0, 0),
+            Pie = "SteeLog - Sistema de Gestión de Inventario"
+        };
+    }
+
+    private static string ExtraerTextoPdf(string ruta)
+    {
+        var asm = Assembly.Load("itextsharp");
+        var readerType = asm.GetType("iTextSharp.text.pdf.PdfReader");
+        var extractorType = asm.GetType("iTextSharp.text.pdf.parser.PdfTextExtractor");
+        using (var reader = (IDisposable)Activator.CreateInstance(readerType, ruta))
+        {
+            var numPages = (int)readerType.GetProperty("NumberOfPages").GetValue(reader);
+            var getTextMethod = extractorType.GetMethod("GetTextFromPage", new[] { readerType, typeof(int) });
+            var sb = new System.Text.StringBuilder();
+            for (int p = 1; p <= numPages; p++)
+                sb.AppendLine((string)getTextMethod.Invoke(null, new object[] { reader, p }));
+            return sb.ToString();
+        }
+    }
+
     [Fact]
     public async Task KardexConservaCantidadSaldoPersistidoYFiltros()
     {
@@ -64,7 +96,13 @@ public sealed class ReportesIntegrationTests
         Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,2.1250,8.25)", P("v", movimiento), P("m", material));
         var caso = new ConsultarKardex(Actor(), new NpgsqlKardexConsulta(Factory()));
         var row = Assert.Single(await caso.HistorialAsync(material, fecha, fecha, default));
-        Assert.Equal(movimiento, row.id_movimiento); Assert.Equal(2.125m, row.cantidad); Assert.Equal(8.25m, row.saldo); Assert.Equal(nombre, row.nombre_material);
+        Assert.Equal(movimiento, row.id_movimiento);
+        Assert.Equal(2.125m, row.cantidad);
+        Assert.Equal(8.25m, row.saldo);
+        Assert.Equal(nombre, row.nombre_material);
+        Assert.Equal("OBRA", row.tipo_destino);
+        Assert.Equal(ImpactoStock.Salida, row.impacto);
+        Assert.Equal(-2.125m, row.delta);
         Assert.Empty(await caso.HistorialAsync(material, fecha.AddDays(1), null, default));
         Assert.Contains(await caso.MaterialesAsync(default), x => x.id == material);
         var anonimo = new ConsultarKardex(Actor(Role.None), new NpgsqlKardexConsulta(Factory()));
@@ -86,6 +124,70 @@ public sealed class ReportesIntegrationTests
         var rows = await new NpgsqlKardexConsulta(Factory()).HistorialAsync(material, null, null);
         Assert.Equal(new[] { 5m, 2m, 1m }, rows.Select(x => x.saldo));
         Assert.True(rows[0].fecha > rows[1].fecha);
+    }
+
+    [Fact]
+    public async Task KardexConsultaSnapshotRenderer_EnvioPositivo_CalculaEntradasCeroYSalidasNegativasEnPdf()
+    {
+        var nombre = Unique();
+        var material = Material(nombre, stock: 8, minimo: 5);
+        var obra = Id("INSERT INTO obras(nombre) VALUES(@n) RETURNING id", P("n", Unique()));
+        var tipo = Id("INSERT INTO tipo_movimiento(nombre) VALUES(@n) RETURNING id_tipomovimiento", P("n", "ENVÍO " + Unique()));
+        var fecha = new DateTime(2026, 10, 15);
+        int movimiento = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
+        Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,2,8)", P("v", movimiento), P("m", material));
+
+        var consulta = new NpgsqlKardexConsulta(Factory());
+        var items = await consulta.HistorialAsync(material, fecha, fecha, default);
+        var row = Assert.Single(items);
+
+        // Contrato legacy: cantidad original positiva exacta (+2), saldo persistido exacto (+8)
+        Assert.Equal(movimiento, row.id_movimiento);
+        Assert.Equal(2m, row.cantidad);
+        Assert.Equal(8m, row.saldo);
+        Assert.Equal("OBRA", row.tipo_destino);
+        Assert.Equal(ImpactoStock.Salida, row.impacto);
+        Assert.Equal(-2m, row.delta);
+
+        // Snapshot puro: resumen calculado por impacto de negocio (entradas 0, salidas -2, stock actual 8)
+        var snapshot = new KardexSnapshot
+        {
+            Historial = items,
+            MaterialNombre = nombre,
+            FechaInicio = fecha,
+            FechaFin = fecha,
+            MostrarColumnaMaterial = true,
+            MostrarColumnaSaldo = true
+        };
+        Assert.Equal(0m, snapshot.Resumen.TotalEntradas);
+        Assert.Equal(-2m, snapshot.Resumen.TotalSalidas);
+        Assert.Equal(8m, snapshot.Resumen.StockFinal);
+
+        // Renderer real KardexPDF genera documento y libera Document y FileStream
+        string rutaPdf = Path.Combine(Path.GetTempPath(), "kardex-integracion-" + Guid.NewGuid().ToString("N") + ".pdf");
+        try
+        {
+            new KardexPDF(new TestRecursosPdf()).Generar(rutaPdf, snapshot);
+            Assert.True(File.Exists(rutaPdf));
+
+            var texto = ExtraerTextoPdf(rutaPdf);
+            Assert.Contains("DETALLE DE MOVIMIENTOS", texto);
+            Assert.Contains("RESUMEN DEL PER", texto);
+            Assert.Contains("Total Entradas:", texto);
+            Assert.Contains("Total Salidas:", texto);
+            Assert.Contains("+0", texto);
+            Assert.Contains("-2", texto);
+            Assert.Contains("8,00", texto);
+
+            using (var fs = new FileStream(rutaPdf, FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+            {
+                Assert.True(fs.CanWrite);
+            }
+        }
+        finally
+        {
+            if (File.Exists(rutaPdf)) File.Delete(rutaPdf);
+        }
     }
 
     [Fact]

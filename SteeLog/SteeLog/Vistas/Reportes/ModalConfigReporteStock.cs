@@ -22,8 +22,26 @@ namespace SteeLog.Vistas.Reportes
         private bool cargado;
         private object identidadDatos;
         private bool guardando;
-        private void CancelarOperaciones() { if (!vida.IsCancellationRequested) vida.Cancel(); }
-        protected override void Dispose(bool disposing) { if (disposing) CancelarOperaciones(); base.Dispose(disposing); }
+        private CancellationTokenSource carga;
+        private int version;
+        private void CancelarOperaciones()
+        {
+            if (!vida.IsCancellationRequested)
+            {
+                try { vida.Cancel(); } catch (ObjectDisposedException) { }
+            }
+            try { carga?.Cancel(); } catch (ObjectDisposedException) { }
+        }
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                CancelarOperaciones();
+                try { vida.Dispose(); } catch (ObjectDisposedException) { }
+                try { carga?.Dispose(); } catch (ObjectDisposedException) { }
+            }
+            base.Dispose(disposing);
+        }
 
         private readonly ListBox lstSecciones = new ListBox();
         private readonly TextBox txtNombreSeccion = new TextBox();
@@ -36,6 +54,34 @@ namespace SteeLog.Vistas.Reportes
         private List<Material> materialesDisponibles = new List<Material>();
 
         private bool actualizandoUI;
+        private Button btnNuevaSeccion;
+        private Button btnEliminarSeccion;
+        private Button btnSubirSeccion;
+        private Button btnBajarSeccion;
+        private Button btnAgregar;
+        private Button btnQuitar;
+        private Button btnSubirMaterial;
+        private Button btnBajarMaterial;
+        private Button btnGuardar;
+
+        private void ActualizarEstadoEdicion()
+        {
+            bool habilitado = cargado && !guardando;
+            if (btnNuevaSeccion != null) btnNuevaSeccion.Enabled = habilitado;
+            if (btnEliminarSeccion != null) btnEliminarSeccion.Enabled = habilitado;
+            if (btnSubirSeccion != null) btnSubirSeccion.Enabled = habilitado;
+            if (btnBajarSeccion != null) btnBajarSeccion.Enabled = habilitado;
+            if (txtNombreSeccion != null) txtNombreSeccion.Enabled = habilitado;
+            if (lstSecciones != null) lstSecciones.Enabled = habilitado;
+            if (txtBuscarMaterial != null) txtBuscarMaterial.Enabled = habilitado;
+            if (btnAgregar != null) btnAgregar.Enabled = habilitado;
+            if (lstResultadosMateriales != null) lstResultadosMateriales.Enabled = habilitado;
+            if (btnQuitar != null) btnQuitar.Enabled = habilitado;
+            if (btnSubirMaterial != null) btnSubirMaterial.Enabled = habilitado;
+            if (btnBajarMaterial != null) btnBajarMaterial.Enabled = habilitado;
+            if (lstMaterialesSeccion != null) lstMaterialesSeccion.Enabled = habilitado;
+            if (btnGuardar != null) btnGuardar.Enabled = habilitado;
+        }
 
         public ModalConfigReporteStock(ReporteStockPresenter presenter)
         {
@@ -51,6 +97,7 @@ namespace SteeLog.Vistas.Reportes
             CrearInterfaz();
             Load += (s, e) => CargarDatos();
             FormClosed += (s, e) => CancelarOperaciones();
+            Disposed += (s, e) => CancelarOperaciones();
         }
 
         internal ModalConfigReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Action<string> avisarError, Action<string> avisarExito) : this(presenter)
@@ -76,6 +123,7 @@ namespace SteeLog.Vistas.Reportes
             panelPrincipal.Controls.Add(CrearPanelMateriales(), 1, 0);
 
             Controls.Add(panelPrincipal);
+            ActualizarEstadoEdicion();
         }
 
         private Control CrearPanelSecciones()
@@ -141,10 +189,14 @@ namespace SteeLog.Vistas.Reportes
             pnlEditor.Controls.Add(txtNombreSeccion, 0, 1);
             pnlEditor.SetColumnSpan(txtNombreSeccion, 2);
 
-            pnlEditor.Controls.Add(CrearBoton("Nueva sección", (s, e) => NuevaSeccion()), 0, 2);
-            pnlEditor.Controls.Add(CrearBoton("Eliminar sección", (s, e) => EliminarSeccionActual(), Color.FromArgb(160, 55, 55)), 1, 2);
-            pnlEditor.Controls.Add(CrearBoton("Subir sección", (s, e) => MoverSeccion(-1)), 0, 3);
-            pnlEditor.Controls.Add(CrearBoton("Bajar sección", (s, e) => MoverSeccion(1)), 1, 3);
+            btnNuevaSeccion = CrearBoton("Nueva sección", (s, e) => NuevaSeccion());
+            pnlEditor.Controls.Add(btnNuevaSeccion, 0, 2);
+            btnEliminarSeccion = CrearBoton("Eliminar sección", (s, e) => EliminarSeccionActual(), Color.FromArgb(160, 55, 55));
+            pnlEditor.Controls.Add(btnEliminarSeccion, 1, 2);
+            btnSubirSeccion = CrearBoton("Subir sección", (s, e) => MoverSeccion(-1));
+            pnlEditor.Controls.Add(btnSubirSeccion, 0, 3);
+            btnBajarSeccion = CrearBoton("Bajar sección", (s, e) => MoverSeccion(1));
+            pnlEditor.Controls.Add(btnBajarSeccion, 1, 3);
 
             panel.Controls.Add(lstSecciones);
             panel.Controls.Add(pnlEditor);
@@ -213,7 +265,7 @@ namespace SteeLog.Vistas.Reportes
             txtBuscarMaterial.KeyDown += TxtBuscarMaterial_KeyDown;
             panelContenido.Controls.Add(txtBuscarMaterial, 0, 1);
 
-            var btnAgregar = CrearBoton("Agregar →", (s, e) => AgregarMaterialSeleccionado());
+            btnAgregar = CrearBoton("Agregar →", (s, e) => AgregarMaterialSeleccionado());
             btnAgregar.Dock = DockStyle.Fill;
             panelContenido.Controls.Add(btnAgregar, 1, 1);
 
@@ -236,9 +288,12 @@ namespace SteeLog.Vistas.Reportes
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
-            panelBotonesMateriales.Controls.Add(CrearBoton("Quitar", (s, e) => QuitarMaterialSeleccionado(), Color.FromArgb(160, 55, 55)), 0, 0);
-            panelBotonesMateriales.Controls.Add(CrearBoton("Subir", (s, e) => MoverMaterial(-1)), 0, 1);
-            panelBotonesMateriales.Controls.Add(CrearBoton("Bajar", (s, e) => MoverMaterial(1)), 0, 2);
+            btnQuitar = CrearBoton("Quitar", (s, e) => QuitarMaterialSeleccionado(), Color.FromArgb(160, 55, 55));
+            panelBotonesMateriales.Controls.Add(btnQuitar, 0, 0);
+            btnSubirMaterial = CrearBoton("Subir", (s, e) => MoverMaterial(-1));
+            panelBotonesMateriales.Controls.Add(btnSubirMaterial, 0, 1);
+            btnBajarMaterial = CrearBoton("Bajar", (s, e) => MoverMaterial(1));
+            panelBotonesMateriales.Controls.Add(btnBajarMaterial, 0, 2);
             panelContenido.Controls.Add(panelBotonesMateriales, 1, 2);
 
             lstMaterialesSeccion.Dock = DockStyle.Fill;
@@ -248,7 +303,7 @@ namespace SteeLog.Vistas.Reportes
             lstMaterialesSeccion.IntegralHeight = false;
             panelContenido.Controls.Add(lstMaterialesSeccion, 2, 2);
 
-            var btnGuardar = CrearBoton("Guardar cambios", (s, e) => GuardarTodo(), Color.FromArgb(39, 174, 96));
+            btnGuardar = CrearBoton("Guardar cambios", (s, e) => GuardarTodo(), Color.FromArgb(39, 174, 96));
             btnGuardar.Dock = DockStyle.Fill;
             panelContenido.Controls.Add(btnGuardar, 2, 3);
 
@@ -287,14 +342,27 @@ namespace SteeLog.Vistas.Reportes
 
         private async void CargarDatos(int? seleccionarSeccionId = null)
         {
+            if (vida.IsCancellationRequested || IsDisposed) return;
             cargado = false;
             identidadDatos = null;
+
+            ActualizarEstadoEdicion();
+
+            carga?.Cancel();
+            var anterior = carga;
+            carga = CancellationTokenSource.CreateLinkedTokenSource(vida.Token);
+            anterior?.Dispose();
+            var token = carga.Token;
+            int solicitud = ++version;
+
             var identidad = identidadActual();
             try
             {
-                var lista = await presenter.MaterialesAsync(vida.Token);
-                var configuracion = await presenter.SeccionesAsync(vida.Token);
-                if (vida.IsCancellationRequested || IsDisposed || !ReferenceEquals(identidad, identidadActual())) return;
+                var lista = await presenter.MaterialesAsync(token);
+                if (token.IsCancellationRequested || vida.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
+                var configuracion = await presenter.SeccionesAsync(token);
+                if (token.IsCancellationRequested || vida.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
+
                 actualizandoUI = true;
                 materialesDisponibles = lista.Select(m => new Material { id = m.Id, nombre = m.Nombre, nombre_categoria = m.Categoria }).OrderBy(m => m.nombre_categoria).ThenBy(m => m.nombre).ToList();
                 secciones.Clear(); seccionesEliminadas.Clear();
@@ -305,8 +373,15 @@ namespace SteeLog.Vistas.Reportes
                 cargado = true;
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed) avisarError("No se pudo cargar la configuración de secciones del reporte de stock. " + ex.Message); }
-            finally { actualizandoUI = false; }
+            catch (Exception ex) { if (!token.IsCancellationRequested && !vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual())) avisarError("No se pudo cargar la configuración de secciones del reporte de stock. " + ex.Message); }
+            finally
+            {
+                if (!IsDisposed && !vida.IsCancellationRequested && solicitud == version && ReferenceEquals(identidad, identidadActual()))
+                {
+                    actualizandoUI = false;
+                    ActualizarEstadoEdicion();
+                }
+            }
         }
 
         private void RefrescarSecciones(int? seleccionarSeccionId = null)
@@ -401,6 +476,11 @@ namespace SteeLog.Vistas.Reportes
         private void RefrescarResultadosBusqueda()
         {
             var seccion = SeccionActual;
+            if (!cargado || guardando)
+            {
+                lstResultadosMateriales.Items.Clear();
+                return;
+            }
             var texto = txtBuscarMaterial.Text.Trim();
             var busquedaNormalizada = NormalizarTexto(texto);
 
@@ -428,6 +508,7 @@ namespace SteeLog.Vistas.Reportes
 
         private void NuevaSeccion()
         {
+            if (!cargado || guardando) return;
             var nueva = new SeccionEditable
             {
                 nombre = string.Empty
@@ -448,6 +529,7 @@ namespace SteeLog.Vistas.Reportes
                 return;
             }
 
+            if (!cargado || guardando) return;
             if (MessageBox.Show("¿Eliminar la sección y sus materiales asignados?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
             {
                 return;
@@ -471,6 +553,7 @@ namespace SteeLog.Vistas.Reportes
                 return;
             }
 
+            if (!cargado || guardando) return;
             int indiceActual = secciones.IndexOf(seccion);
             int indiceNuevo = indiceActual + direccion;
             if (indiceActual < 0 || indiceNuevo < 0 || indiceNuevo >= secciones.Count)
@@ -487,6 +570,7 @@ namespace SteeLog.Vistas.Reportes
         private void AgregarMaterialSeleccionado()
         {
             var seccion = SeccionActual;
+            if (!cargado || guardando) return;
             var material = lstResultadosMateriales.SelectedItem as MaterialBusqueda;
 
             if (seccion == null)
@@ -528,6 +612,7 @@ namespace SteeLog.Vistas.Reportes
                 return;
             }
 
+            if (!cargado || guardando) return;
             seccion.Materiales.Remove(material);
             RefrescarMaterialesSeccion(seccion);
             RefrescarResultadosBusqueda();
@@ -543,6 +628,7 @@ namespace SteeLog.Vistas.Reportes
                 return;
             }
 
+            if (!cargado || guardando) return;
             int indiceActual = seccion.Materiales.IndexOf(material);
             int indiceNuevo = indiceActual + direccion;
             if (indiceActual < 0 || indiceNuevo < 0 || indiceNuevo >= seccion.Materiales.Count)
@@ -559,22 +645,35 @@ namespace SteeLog.Vistas.Reportes
         private async void GuardarTodo()
         {
             if (!cargado || guardando || vida.IsCancellationRequested || !ReferenceEquals(identidadDatos, identidadActual())) return;
+            var identidad = identidadActual();
+            int solicitud = version;
             try
             {
                 ValidarConfiguracion();
                 var snapshot = secciones.Select(s => new SteeLog.Core.Application.Reportes.ReporteStockSeccion { Id = s.id, Nombre = s.nombre, Materiales = s.Materiales.Select(m => m.idMaterial).ToList() }).ToArray();
                 var eliminadas = seccionesEliminadas.ToArray();
-                var identidad = identidadActual();
+
                 guardando = true;
                 Enabled = false;
+                ActualizarEstadoEdicion();
                 await presenter.GuardarAsync(snapshot, eliminadas, vida.Token);
-                if (vida.IsCancellationRequested || IsDisposed || !ReferenceEquals(identidad, identidadActual())) return;
-                CargarDatos();
+                if (vida.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
                 avisarExito("Configuración de secciones guardada.");
+                guardando = false;
+                Enabled = true;
+                CargarDatos();
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed) avisarError("No se pudo guardar la configuración del reporte: " + ex.Message); }
-            finally { guardando = false; if (!IsDisposed && !vida.IsCancellationRequested) Enabled = true; }
+            catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual())) avisarError("No se pudo guardar la configuración del reporte: " + ex.Message); }
+            finally
+            {
+                guardando = false;
+                if (!IsDisposed && !vida.IsCancellationRequested && (solicitud == version || ReferenceEquals(identidadDatos, identidad)) && ReferenceEquals(identidad, identidadActual()))
+                {
+                    Enabled = true;
+                    ActualizarEstadoEdicion();
+                }
+            }
         }
 
         private void ValidarConfiguracion()
@@ -597,7 +696,7 @@ namespace SteeLog.Vistas.Reportes
 
         private void LstSecciones_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (actualizandoUI)
+            if (actualizandoUI || !cargado || guardando)
             {
                 return;
             }
@@ -607,7 +706,7 @@ namespace SteeLog.Vistas.Reportes
 
         private void TxtNombreSeccion_TextChanged(object sender, EventArgs e)
         {
-            if (actualizandoUI)
+            if (actualizandoUI || !cargado || guardando)
             {
                 return;
             }
@@ -629,6 +728,7 @@ namespace SteeLog.Vistas.Reportes
 
         private void TxtBuscarMaterial_KeyDown(object sender, KeyEventArgs e)
         {
+            if (!cargado || guardando) return;
             if (e.KeyCode == Keys.Down && lstResultadosMateriales.Items.Count > 0)
             {
                 lstResultadosMateriales.SelectedIndex = 0;

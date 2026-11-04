@@ -42,7 +42,14 @@ namespace SteeLog.Vistas
         private bool exportando;
         private object identidadDatos;
         private FiltroMaterialParams filtroActual;
-        private void CancelarOperaciones() { if (!vida.IsCancellationRequested) vida.Cancel(); carga?.Cancel(); }
+        private void CancelarOperaciones()
+        {
+            if (!vida.IsCancellationRequested)
+            {
+                try { vida.Cancel(); } catch (ObjectDisposedException) { }
+            }
+            try { carga?.Cancel(); } catch (ObjectDisposedException) { }
+        }
 
         public Vista_ReporteStock()
         {
@@ -51,6 +58,7 @@ namespace SteeLog.Vistas
             dgvMateriales.CellPainting += dgvMateriales_CellPainting;
             dgvMateriales.SelectionChanged += dgvMateriales_SelectionChanged;
             FormClosed += (s, e) => CancelarOperaciones();
+            Disposed += (s, e) => CancelarOperaciones();
         }
 
         internal Vista_ReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Func<bool> esAdmin, Func<string> elegirPdf, Action<string> abrirPdf, Action<string> avisarError, Action<string> avisarExito) : this()
@@ -169,7 +177,7 @@ namespace SteeLog.Vistas
                 identidadDatos = identidad;
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!token.IsCancellationRequested && !IsDisposed && solicitud == version) avisarError("No se pudo cargar los materiales: " + ex.Message); }
+            catch (Exception ex) { if (!token.IsCancellationRequested && !vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual())) avisarError("No se pudo cargar los materiales: " + ex.Message); }
         }
 
         private List<Material> ConstruirFilasConSeparadores(List<Material> materiales)
@@ -688,7 +696,7 @@ namespace SteeLog.Vistas
                     try { abrirPdf(destino); } catch { }
                 }
                 catch (OperationCanceledException) { }
-                catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed && solicitud == version) avisarError("Error al exportar PDF: " + ex.Message); }
+                catch (Exception ex) { if (!vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual())) avisarError("Error al exportar PDF: " + ex.Message); }
                 finally { exportando = false; try { if (File.Exists(temporal)) File.Delete(temporal); } catch { } }
             }
         }

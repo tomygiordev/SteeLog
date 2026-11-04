@@ -5,13 +5,16 @@ using System.Threading.Tasks;
 using Npgsql;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Domain.Inventario;
+using SteeLog.Domain.Reportes;
 using SteeLog.Infrastructure.Persistence;
+
 namespace SteeLog.Infrastructure.Reportes
 {
     public sealed class NpgsqlKardexConsulta : IKardexConsulta
     {
         private readonly PostgresConnectionFactory factory;
         public NpgsqlKardexConsulta(PostgresConnectionFactory factory) { this.factory = factory ?? throw new ArgumentNullException(nameof(factory)); }
+
         public async Task<List<KardexMaterial>> MaterialesAsync(CancellationToken token = default)
         {
             var resultado = new List<KardexMaterial>();
@@ -22,6 +25,7 @@ namespace SteeLog.Infrastructure.Reportes
             }
             return resultado;
         }
+
         public async Task<List<KardexItem>> HistorialAsync(int? material, DateTime? desde, DateTime? hasta, CancellationToken token = default)
         {
             var resultado = new List<KardexItem>();
@@ -42,12 +46,27 @@ namespace SteeLog.Infrastructure.Reportes
                     using (var r = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false)) {
                         decimal acumulado = 0;
                         while (await r.ReadAsync(token).ConfigureAwait(false)) {
-                            var item = new KardexItem { fecha=r.GetDateTime(0), tipo_movimiento=r.IsDBNull(1)?"-":r.GetString(1), cantidad=r.IsDBNull(2)?0:r.GetDecimal(2), origen=r.IsDBNull(3)?"-":r.GetString(3), destino=r.IsDBNull(4)?"-":r.GetString(4), id_movimiento=r.GetInt32(7), id_material=r.IsDBNull(8)?(int?)null:r.GetInt32(8), nombre_material=r.IsDBNull(9)?"":r.GetString(9) };
-                            var impacto = ClasificadorMovimiento.Clasificar(item.tipo_movimiento, r.IsDBNull(5)?null:r.GetString(5));
+                            var tipoDestino = r.IsDBNull(5) ? null : r.GetString(5);
+                            var item = new KardexItem {
+                                fecha = r.GetDateTime(0),
+                                tipo_movimiento = r.IsDBNull(1) ? "-" : r.GetString(1),
+                                cantidad = r.IsDBNull(2) ? 0 : r.GetDecimal(2),
+                                origen = r.IsDBNull(3) ? "-" : r.GetString(3),
+                                destino = r.IsDBNull(4) ? "-" : r.GetString(4),
+                                id_movimiento = r.GetInt32(7),
+                                id_material = r.IsDBNull(8) ? (int?)null : r.GetInt32(8),
+                                nombre_material = r.IsDBNull(9) ? "" : r.GetString(9),
+                                tipo_destino = tipoDestino
+                            };
+                            var impacto = ClasificadorMovimiento.Clasificar(item.tipo_movimiento, tipoDestino);
+                            item.impacto = impacto;
+                            item.delta = TotalesKardex.Delta(impacto, item.cantidad);
+
                             if (impacto == ImpactoStock.Entrada) acumulado += item.cantidad;
                             else if (impacto == ImpactoStock.Salida) acumulado -= item.cantidad;
                             if (!r.IsDBNull(6)) acumulado = r.GetDecimal(6);
-                            item.saldo = acumulado; resultado.Add(item);
+                            item.saldo = acumulado;
+                            resultado.Add(item);
                         }
                     }
                 }

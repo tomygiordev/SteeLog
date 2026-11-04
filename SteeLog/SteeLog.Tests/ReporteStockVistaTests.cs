@@ -50,8 +50,14 @@ namespace SteeLog.Tests
         {
             return (Form)Activator.CreateInstance(Tipo("Vista_ReporteStock"), Privado, null, new object[] { new ReporteStockPresenter(executor, pdf), identidad, admin, ruta, abrir, error, (Action<string>)(_ => { }) }, null);
         }
+        private static Form Modal(ReporteStockPresenter presenter, Func<object> identidad, Action<string> error, Action<string> exito)
+        {
+            return (Form)Activator.CreateInstance(Tipo("Reportes.ModalConfigReporteStock"), Privado, null, new object[] { presenter, identidad, error, exito }, null);
+        }
+        private static Form Modal(ReporteStockPresenter presenter, Func<object> identidad, Action<string> error) => Modal(presenter, identidad, error, (Action<string>)(_ => { }));
         private static void Cargar(Form vista) => Llamar(vista, "CargarMateriales", null, false, null);
         private static void Exportar(Form vista) => Llamar(vista, "btnExportarPDF_Click", null, EventArgs.Empty);
+
         [Fact]
         public void CargaPendienteFallidaObsoletaYDisposeNoExportan()
         {
@@ -99,6 +105,340 @@ namespace SteeLog.Tests
                     var identidadOriginal = identidad; identidad = new object(); Llamar(modal, "GuardarTodo"); Assert.Equal(3, executor.Llamadas); identidad = identidadOriginal;
                     Llamar(modal, "GuardarTodo"); Llamar(modal, "GuardarTodo"); Assert.Equal(4, executor.Llamadas); Assert.False(modal.Enabled);
                     modal.Dispose(); guardar.SetResult(0); Application.DoEvents(); Assert.Equal(4, executor.Llamadas);
+                }
+            });
+        }
+        [Fact]
+        public void ModalCargaInicialPendienteYFallidaBloqueanEditorYValidaHabilita()
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var mat1 = executor.Agregar();
+                var mat2 = executor.Agregar();
+                var sec2 = executor.Agregar();
+                var presenter = new ReporteStockPresenter(executor, new Pdf());
+                object identidad = new object();
+                int errores = 0;
+
+                using (var modal = Modal(presenter, () => identidad, _ => errores++)) {
+                    var handle = modal.Handle;
+                    var btnNueva = (Button)Campo(modal, "btnNuevaSeccion");
+                    var txtNombre = (TextBox)Campo(modal, "txtNombreSeccion");
+                    var btnGuardar = (Button)Campo(modal, "btnGuardar");
+                    var secciones = (System.Collections.IList)Campo(modal, "secciones");
+
+                    Assert.False(btnNueva.Enabled);
+                    Assert.False(txtNombre.Enabled);
+                    Assert.False(btnGuardar.Enabled);
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    Assert.False(btnNueva.Enabled);
+                    Assert.False(txtNombre.Enabled);
+                    Assert.False(btnGuardar.Enabled);
+
+                    Llamar(modal, "NuevaSeccion");
+                    Assert.Empty(secciones);
+
+                    mat1.SetException(new Exception("fallo inicial"));
+                    Esperar(() => errores == 1);
+                    Assert.False((bool)Campo(modal, "cargado"));
+                    Assert.False(btnNueva.Enabled);
+                    Assert.False(txtNombre.Enabled);
+                    Assert.False(btnGuardar.Enabled);
+
+                    Llamar(modal, "NuevaSeccion");
+                    Assert.Empty(secciones);
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    mat2.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    Esperar(() => executor.Llamadas == 3);
+                    sec2.SetResult((IReadOnlyList<ReporteStockSeccion>)new ReporteStockSeccion[0]);
+                    Esperar(() => (bool)Campo(modal, "cargado"));
+
+                    Assert.True(btnNueva.Enabled);
+                    Assert.True(txtNombre.Enabled);
+                    Assert.True(btnGuardar.Enabled);
+
+                    Llamar(modal, "NuevaSeccion");
+                    Assert.Single(secciones);
+                }
+            });
+        }
+        [Theory] [InlineData(false)] [InlineData(true)]
+        public void ModalGuardarConfirmadoMantieneBloqueoHastaRecargaValidaYSeparaSuFallo(bool fallaRecarga)
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var matInicial = executor.Agregar();
+                var secInicial = executor.Agregar();
+                var guardar = executor.Agregar();
+                var matRecarga = executor.Agregar();
+                var secRecarga = executor.Agregar();
+                var presenter = new ReporteStockPresenter(executor, new Pdf());
+                object identidad = new object();
+                var listaErrores = new List<string>();
+                var listaExitos = new List<string>();
+
+                using (var modal = Modal(presenter, () => identidad, msg => listaErrores.Add(msg), msg => listaExitos.Add(msg))) {
+                    var handle = modal.Handle;
+                    var btnNueva = (Button)Campo(modal, "btnNuevaSeccion");
+                    var btnGuardar = (Button)Campo(modal, "btnGuardar");
+                    var txtNombre = (TextBox)Campo(modal, "txtNombreSeccion");
+                    var secciones = (System.Collections.IList)Campo(modal, "secciones");
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    matInicial.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    secInicial.SetResult((IReadOnlyList<ReporteStockSeccion>)new[] { new ReporteStockSeccion { Id = 10, Nombre = "Perfiles", Materiales = new List<int>() } });
+                    Esperar(() => (bool)Campo(modal, "cargado"));
+                    Assert.True(btnNueva.Enabled);
+                    Assert.True(btnGuardar.Enabled);
+                    Assert.Single(secciones);
+
+                    Llamar(modal, "GuardarTodo");
+                    Assert.False(modal.Enabled);
+                    Assert.False(btnGuardar.Enabled);
+
+                    guardar.SetResult(0);
+                    Esperar(() => listaExitos.Count == 1);
+                    Assert.Contains("guardada", listaExitos[0], StringComparison.OrdinalIgnoreCase);
+
+                    Esperar(() => executor.Llamadas >= 4);
+                    Assert.False((bool)Campo(modal, "cargado"));
+                    Assert.False(btnNueva.Enabled);
+                    Assert.False(btnGuardar.Enabled);
+                    Assert.False(txtNombre.Enabled);
+
+                    Llamar(modal, "NuevaSeccion");
+                    Assert.Single(secciones);
+
+                    if (fallaRecarga)
+                    {
+                        matRecarga.SetException(new Exception("error en recarga"));
+                        Esperar(() => listaErrores.Count == 1);
+                        Assert.Contains("cargar", listaErrores[0], StringComparison.OrdinalIgnoreCase);
+                        Assert.DoesNotContain("guardar", listaErrores[0], StringComparison.OrdinalIgnoreCase);
+                        Assert.Equal(1, listaExitos.Count);
+
+                        Assert.False((bool)Campo(modal, "cargado"));
+                        Assert.False(btnNueva.Enabled);
+                        Assert.False(btnGuardar.Enabled);
+                        Assert.False(txtNombre.Enabled);
+
+                        Llamar(modal, "NuevaSeccion");
+                        Assert.Single(secciones);
+                    }
+                    else
+                    {
+                        matRecarga.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                        secRecarga.SetResult((IReadOnlyList<ReporteStockSeccion>)new[] {
+                            new ReporteStockSeccion { Id = 10, Nombre = "Perfiles confirmados" }
+                        });
+                        Esperar(() => (bool)Campo(modal, "cargado"));
+                        Assert.True(modal.Enabled);
+                        Assert.True(btnNueva.Enabled);
+                        Assert.True(btnGuardar.Enabled);
+                        Assert.True(txtNombre.Enabled);
+                        Assert.Empty(listaErrores);
+                        Assert.Single(listaExitos);
+                        Assert.Contains("Perfiles confirmados", ((ListBox)Campo(modal, "lstSecciones")).Items[0].ToString());
+                    }
+
+                }
+            });
+        }
+        [Fact]
+        public void ModalErroresCargaYGuardadoIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var cargaMat1 = executor.Agregar();
+                var matValido = executor.Agregar();
+                var secValido = executor.Agregar();
+                var guardar = executor.Agregar();
+                var presenter = new ReporteStockPresenter(executor, new Pdf());
+                object identidad = new object();
+                int errores = 0;
+                int exitos = 0;
+
+                using (var modal = Modal(presenter, () => identidad, _ => errores++, _ => exitos++)) {
+                    var handle = modal.Handle;
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    identidad = new object();
+                    cargaMat1.SetException(new Exception("error carga previa"));
+                    Application.DoEvents();
+                    Thread.Sleep(20);
+                    Application.DoEvents();
+
+                    Assert.Equal(0, errores);
+                    Assert.False((bool)Campo(modal, "cargado"));
+                    Assert.Null(Campo(modal, "identidadDatos"));
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    matValido.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    Esperar(() => executor.Llamadas == 3);
+                    secValido.SetResult((IReadOnlyList<ReporteStockSeccion>)new[] { new ReporteStockSeccion { Id = 1, Nombre = "Barras", Materiales = new List<int>() } });
+                    Esperar(() => (bool)Campo(modal, "cargado"));
+
+                    Llamar(modal, "GuardarTodo");
+                    identidad = new object();
+                    guardar.SetException(new Exception("error guardar previo"));
+                    Esperar(() => !(bool)Campo(modal, "guardando"));
+
+                    Assert.Equal(0, errores);
+                    Assert.Equal(0, exitos);
+                    Assert.Equal(4, executor.Llamadas);
+                }
+            });
+        }
+        [Fact]
+        public void VistaErroresCargaYRenderIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var carga1 = executor.Agregar();
+                var cargaValida = executor.Agregar();
+                var pdf = new Pdf();
+                object identidad = new object();
+                int errores = 0;
+                int aperturas = 0;
+                string destino = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N") + ".pdf");
+
+                try {
+                    using (var vista = Vista(executor, pdf, () => identidad, () => true, () => destino, _ => aperturas++, _ => errores++)) {
+                        var handle = vista.Handle;
+
+                        Cargar(vista);
+                        identidad = new object();
+                        carga1.SetException(new Exception("falla de carga vista"));
+                        Application.DoEvents();
+                        Thread.Sleep(20);
+                        Application.DoEvents();
+
+                        Assert.Equal(0, errores);
+                        Assert.Null(Campo(vista, "identidadDatos"));
+                        var grid = (DataGridView)Campo(vista, "dgvMateriales");
+                        Assert.Null(grid.DataSource);
+
+                        Cargar(vista);
+                        cargaValida.SetResult(Filas("Perfil W"));
+                        Esperar(() => grid.DataSource != null && grid.Rows.Count > 0);
+                        Assert.NotNull(Campo(vista, "identidadDatos"));
+
+                        Exportar(vista);
+                        Esperar(() => pdf.Inicio.Task.IsCompleted);
+
+                        identidad = new object();
+                        pdf.Seguir.SetException(new Exception("fallo de render"));
+                        Esperar(() => !(bool)Campo(vista, "exportando"));
+
+                        Assert.Equal(0, errores);
+                        Assert.Equal(0, aperturas);
+                        Assert.False(File.Exists(destino));
+                    }
+                }
+                finally {
+                    try { if (File.Exists(destino)) File.Delete(destino); } catch { }
+                }
+            });
+        }
+        [Fact]
+        public void ModalCargasFueraDeOrdenDescartaCargaObsoleta()
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var matA = executor.Agregar();
+                var matB = executor.Agregar();
+                var presenter = new ReporteStockPresenter(executor, new Pdf());
+                object identidad = new object();
+
+                using (var modal = Modal(presenter, () => identidad, _ => {})) {
+                    var handle = modal.Handle;
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    Assert.Equal(1, executor.Llamadas);
+
+                    Llamar(modal, "CargarDatos", (object)null);
+                    Assert.Equal(2, executor.Llamadas);
+
+                    var secB = executor.Agregar();
+                    matB.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    secB.SetResult((IReadOnlyList<ReporteStockSeccion>)new[] { new ReporteStockSeccion { Id = 20, Nombre = "SeccionB", Materiales = new List<int>() } });
+                    Esperar(() => (bool)Campo(modal, "cargado"));
+
+                    var lstSecciones = (ListBox)Campo(modal, "lstSecciones");
+                    var secciones = (System.Collections.IList)Campo(modal, "secciones");
+                    Assert.Single(lstSecciones.Items);
+                    Assert.Contains("SeccionB", lstSecciones.Items[0].ToString());
+
+                    matA.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    Application.DoEvents();
+                    Thread.Sleep(30);
+                    Application.DoEvents();
+
+                    Assert.Single(lstSecciones.Items);
+                    Assert.Contains("SeccionB", lstSecciones.Items[0].ToString());
+                    Assert.DoesNotContain("SeccionA", lstSecciones.Items[0].ToString());
+                    Assert.Single(secciones);
+                }
+            });
+        }
+        [Fact]
+        public void ModalYVistaDisposeConPendientesNoLanzanExcepcionNiHabilitan()
+        {
+            EnSta(() => {
+                var executor = new Executor();
+                var mat1 = executor.Agregar();
+                var presenter = new ReporteStockPresenter(executor, new Pdf());
+                int erroresModal = 0;
+                object identidad = new object();
+
+                using (var modal = Modal(presenter, () => identidad, _ => erroresModal++)) {
+                    var handle = modal.Handle;
+                    Llamar(modal, "CargarDatos", (object)null);
+                    Assert.False(modal.IsDisposed);
+                    modal.Dispose();
+                    bool habilitadoTrasDispose = modal.Enabled;
+                    Assert.True(modal.IsDisposed);
+                    mat1.SetException(new Exception("error carga cancelada"));
+                    Application.DoEvents();
+                    Assert.Equal(0, erroresModal);
+                    Assert.Equal(habilitadoTrasDispose, modal.Enabled);
+                }
+
+                var mat2 = executor.Agregar();
+                var sec2 = executor.Agregar();
+                var guardar = executor.Agregar();
+                using (var modal2 = Modal(presenter, () => identidad, _ => erroresModal++)) {
+                    var handle = modal2.Handle;
+                    Llamar(modal2, "CargarDatos", (object)null);
+                    mat2.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]);
+                    sec2.SetResult((IReadOnlyList<ReporteStockSeccion>)new[] { new ReporteStockSeccion { Id = 1, Nombre = "Sec", Materiales = new List<int>() } });
+                    Esperar(() => (bool)Campo(modal2, "cargado"));
+
+                    Llamar(modal2, "GuardarTodo");
+                    Assert.False(modal2.Enabled);
+                    modal2.Dispose();
+                    Assert.True(modal2.IsDisposed);
+                    guardar.SetResult(0);
+                    Application.DoEvents();
+                    Assert.Equal(0, erroresModal);
+                    Assert.False(modal2.Enabled);
+                }
+
+                var cargaVista = executor.Agregar();
+                int erroresVista = 0;
+                var pdf = new Pdf();
+                using (var vista = Vista(executor, pdf, () => identidad, () => true, () => "no.pdf", _ => {}, _ => erroresVista++)) {
+                    var handle = vista.Handle;
+                    Cargar(vista);
+                    vista.Dispose();
+                    bool habilitadoTrasDispose = vista.Enabled;
+                    Assert.True(vista.IsDisposed);
+                    cargaVista.SetException(new Exception("error carga vista cancelada"));
+                    Application.DoEvents();
+                    Assert.Equal(0, erroresVista);
+                    Assert.Equal(habilitadoTrasDispose, vista.Enabled);
                 }
             });
         }

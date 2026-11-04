@@ -64,7 +64,7 @@ namespace SteeLog.Infrastructure.Pdf
                 doc.Open();
                 AgregarEncabezado(doc, snapshot.MaterialNombre, snapshot.FechaInicio, snapshot.FechaFin, marca);
                 AgregarTablaMovimientos(doc, snapshot.Historial, snapshot.MostrarColumnaMaterial, snapshot.MostrarColumnaSaldo);
-                AgregarResumen(doc, snapshot.Historial, snapshot.MostrarColumnaSaldo);
+                AgregarResumen(doc, snapshot);
             }
         }
 
@@ -173,7 +173,7 @@ namespace SteeLog.Infrastructure.Pdf
 
                 tabla.AddCell(FilaCelda(item.tipo_movimiento, Element.ALIGN_LEFT, bg, fntCelda));
 
-                // Cantidad: positivo en verde, negativo en rojo
+                // Cantidad original exacta: positivo en verde, negativo en rojo
                 BaseColor colorCant = item.cantidad < 0
                     ? new BaseColor(180, 60, 60)
                     : new BaseColor(39, 120, 70);
@@ -194,20 +194,21 @@ namespace SteeLog.Infrastructure.Pdf
         }
 
         // ─────────────────────────────────────────────────────────────────────
-        private static void AgregarResumen(Document doc, List<KardexItem> historial, bool mostrarSaldo)
+        private static void AgregarResumen(Document doc, KardexSnapshot snapshot)
         {
-            if (historial.Count == 0) return;
+            if (snapshot.Historial == null || snapshot.Historial.Count == 0) return;
 
             var culture = new System.Globalization.CultureInfo("es-AR");
 
-            decimal totalEntradas = historial.Where(h => h.cantidad > 0).Sum(h => h.cantidad);
-            decimal totalSalidas  = historial.Where(h => h.cantidad < 0).Sum(h => h.cantidad);
-            decimal stockFinal = historial.FirstOrDefault()?.saldo ?? 0;  // descending order — primero = más reciente
+            var resumen = snapshot.Resumen;
+            decimal totalEntradas = resumen.TotalEntradas;
+            decimal totalSalidas  = resumen.TotalSalidas;
+            decimal stockFinal = snapshot.Historial.FirstOrDefault()?.saldo ?? resumen.StockFinal;
 
-            PdfPTable tRes = new PdfPTable(mostrarSaldo ? 3 : 2);
+            PdfPTable tRes = new PdfPTable(snapshot.MostrarColumnaSaldo ? 3 : 2);
             tRes.WidthPercentage = 60;
             tRes.HorizontalAlignment = Element.ALIGN_RIGHT;
-            tRes.SetWidths(mostrarSaldo ? new float[] { 40f, 30f, 30f } : new float[] { 50f, 50f });
+            tRes.SetWidths(snapshot.MostrarColumnaSaldo ? new float[] { 40f, 30f, 30f } : new float[] { 50f, 50f });
             tRes.SpacingBefore = 8;
 
             // Header
@@ -216,14 +217,17 @@ namespace SteeLog.Infrastructure.Pdf
                 BackgroundColor = COLOR_VERDE_ACCENT,
                 Border = Rectangle.NO_BORDER,
                 Padding = 5,
-                Colspan = mostrarSaldo ? 3 : 2
+                Colspan = snapshot.MostrarColumnaSaldo ? 3 : 2
             };
             tRes.AddCell(hRes);
 
-            // Valores
-            AgCeldaRes(tRes, "Total Entradas:",  "+" + totalEntradas.ToString("G29"), new BaseColor(39, 120, 70));
-            AgCeldaRes(tRes, "Total Salidas:",   totalSalidas.ToString("G29"), new BaseColor(180, 60, 60));
-            if (mostrarSaldo)
+            // Valores con formato explícito según signo/impacto
+            string strEntradas = totalEntradas > 0 ? "+" + totalEntradas.ToString("G29") : (totalEntradas == 0 ? "+0" : totalEntradas.ToString("G29"));
+            string strSalidas  = totalSalidas > 0 ? "+" + totalSalidas.ToString("G29") : totalSalidas.ToString("G29");
+
+            AgCeldaRes(tRes, "Total Entradas:",  strEntradas, new BaseColor(39, 120, 70));
+            AgCeldaRes(tRes, "Total Salidas:",   strSalidas, new BaseColor(180, 60, 60));
+            if (snapshot.MostrarColumnaSaldo)
                 AgCeldaRes(tRes, "Stock Actual:", stockFinal.ToString("N2", culture), COLOR_VERDE_OSCURO);
 
             doc.Add(tRes);
