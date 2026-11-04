@@ -1,256 +1,157 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
-using SteeLog.Modelos;
+using SteeLog.CompositionRoot;
+using SteeLog.Core.Application.Catalogos;
+using SteeLog.Presentation;
 
 namespace SteeLog.Vistas
 {
     public partial class Vista_Obras : Form
     {
-        private int idSeleccionado = -1;
-        private List<Obra> _todasLasObras = new List<Obra>();
-        private bool _isSelecting = false;
+        private CatalogosPresenter _presenter;
+        private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private List<ObraCatalogo> _items = new List<ObraCatalogo>();
+        private int idSeleccionado = -1, _versionCarga;
+        private bool _listo, _ocupado, _seleccionando;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
 
         public Vista_Obras()
         {
             InitializeComponent();
-            CargarObra();
-            eliminarObraBoton.Enabled = false;
+            ActualizarEstado();
         }
+        internal Vista_Obras(CatalogosPresenter presenter) : this() { _presenter = presenter; }
 
-        public void CargarObra()
+        protected override async void OnLoad(EventArgs e)
         {
+            base.OnLoad(e);
+            if (System.ComponentModel.LicenseManager.UsageMode == System.ComponentModel.LicenseUsageMode.Designtime) return;
             try
             {
-                ObraDatos datos = new ObraDatos();
-                _todasLasObras = datos.GetObras();
-                FiltrarObras();
+                if (_presenter == null) _presenter = new CatalogosPresenter(LocalServices.Current.Executor);
+                await CargarAsync();
             }
-            catch (Exception)
-            {
-                ToastNotification.ShowError("Error al cargar obras.");
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Error al cargar obras: " + ex.Message); }
         }
-
-        private void FiltrarObras()
+        protected override void OnFormClosed(FormClosedEventArgs e) { CancelarCierre(); base.OnFormClosed(e); }
+        private void CancelarCierre() { if (!_cierre.IsCancellationRequested) _cierre.Cancel(); }
+        private bool Vigente => !_cierre.IsCancellationRequested && !IsDisposed;
+        private void ActualizarEstado()
         {
-            string busqueda = txtObra.Text.Trim();
-            
-            if (string.IsNullOrEmpty(busqueda) || _isSelecting)
-            {
-                dgvObras.DataSource = null;
-                dgvObras.DataSource = _todasLasObras;
-            }
-            else
-            {
-                // Filtro que busca coincidencias según lo tipeado (insensible a mayúsculas para mejorar la búsqueda)
-                var filtradas = _todasLasObras.FindAll(o => o.nombre.IndexOf(busqueda, StringComparison.OrdinalIgnoreCase) >= 0);
-                dgvObras.DataSource = null;
-                dgvObras.DataSource = filtradas;
-            }
-
-            ConfigurarEstiloGrid();
+            bool habilitado = _listo && !_ocupado;
+            guna2Button1.Enabled = habilitado;
+            eliminarObraBoton.Enabled = habilitado && idSeleccionado >= 0;
+            txtObra.Enabled = habilitado;
+            dgvObras.Enabled = habilitado;
+            chkActiva.Enabled = habilitado;
         }
-
-        private void ConfigurarEstiloGrid()
+        private async Task CargarAsync()
         {
-            try
-            {
-                dgvObras.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
-                dgvObras.RowHeadersVisible = false;
-                dgvObras.AllowUserToResizeRows = false;
-                dgvObras.ColumnHeadersHeight = 35;
-                dgvObras.MultiSelect = false;
-                dgvObras.ReadOnly = true;
-                dgvObras.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
-                dgvObras.AllowUserToResizeColumns = false;
-                dgvObras.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-
-                dgvObras.EnableHeadersVisualStyles = false;
-                dgvObras.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvObras.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                dgvObras.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                dgvObras.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                dgvObras.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-                dgvObras.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-
-                if (dgvObras.Columns["id"] != null)
-                {
-                    dgvObras.Columns["id"].Visible = false;
-                }
-
-                if (dgvObras.Columns["nombre"] != null)
-                {
-                    dgvObras.Columns["nombre"].HeaderText = "Nombre de Obra";
-                    dgvObras.Columns["nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-                    dgvObras.Columns["nombre"].FillWeight = 80;
-                }
-
-                if (dgvObras.Columns["activa"] != null)
-                {
-                    dgvObras.Columns["activa"].HeaderText = "Estado";
-                    dgvObras.Columns["activa"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-                    dgvObras.Columns["activa"].FillWeight = 20;
-                    dgvObras.Columns["activa"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-                }
-            }
-            catch (Exception)
-            {
-                ToastNotification.ShowError("Error en estilo de grilla.");
-            }
+            int version = ++_versionCarga;
+            _listo = false;
+            ActualizarEstado();
+            var items = await _presenter.ObrasAsync(_cierre.Token);
+            if (!Vigente || version != _versionCarga) return;
+            _items = items.ToList();
+            _listo = true;
+            MostrarItems();
+            ActualizarEstado();
         }
-
-        private void guna2Button1_Click(object sender, EventArgs e)
+        private void MostrarItems()
         {
-            string obra = txtObra.Text;
-            if (string.IsNullOrEmpty(obra))
-            {
-                ToastNotification.ShowWarning("Debes escribir un nombre.");
-                return;
-            }
-            string _msg = idSeleccionado < 0 ? "¿Crear esta obra?" : "¿Actualizar esta obra?";
-            if (MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-            try
-            {
-                if (idSeleccionado < 0)
-                {
-                    ObraDatos datos = new ObraDatos();
-                    datos.GuardarObra(obra, chkActiva.Checked);
-                    txtObra.Clear();
-                }
-                else
-                {
-                    ComunDatos datos = new ComunDatos();
-                    var valores = new Dictionary<string, object>();
-                    valores.Add("nombre", obra);
-                    valores.Add("activa", chkActiva.Checked);
-                    datos.ActualizarEntidadGenerica("obras", "id", idSeleccionado, valores);
-                }
-                LimpiarSeleccion();
-                CargarObra();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al guardar: " + ex.Message);
-            }
+            var datos = _items;
+            if (!_seleccionando && !string.IsNullOrWhiteSpace(txtObra.Text)) datos = _items.Where(x => x.Nombre.IndexOf(txtObra.Text.Trim(), StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            dgvObras.DataSource = null;
+            dgvObras.DataSource = datos;
+            dgvObras.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvObras.RowHeadersVisible = false;
+            dgvObras.AllowUserToResizeRows = false;
+            dgvObras.ColumnHeadersHeight = 35;
+            dgvObras.MultiSelect = false;
+            dgvObras.ReadOnly = true;
+            dgvObras.AllowUserToResizeColumns = false;
+            dgvObras.EnableHeadersVisualStyles = false;
+            dgvObras.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            dgvObras.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
+            dgvObras.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
+            dgvObras.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
+            dgvObras.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
+            dgvObras.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
+            if (dgvObras.Columns["Id"] != null) dgvObras.Columns["Id"].Visible = false;
+            if (dgvObras.Columns["Nombre"] != null) { dgvObras.Columns["Nombre"].HeaderText = "Nombre de obra"; dgvObras.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
+            if (dgvObras.Columns["Activa"] != null) { dgvObras.Columns["Activa"].HeaderText = "Estado"; dgvObras.Columns["Activa"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; dgvObras.Columns["Activa"].FillWeight = 25; }
         }
-
-        private void dgvObras_CellClick(object sender, DataGridViewCellEventArgs e)
-        {
-            if (e.RowIndex < 0) return;
-            var filas = dgvObras.Rows[e.RowIndex];
-
-            if (filas.Cells["id"].Value == null) return;
-
-            int clicID = Convert.ToInt32(filas.Cells["id"].Value);
-
-            if (idSeleccionado == clicID)
-            {
-                LimpiarSeleccion();
-            }
-            else
-            {
-                try
-                {
-                    _isSelecting = true;
-                    idSeleccionado = clicID;
-                    string obraNombre = filas.Cells["nombre"].Value.ToString();
-                    txtObra.Text = obraNombre;
-                    if (filas.Cells["activa"] != null && filas.Cells["activa"].Value != null)
-                    {
-                        chkActiva.Checked = (bool)filas.Cells["activa"].Value;
-                    }
-                    guna2Button1.Text = "Actualizar";
-                    eliminarObraBoton.Enabled = true;
-                }
-                finally
-                {
-                    _isSelecting = false;
-                }
-            }
-        }
-
         private void LimpiarSeleccion()
         {
+            _seleccionando = true;
+            try { idSeleccionado = -1; txtObra.Clear(); chkActiva.Checked = true; guna2Button1.Text = "Guardar"; dgvObras.ClearSelection(); }
+            finally { _seleccionando = false; }
+            MostrarItems();
+            ActualizarEstado();
+        }
+        private void dgvObras_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            if (!_listo || _ocupado || e.RowIndex < 0) return;
+            var item = dgvObras.Rows[e.RowIndex].DataBoundItem as ObraCatalogo;
+            if (item == null) return;
+            if (idSeleccionado == item.Id) { LimpiarSeleccion(); return; }
+            _seleccionando = true;
+            try { idSeleccionado = item.Id; txtObra.Text = item.Nombre; chkActiva.Checked = item.Activa; guna2Button1.Text = "Actualizar"; }
+            finally { _seleccionando = false; }
+            ActualizarEstado();
+        }
+        private async void guna2Button1_Click(object sender, EventArgs e)
+        {
+            if (!_listo || _ocupado) return;
+            string nombre = txtObra.Text.Trim();
+            if (string.IsNullOrEmpty(nombre)) { ToastNotification.ShowWarning("Debes escribir un nombre."); return; }
+            int? id = idSeleccionado < 0 ? (int?)null : idSeleccionado;
+            if (!Confirmar(id.HasValue ? "¿Actualizar esta obra?" : "¿Crear esta obra?", MessageBoxIcon.Question)) return;
+            bool estado = chkActiva.Checked;
+            _ocupado = true; ActualizarEstado();
             try
             {
-                _isSelecting = true;
-                idSeleccionado = -1;
-                eliminarObraBoton.Enabled = false;
-                guna2Button1.Text = "Guardar";
-                txtObra.Clear();
-                chkActiva.Checked = true;
-                dgvObras.ClearSelection();
+                await _presenter.GuardarObraAsync(id, nombre, estado, _cierre.Token);
+                if (!Vigente) return;
+                if (idSeleccionado == (id ?? -1) && txtObra.Text.Trim() == nombre && chkActiva.Checked == estado) LimpiarSeleccion();
+                try { await CargarAsync(); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Guardado, pero no se pudo actualizar el listado: " + ex.Message); }
             }
-            finally
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Error al guardar: " + ex.Message); }
+            finally { _ocupado = false; if (Vigente) ActualizarEstado(); }
+        }
+        private async void eliminarObraBoton_Click_1(object sender, EventArgs e)
+        {
+            if (!_listo || _ocupado || idSeleccionado < 0) return;
+            int id = idSeleccionado;
+            if (!Confirmar("¿Estás seguro de eliminar esta obra?", MessageBoxIcon.Warning)) return;
+            _ocupado = true; ActualizarEstado();
+            try
             {
-                _isSelecting = false;
-                FiltrarObras();
+                await _presenter.EliminarObraAsync(id, _cierre.Token);
+                if (!Vigente) return;
+                if (idSeleccionado == id) LimpiarSeleccion();
+                try { await CargarAsync(); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Eliminado, pero no se pudo actualizar el listado: " + ex.Message); }
             }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo eliminar: " + ex.Message); }
+            finally { _ocupado = false; if (Vigente) ActualizarEstado(); }
         }
-
-        private void eliminarObraBoton_Click(object sender, EventArgs e)
-        {
-           
-        }
-
-        private void panelAntiParpadeo1_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void eliminarObraBoton_Click_1(object sender, EventArgs e)
-        {
-            if (idSeleccionado == -1) return;
-            ComunDatos datos = new ComunDatos();
-            DialogResult resultado = MessageBox.Show(
-                "¿Estás seguro de eliminar esta obra?",
-                "Confirmar",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (resultado == DialogResult.Yes)
-            {
-                try
-                {
-                    datos.EliminarEntidadGenerica("obras", "id", idSeleccionado);
-                    LimpiarSeleccion();
-                    CargarObra();
-                }
-                catch (Exception ex)
-                {
-                    string msg = "No se puede eliminar la obra.\n\n";
-                    if (ex.Message.Contains("23503") || ex.Message.ToLower().Contains("fk") || ex.Message.ToLower().Contains("constraint"))
-                    {
-                        msg += "Está vinculada a otros datos (movimientos, insumos, etc.). Sugerimos desmarcar 'Activa' para archivarla.\n\n";
-                    }
-                    msg += "Error técnico: " + ex.Message;
-                    
-                    ToastNotification.ShowError("No se puede eliminar la obra (está en uso).");
-                }
-            }
-        }
-        
-        private void txtObra_TextChanged(object sender, EventArgs e)
-        {
-            if (!_isSelecting) // 4. Update the txtObra_TextChanged event to call FilterObras.
-            {
-                FiltrarObras();
-            }
-        }
-
         private void txtObra_KeyDown(object sender, KeyEventArgs e)
         {
-            if (e.KeyCode == Keys.Enter)
-            {
-                guna2Button1.PerformClick();
-                e.SuppressKeyPress = true;
-            }
+            if (e.KeyCode == Keys.Enter) { guna2Button1.PerformClick(); e.SuppressKeyPress = true; }
         }
+        private void txtObra_TextChanged(object sender, EventArgs e) { if (!_seleccionando) MostrarItems(); }
+        private void panelAntiParpadeo1_Paint(object sender, PaintEventArgs e) { }
     }
 }

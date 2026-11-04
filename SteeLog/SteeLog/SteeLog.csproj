@@ -175,16 +175,11 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="Datos\CategoriaDatos.cs" />
-    <Compile Include="Datos\ComunDatos.cs" />
     <Compile Include="Datos\ConexionDB.cs" />
-    <Compile Include="Datos\FleteDatos.cs" />
     <Compile Include="Datos\MaterialDatos.cs" />
     <Compile Include="Datos\HerramientaDatos.cs" />
     <Compile Include="Datos\InsumoDatos.cs" />
     <Compile Include="Datos\InformeObraDatos.cs" />
-    <Compile Include="Datos\ObraDatos.cs" />
-    <Compile Include="Datos\ProveedorDatos.cs" />
     <Compile Include="Datos\MovimientoDatos.cs" />
     <Compile Include="Datos\RecorteDatos.cs" />
     <Compile Include="Datos\ReporteStockDatos.cs" />
@@ -553,6 +548,8 @@
     <Compile Include="Presentation\OrdenesPresenter.cs" />
     <Compile Include="Presentation\MovimientosPresenter.cs" />
     <Compile Include="Presentation\InsumosPresenter.cs" />
+    <Compile Include="Presentation\HerramientasPresenter.cs" />
+    <Compile Include="Presentation\CatalogosPresenter.cs" />
     <Compile Include="Presentation\RecortesPresenter.cs" />
     <Compile Include="Presentation\MaterialesPresenter.cs" />
     <Compile Include="Presentation\ConteosPresenter.cs" />

@@ -8,6 +8,8 @@ using System.Linq;
 using System.Threading.Tasks;
 using System.Threading;
 using SteeLog.Core.Application.Canaletas;
+using SteeLog.Core.Application.Catalogos;
+using SteeLog.Core.Application.Activos;
 using SteeLog.Presentation;
 using SteeLog.CompositionRoot;
 using System.Windows.Forms;
@@ -36,6 +38,10 @@ namespace SteeLog.Vistas.Reportes
         private readonly Func<int, string, CancellationToken, Task<LecturasObra>> cargarLegacy;
         internal Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> GenerarInforme;
         internal Action<string> AbrirInforme;
+        internal Func<CancellationToken, Task<IReadOnlyList<ObraCatalogo>>> ConsultarObras;
+        internal Func<int, CancellationToken, Task<int>> RetornarHerramienta;
+        internal Action<string> AvisarRetorno;
+        private bool retornandoHerramienta;
         private CanaletasPresenter Presenter => presenterInyectado ?? new CanaletasPresenter(LocalServices.Current.Executor);
         internal sealed class LecturasObra
         {
@@ -118,8 +124,13 @@ namespace SteeLog.Vistas.Reportes
             HabilitarAcciones(false);
             try
             {
-                var dt = await Task.Run(() => new ComunDatos().ObtenerListaGenerica("obras"), token);
+                var obras = ConsultarObras != null ? await ConsultarObras(token)
+                    : await LocalServices.Current.Executor.ExecuteAsync<ConsultarCatalogos, IReadOnlyList<ObraCatalogo>>(x => x.ObrasAsync(token));
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
+                var dt = new DataTable();
+                dt.Columns.Add("id", typeof(int));
+                dt.Columns.Add("nombre", typeof(string));
+                foreach (var obra in obras) dt.Rows.Add(obra.Id, obra.Nombre);
                 cmbObras.DataSource = dt;
                 cmbObras.DisplayMember = "nombre";
                 cmbObras.ValueMember = "id";
@@ -879,7 +890,7 @@ namespace SteeLog.Vistas.Reportes
 
         private void menuHerramientas_Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
-            bool habilitado = tabActual == "herramientas"
+            bool habilitado = !retornandoHerramienta && dgvDatos.Enabled && tabActual == "herramientas"
                 && dgvDatos.SelectedRows.Count > 0
                 && dgvDatos.Columns["Estado"] != null
                 && string.Equals(
@@ -892,9 +903,9 @@ namespace SteeLog.Vistas.Reportes
             e.Cancel = !habilitado;
         }
 
-        private void itemEnviarAGalpon_Click(object sender, EventArgs e)
+        private async void itemEnviarAGalpon_Click(object sender, EventArgs e)
         {
-            if (dgvDatos.SelectedRows.Count == 0 || dgvDatos.Columns["IdHerramienta"] == null)
+            if (retornandoHerramienta || !dgvDatos.Enabled || dgvDatos.SelectedRows.Count == 0 || dgvDatos.Columns["IdHerramienta"] == null)
                 return;
 
             var row = dgvDatos.SelectedRows[0];
@@ -911,16 +922,35 @@ namespace SteeLog.Vistas.Reportes
             if (confirmacion != DialogResult.Yes)
                 return;
 
+            await RetornarHerramientaAsync(idHerramienta);
+        }
+
+        private async Task RetornarHerramientaAsync(int idHerramienta)
+        {
+            if (retornandoHerramienta || vida.IsCancellationRequested || !dgvDatos.Enabled) return;
+            retornandoHerramienta = true;
+            itemEnviarAGalpon.Enabled = false;
+            int version = versionObra;
+            var token = vida.Token;
             try
             {
-                new HerramientaDatos().EnviarAGalpon(idHerramienta);
+                if (RetornarHerramienta != null) await RetornarHerramienta(idHerramienta, token);
+                else await LocalServices.Current.Executor.ExecuteAsync<GestionarHerramientas, int>(x => x.EnviarAGalponAsync(idHerramienta, token));
+                if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
                 CargarDatosObra();
-                ToastNotification.ShowSuccess("La herramienta fue enviada al galpón.");
+                if (AvisarRetorno != null) AvisarRetorno("La herramienta fue enviada al galpón.");
+                else ToastNotification.ShowSuccess("La herramienta fue enviada al galpón.");
             }
+            catch (OperationCanceledException) { }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("No se pudo enviar la herramienta al galpón:\n" + ex.Message);
+                if (!token.IsCancellationRequested && !IsDisposed && version == versionObra)
+                {
+                    if (AvisarRetorno != null) AvisarRetorno(ex.Message);
+                    else ToastNotification.ShowError("No se pudo enviar la herramienta al galpón:\n" + ex.Message);
+                }
             }
+            finally { retornandoHerramienta = false; }
         }
 
         private class VisorFotosCanaletaForm : Form

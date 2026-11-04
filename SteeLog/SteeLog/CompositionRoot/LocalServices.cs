@@ -25,6 +25,8 @@ using SteeLog.Core.Application.OrdenesCompra;
 using SteeLog.Core.Application.Canaletas;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Infrastructure.Canaletas;
+using SteeLog.Core.Application.Catalogos;
+using SteeLog.Infrastructure.Catalogos;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IDisposable
@@ -102,6 +104,14 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<IHistorialMovimientoConsulta>(_ => new NpgsqlHistorialMovimientoConsulta(Connections));
             registrations.AddScoped<ConsultarHistorialMovimientos>();
             registrations.AddScoped<GestionarInsumos>();
+            registrations.AddScoped<IHerramientasConsulta>(_ => new NpgsqlHerramientasConsulta(Connections));
+            registrations.AddScoped<IHerramientasEscritura, NpgsqlHerramientas>();
+            registrations.AddScoped<ConsultarHerramientas>();
+            registrations.AddScoped<GestionarHerramientas>();
+            registrations.AddScoped<ICatalogosConsulta>(_ => new NpgsqlCatalogosConsulta(Connections));
+            registrations.AddScoped<ICatalogosEscritura, NpgsqlCatalogos>();
+            registrations.AddScoped<ConsultarCatalogos>();
+            registrations.AddScoped<GestionarCatalogos>();
             registrations.AddScoped<IRemitoConsulta>(_ => new NpgsqlRemitoConsulta(Connections));
             registrations.AddScoped<ConsultarRemito>();
             registrations.AddScoped<ICatalogosMovimientoConsulta>(_ => new NpgsqlCatalogosMovimientoConsulta(Connections));
@@ -129,6 +139,7 @@ namespace SteeLog.CompositionRoot
             Executor = new UseCaseExecutor(provider.GetRequiredService<IServiceScopeFactory>());
         }
         internal InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
+        internal HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista) => new HerramientasPresenter(Executor, vista);
         internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;

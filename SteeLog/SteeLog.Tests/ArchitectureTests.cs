@@ -224,6 +224,25 @@ public class ArchitectureTests
         }
     }
     [Fact]
+    public void Herramientas_and_catalogos_views_have_no_persistence_dependencies()
+    {
+        var owners = new HashSet<string>(StringComparer.Ordinal) {
+            "SteeLog.Vistas.Vista_Herramientas", "SteeLog.Vistas.Vista_Categorias",
+            "SteeLog.Vistas.Vista_Obras", "SteeLog.Vistas.Vista_Proveedores",
+            "SteeLog.Vistas.Vista_Ubicaciones", "SteeLog.Vistas.Vista_Fletes",
+            "SteeLog.Presentation.HerramientasPresenter", "SteeLog.Presentation.CatalogosPresenter"
+        };
+        using (var host = Read(HostPath))
+        {
+            var guarded = Types(host.MainModule.Types).Where(t => owners.Contains(Owner(t))).ToArray();
+            foreach (var owner in owners) Assert.Contains(guarded, t => t.FullName == owner);
+            Assert.Empty(guarded.SelectMany(t => References(t).Where(Forbidden).Select(r => Owner(t) + " -> " + r.FullName)).Distinct());
+            Assert.DoesNotContain(Types(host.MainModule.Types).SelectMany(References), t => t.FullName == "SteeLog.Datos.ComunDatos");
+            var report = Types(host.MainModule.Types).Where(t => Owner(t) == "SteeLog.Vistas.Reportes.Vista_InformeObra");
+            Assert.DoesNotContain(report.SelectMany(References), t => t.FullName == "SteeLog.Datos.HerramientaDatos");
+        }
+    }
+    [Fact]
     public void Demo_bridges_have_no_http_or_process_launch_dependencies()
     {
         var guarded = new HashSet<string> {

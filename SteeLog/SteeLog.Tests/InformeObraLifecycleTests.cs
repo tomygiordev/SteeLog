@@ -111,6 +111,34 @@ namespace SteeLog.Tests
             });
         }
         [Theory] [InlineData(true)] [InlineData(false)]
+        public void RetornoHerramientaNoActualizaContextoNuevoOCerradoYBloqueaDobleEnvio(bool cerrar)
+        {
+            Sta(() => {
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
+                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                    var handle = form.Handle;
+                    var pendiente = new TaskCompletionSource<int>();
+                    int envios = 0, avisos = 0;
+                    CancellationToken tokenCapturado = default;
+                    Func<int, CancellationToken, Task<int>> retornar = (id, token) => { envios++; tokenCapturado = token; return pendiente.Task; };
+                    tipo.GetField("RetornarHerramienta", Private).SetValue(form, retornar);
+                    tipo.GetField("AvisarRetorno", Private).SetValue(form, new Action<string>(_ => avisos++));
+                    var grid = (Control)tipo.GetField("dgvDatos", Private).GetValue(form);
+                    grid.Enabled = true;
+                    var metodo = tipo.GetMethod("RetornarHerramientaAsync", Private);
+                    var primera = (Task)metodo.Invoke(form, new object[] { 7 });
+                    Esperar((Task)metodo.Invoke(form, new object[] { 7 }));
+                    Assert.Equal(1, envios);
+                    if (cerrar) { form.Dispose(); Assert.True(tokenCapturado.IsCancellationRequested); }
+                    else tipo.GetField("versionObra", Private).SetValue(form, 12);
+                    pendiente.SetResult(7);
+                    Esperar(primera);
+                    Assert.Equal(0, avisos);
+                    if (!cerrar) Assert.Equal(12, tipo.GetField("versionObra", Private).GetValue(form));
+                }
+            });
+        }
+        [Theory] [InlineData(true)] [InlineData(false)]
         public void ReporteTerminadoTrasCierreOCambioNoAbreVisor(bool cerrar)
         {
             Sta(() => {

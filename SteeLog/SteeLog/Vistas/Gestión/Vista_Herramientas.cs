@@ -8,16 +8,32 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.Datos;
+using SteeLog.Presentation;
+using SteeLog.CompositionRoot;
+using System.Threading;
 using SteeLog.Modelos;
 
 namespace SteeLog.Vistas
 {
-    public partial class Vista_Herramientas : Form
+    public partial class Vista_Herramientas : Form, IHerramientasVista
     {
         private int idSeleccionado = -1;
-        private HerramientaDatos herramientaDatos = new HerramientaDatos();
-        private ObraDatos obraDatos = new ObraDatos();
+        private readonly CancellationTokenSource cierre = new CancellationTokenSource();
+        private readonly CargasHerramientas cargas = new CargasHerramientas();
+        private HerramientasPresenter presenter;
+        private HerramientasPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearHerramientasPresenter(this));
+        private List<Herramienta> herramientas = new List<Herramienta>();
+        private List<Obra> obras = new List<Obra>();
+        private List<HerramientaMovimiento> historial = new List<HerramientaMovimiento>();
+        private bool ocupada, leyendo, inicializada, obrasCargadas;
+        private Func<string, string, MessageBoxIcon, bool> confirmar = (mensaje, titulo, icono) => MessageBox.Show(mensaje, titulo, MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        private Action<string> avisar = mensaje => ToastNotification.ShowError(mensaje);
+        private int contexto;
+        public void SetOcupada(bool valor) { ocupada=valor; ActualizarControles(); }
+        public void MostrarError(Exception error) { if (!IsDisposed && !cierre.IsCancellationRequested) avisar(error.Message); }
+        private bool Vigente(int revision) => !IsDisposed && !cierre.IsCancellationRequested && cargas.EsActual(revision);
+        private void ActualizarControles() { if(IsDisposed || cierre.IsCancellationRequested) return; btnGuardar.Enabled=inicializada && !leyendo && !ocupada; btnEliminar.Enabled=inicializada && !leyendo && !ocupada && idSeleccionado!=-1; btnVerHerramientas.Enabled=obrasCargadas; btnVerHistorial.Enabled=obrasCargadas; txtNombre.Enabled=inicializada && !leyendo; txtObservaciones.Enabled=inicializada && !leyendo; cboEstado.Enabled=inicializada && !leyendo; cboObra.Enabled=inicializada && !leyendo; dgvHerramientas.Enabled=inicializada && !leyendo; }
+        private void CerrarCargas() { cargas.Cerrar(); if(!cierre.IsCancellationRequested) cierre.Cancel(); }
         private PrintDocument printDocument1;
         private Color tabActiveColor = Color.FromArgb(25, 135, 84);
         private Color tabInactiveColor = Color.FromArgb(47, 84, 57);
@@ -27,17 +43,42 @@ namespace SteeLog.Vistas
         {
             InitializeComponent();
             btnEliminar.Enabled = false;
+            btnGuardar.Enabled = false;
+            btnVerHerramientas.Enabled = false;
+            btnVerHistorial.Enabled = false;
+            txtNombre.Enabled = false; txtObservaciones.Enabled = false; cboEstado.Enabled = false; cboObra.Enabled = false; dgvHerramientas.Enabled = false;
+            txtNombre.TextChanged += (s, e) => contexto++;
+            txtObservaciones.TextChanged += (s, e) => contexto++;
+            cboEstado.SelectedIndexChanged += (s, e) => contexto++;
+            cboObra.SelectedIndexChanged += (s, e) => contexto++;
+            FormClosed += (s, e) => CerrarCargas();
+            Disposed += (s, e) => CerrarCargas();
 
             printDocument1 = new PrintDocument();
             printDocument1.PrintPage += new PrintPageEventHandler(printDocument1_PrintPage);
         }
 
-        private void Vista_Herramientas_Load(object sender, EventArgs e)
+        internal Vista_Herramientas(IUseCaseExecutor executor) : this()
         {
-            CargarComboEstado();
-            CargarComboObras();
-            CargarComboFiltroHerramienta();
-            CargarHerramientas();
+            presenter = new HerramientasPresenter(executor ?? throw new ArgumentNullException(nameof(executor)), this);
+        }
+
+        private async void Vista_Herramientas_Load(object sender, EventArgs e)
+        {
+            int revision=cargas.Iniciar(); leyendo=true; ActualizarControles();
+            try
+            {
+                CargarComboEstado();
+                var datosObras=await Presenter.ObrasAsync(cierre.Token);
+                if(!Vigente(revision)) return;
+                obras=datosObras.Select(x=>new Obra { id=x.Id,nombre=x.Nombre }).ToList();
+                CargarComboObras();
+                obrasCargadas=true;
+                await CargarHerramientas();
+            }
+            catch(OperationCanceledException) { }
+            catch(Exception ex) { if(Vigente(revision)) MostrarError(ex); }
+            finally { if(Vigente(revision)) { leyendo=false; ActualizarControles(); } }
         }
 
         // ===================== COMBOS =====================
@@ -56,7 +97,7 @@ namespace SteeLog.Vistas
             cboObra.Items.Clear();
             cboObra.DataSource = null;
 
-            var obras = obraDatos.GetObras();
+
             var listaObras = new List<Obra>();
             listaObras.Add(new Obra { id = 0, nombre = "Galpón" });
             listaObras.AddRange(obras);
@@ -71,7 +112,7 @@ namespace SteeLog.Vistas
         {
             cboFiltroHerramienta.DataSource = null;
 
-            var herramientas = herramientaDatos.GetHerramientas();
+
             var lista = new List<Herramienta>();
             lista.Add(new Herramienta { id = 0, nombre = "— Todas —" });
             foreach (var h in herramientas)
@@ -95,7 +136,7 @@ namespace SteeLog.Vistas
 
             // Cargar obras para el filtro
             cboFiltroObra.DataSource = null;
-            var obras = obraDatos.GetObras();
+
             var listaObras = new List<Obra>();
             listaObras.Add(new Obra { id = 0, nombre = "Todas" });
             listaObras.Add(new Obra { id = -1, nombre = "Galpón" });
@@ -109,11 +150,16 @@ namespace SteeLog.Vistas
 
         // ===================== GRILLA HERRAMIENTAS =====================
 
-        private void CargarHerramientas()
+        private async Task CargarHerramientas()
         {
+            int revision=cargas.Iniciar(); leyendo=true; inicializada=false; ActualizarControles();
             try
             {
-                var lista = herramientaDatos.GetHerramientas();
+                var datos=await Presenter.HerramientasAsync(cierre.Token);
+                if(!Vigente(revision)) return;
+                herramientas=datos.Select(x=>new Herramienta { id=x.Id,nombre=x.Nombre,estado=x.Estado,id_obra=x.ObraId,nombre_obra=x.Obra,observaciones=x.Observaciones }).ToList();
+                inicializada=true;
+                var lista = herramientas;
                 
                 // Ordenar por nombre que contiene ID
                 lista = lista.OrderBy(h => {
@@ -183,10 +229,9 @@ namespace SteeLog.Vistas
                     dgvHerramientas.Columns["observaciones"].FillWeight = 25;
                 }
             }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al cargar herramientas: " + ex.Message);
-            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if(Vigente(revision)) MostrarError(ex); }
+            finally { if(Vigente(revision)) { leyendo=false; ActualizarControles(); } }
         }
 
         // ===================== GRILLA HISTORIAL =====================
@@ -195,7 +240,7 @@ namespace SteeLog.Vistas
         {
             try
             {
-                var lista = herramientaDatos.GetHistorial();
+                var lista = historial.ToList();
 
                 // Filtro por herramienta específica (comparación por id, no por nombre)
                 if (cboFiltroHerramienta.SelectedIndex > 0 && cboFiltroHerramienta.SelectedItem is Herramienta seleccionada && seleccionada.id > 0)
@@ -324,7 +369,7 @@ namespace SteeLog.Vistas
 
         // ===================== TABS =====================
 
-        private void btnVerHerramientas_Click(object sender, EventArgs e)
+        private async void btnVerHerramientas_Click(object sender, EventArgs e)
         {
             vistaHistorialActiva = false;
             panelGrid.Visible = true;
@@ -332,10 +377,10 @@ namespace SteeLog.Vistas
             panelFiltro.Visible = false;
             btnVerHerramientas.FillColor = tabActiveColor;
             btnVerHistorial.FillColor = tabInactiveColor;
-            CargarHerramientas();
+            await CargarHerramientas();
         }
 
-        private void btnVerHistorial_Click(object sender, EventArgs e)
+        private async void btnVerHistorial_Click(object sender, EventArgs e)
         {
             vistaHistorialActiva = true;
             panelGrid.Visible = false;
@@ -343,15 +388,24 @@ namespace SteeLog.Vistas
             panelFiltro.Visible = true;
             btnVerHerramientas.FillColor = tabInactiveColor;
             btnVerHistorial.FillColor = tabActiveColor;
-            CargarComboFiltroHerramienta();
-            CargarFiltrosHistorial();
-            CargarHistorial();
+            int revision=cargas.Iniciar(); leyendo=true; ActualizarControles();
+            try
+            {
+                var datos=await Presenter.HistorialAsync(cierre.Token);
+                if(!Vigente(revision) || !vistaHistorialActiva) return;
+                historial=datos.Select(x=>new HerramientaMovimiento { id=x.Id,id_herramienta=x.HerramientaId,nombre_herramienta=x.Nombre,estado=x.Estado,obra_origen=x.Origen,obra_destino=x.Destino,fecha=x.Fecha }).ToList();
+                CargarComboFiltroHerramienta(); CargarFiltrosHistorial(); CargarHistorial();
+            }
+            catch(OperationCanceledException) { }
+            catch(Exception ex) { if(Vigente(revision)) MostrarError(ex); }
+            finally { if(Vigente(revision)) { leyendo=false; ActualizarControles(); } }
         }
 
         // ===================== SELECTION =====================
 
         private void LimpiarSeleccion()
         {
+            contexto++;
             idSeleccionado = -1;
             txtNombre.Clear();
             txtObservaciones.Clear();
@@ -370,6 +424,7 @@ namespace SteeLog.Vistas
             if (fila.Cells["id"].Value == null) return;
 
             int clicID = Convert.ToInt32(fila.Cells["id"].Value);
+            contexto++;
 
             if (idSeleccionado == clicID)
             {
@@ -382,6 +437,7 @@ namespace SteeLog.Vistas
                 txtObservaciones.Text = fila.Cells["observaciones"].Value?.ToString() ?? "";
 
                 string estado = fila.Cells["estado"].Value.ToString();
+                if (!cboEstado.Items.Contains(estado)) cboEstado.Items.Add(estado);
                 for (int i = 0; i < cboEstado.Items.Count; i++)
                 {
                     if (cboEstado.Items[i].ToString() == estado)
@@ -417,8 +473,9 @@ namespace SteeLog.Vistas
 
         // ===================== CRUD =====================
 
-        private void btnGuardar_Click(object sender, EventArgs e)
+        private async void btnGuardar_Click(object sender, EventArgs e)
         {
+            if(!inicializada || leyendo || ocupada) return;
             string nombre = txtNombre.Text.Trim();
             if (string.IsNullOrEmpty(nombre))
             {
@@ -432,52 +489,23 @@ namespace SteeLog.Vistas
             string observaciones = txtObservaciones.Text.Trim();
 
             string _msg = idSeleccionado == -1 ? "¿Crear esta herramienta?" : "¿Actualizar esta herramienta?";
-            if (MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!confirmar(_msg, "Confirmar", MessageBoxIcon.Question)) return;
 
-            try
-            {
-                if (idSeleccionado == -1)
-                {
-                    herramientaDatos.GuardarHerramienta(nombre, estado, idObra, observaciones);
-                }
-                else
-                {
-                    herramientaDatos.ActualizarHerramienta(idSeleccionado, nombre, estado, idObra, observaciones);
-                }
-
-                LimpiarSeleccion();
-                CargarHerramientas();
-            }
-            catch (Exception ex)
-            {
-                ToastNotification.ShowError("Error al guardar: " + ex.Message);
-            }
+            int revisionContexto=contexto;
+            int? id=idSeleccionado == -1 ? (int?)null : idSeleccionado;
+            var resultado=await Presenter.GuardarAsync(id,nombre,estado,idObra,observaciones,cierre.Token,()=>!IsDisposed && !cierre.IsCancellationRequested && revisionContexto==contexto);
+            if(resultado.HasValue && !IsDisposed && !cierre.IsCancellationRequested && revisionContexto==contexto)
+            { LimpiarSeleccion(); await CargarHerramientas(); }
         }
 
-        private void btnEliminar_Click(object sender, EventArgs e)
+        private async void btnEliminar_Click(object sender, EventArgs e)
         {
-            if (idSeleccionado == -1) return;
-
-            DialogResult resultado = MessageBox.Show(
-                "¿Estás seguro de eliminar esta herramienta?",
-                "Confirmar",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
-
-            if (resultado == DialogResult.Yes)
-            {
-                try
-                {
-                    herramientaDatos.EliminarHerramienta(idSeleccionado);
-                    LimpiarSeleccion();
-                    CargarHerramientas();
-                }
-                catch (Exception ex)
-                {
-                    ToastNotification.ShowError("No se puede eliminar la herramienta: " + ex.Message);
-                }
-            }
+            if(idSeleccionado==-1 || leyendo || ocupada) return;
+            if(!confirmar("¿Estás seguro de eliminar esta herramienta?","Confirmar",MessageBoxIcon.Warning)) return;
+            int id=idSeleccionado, revisionContexto=contexto;
+            var resultado=await Presenter.EliminarAsync(id,cierre.Token,()=>!IsDisposed && !cierre.IsCancellationRequested && revisionContexto==contexto);
+            if(resultado.HasValue && !IsDisposed && !cierre.IsCancellationRequested && revisionContexto==contexto)
+            { LimpiarSeleccion(); await CargarHerramientas(); }
         }
 
         // ===================== PDF =====================
