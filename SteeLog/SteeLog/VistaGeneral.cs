@@ -860,30 +860,48 @@ namespace SteeLog
         private async void BtnUpdate_Click(object sender, EventArgs e)
         {
             var btn = sender as Button;
+            await VerificarActualizacionesAsync(btn, () => UpdaterService.CheckForUpdateAsync(throwOnError: true),
+                update => { using (var modal = new ModalActualizacion(update)) modal.ShowDialog(this); },
+                mensaje => ToastNotification.ShowSuccess(mensaje), mensaje => ToastNotification.ShowError(mensaje));
+        }
+
+        private bool verificandoActualizacion;
+        internal async Task VerificarActualizacionesAsync(Button btn,
+            Func<Task<SteeLog.Core.Application.Actualizaciones.UpdateInfo>> consultar,
+            Action<SteeLog.Core.Application.Actualizaciones.UpdateInfo> mostrar,
+            Action<string> exito, Action<string> error)
+        {
+            if (verificandoActualizacion || IsDisposed || Disposing || btn == null || btn.IsDisposed) return;
+            verificandoActualizacion = true;
             btn.Enabled = false;
             btn.Text = "  Verificando...";
 
             try
             {
-                var update = await UpdaterService.CheckForUpdateAsync(throwOnError: true);
+                var update = await consultar();
+                if (IsDisposed || Disposing || _tokenCierreStock.IsCancellationRequested) return;
                 if (update == null)
                 {
-                    ToastNotification.ShowSuccess("No hay una versión demo más reciente (actual: " + AppVersion.Current + ").");
+                    exito("No hay una versión demo más reciente (actual: " + AppVersion.Current + ").");
                 }
                 else
                 {
-                    var modal = new ModalActualizacion(update);
-                    modal.ShowDialog(this);
+                    mostrar(update);
                 }
             }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("No se pudo verificar actualizaciones: " + ex.Message);
+                if (!IsDisposed && !Disposing && !_tokenCierreStock.IsCancellationRequested)
+                    error("No se pudo verificar actualizaciones: " + ex.Message);
             }
             finally
             {
-                btn.Enabled = true;
-                btn.Text = "  Buscar actualizaciones";
+                verificandoActualizacion = false;
+                if (!IsDisposed && !Disposing && !btn.IsDisposed)
+                {
+                    btn.Enabled = true;
+                    btn.Text = "  Buscar actualizaciones";
+                }
             }
         }
     }
