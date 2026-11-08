@@ -30,7 +30,8 @@ namespace SteeLog.Vistas
             this.txtFlete = new Guna.UI2.WinForms.Guna2TextBox();
             this.guna2Button1 = new Guna.UI2.WinForms.Guna2Button();
             this.eliminarFleteBoton = new Guna.UI2.WinForms.Guna2Button();
-            this.chkActivo = new Guna.UI2.WinForms.Guna2CheckBox();
+            this.chkActivo = new Guna.UI2.WinForms.Guna2CustomCheckBox();
+            this.lblActivo = new System.Windows.Forms.Label();
 
             this.panelAntiParpadeo4 = new SteeLog.PanelAntiParpadeo();
             this.label3 = new System.Windows.Forms.Label();
@@ -78,17 +79,19 @@ namespace SteeLog.Vistas
             // -------------------------------------------------------
             // panelAntiParpadeo2 — Formulario
             // -------------------------------------------------------
-            this.panelAntiParpadeo2.ColumnCount = 5;
+            this.panelAntiParpadeo2.ColumnCount = 6;
             this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 90F));
             this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 55F));
-            this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 95F));
+            this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 60F));
+            this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 34F));
             this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 22.5F));
             this.panelAntiParpadeo2.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 22.5F));
             this.panelAntiParpadeo2.Controls.Add(this.label2, 0, 0);
             this.panelAntiParpadeo2.Controls.Add(this.txtFlete, 1, 0);
-            this.panelAntiParpadeo2.Controls.Add(this.chkActivo, 2, 0);
-            this.panelAntiParpadeo2.Controls.Add(this.guna2Button1, 3, 0);
-            this.panelAntiParpadeo2.Controls.Add(this.eliminarFleteBoton, 4, 0);
+            this.panelAntiParpadeo2.Controls.Add(this.lblActivo, 2, 0);
+            this.panelAntiParpadeo2.Controls.Add(this.chkActivo, 3, 0);
+            this.panelAntiParpadeo2.Controls.Add(this.guna2Button1, 4, 0);
+            this.panelAntiParpadeo2.Controls.Add(this.eliminarFleteBoton, 5, 0);
             this.panelAntiParpadeo2.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelAntiParpadeo2.GrowStyle = System.Windows.Forms.TableLayoutPanelGrowStyle.AddColumns;
             this.panelAntiParpadeo2.Location = new System.Drawing.Point(0, 42);
@@ -175,18 +178,34 @@ namespace SteeLog.Vistas
             // 
             // chkActivo
             // 
-            this.chkActivo.Anchor = System.Windows.Forms.AnchorStyles.None;
-            this.chkActivo.AutoSize = true;
+            this.chkActivo.Anchor = System.Windows.Forms.AnchorStyles.Left;
             this.chkActivo.Checked = true;
-            this.chkActivo.CheckState = System.Windows.Forms.CheckState.Checked;
-            this.chkActivo.Font = new System.Drawing.Font("Bahnschrift Light", 10.5F);
-            this.chkActivo.ForeColor = System.Drawing.Color.White;
+            this.chkActivo.CheckedState.BorderColor = System.Drawing.Color.FromArgb(39, 174, 96);
+            this.chkActivo.CheckedState.BorderRadius = 0;
+            this.chkActivo.CheckedState.BorderThickness = 0;
+            this.chkActivo.CheckedState.FillColor = System.Drawing.Color.FromArgb(39, 174, 96);
             this.chkActivo.Location = new System.Drawing.Point(400, 15);
+            this.chkActivo.Margin = new System.Windows.Forms.Padding(0, 0, 8, 0);
             this.chkActivo.Name = "chkActivo";
-            this.chkActivo.Size = new System.Drawing.Size(75, 21);
+            this.chkActivo.Size = new System.Drawing.Size(22, 22);
             this.chkActivo.TabIndex = 4;
-            this.chkActivo.Text = "Activo";
-            this.chkActivo.UseVisualStyleBackColor = true;
+            this.chkActivo.UncheckedState.BorderColor = System.Drawing.Color.FromArgb(75, 100, 84);
+            this.chkActivo.UncheckedState.BorderRadius = 0;
+            this.chkActivo.UncheckedState.BorderThickness = 2;
+            this.chkActivo.UncheckedState.FillColor = System.Drawing.Color.FromArgb(35, 50, 40);
+            // 
+            // lblActivo
+            // 
+            this.lblActivo.Anchor = System.Windows.Forms.AnchorStyles.Left;
+            this.lblActivo.AutoSize = false;
+            this.lblActivo.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lblActivo.Font = new System.Drawing.Font("Bahnschrift Light", 10.5F);
+            this.lblActivo.ForeColor = System.Drawing.Color.FromArgb(155, 185, 165);
+            this.lblActivo.Name = "lblActivo";
+            this.lblActivo.Padding = new System.Windows.Forms.Padding(8, 0, 4, 0);
+            this.lblActivo.TabIndex = 5;
+            this.lblActivo.Text = "Activo:";
+            this.lblActivo.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
 
             // -------------------------------------------------------
             // panelAntiParpadeo4 — Encabezado del listado
@@ -347,6 +366,7 @@ namespace SteeLog.Vistas
         private Guna.UI2.WinForms.Guna2Panel guna2Panel1;
         private Guna.UI2.WinForms.Guna2VScrollBar guna2VScrollBar1;
         private Guna.UI2.WinForms.Guna2DataGridView dgvFletes;
-        private Guna.UI2.WinForms.Guna2CheckBox chkActivo;
+        private Guna.UI2.WinForms.Guna2CustomCheckBox chkActivo;
+        private System.Windows.Forms.Label lblActivo;
     }
 }

@@ -270,6 +270,26 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
+        public void RevisionCargada_TituloIncluyeNumeroYLabelEntraEnElAncho()
+        {
+            EnSta(() => {
+                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                try {
+                var ejecutor = new EjecutorIncierto();
+                using (var revision = new Vista_OrdenesRevision()) {
+                    Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
+                    revision.Size = new System.Drawing.Size(1000, 700);
+                    revision.SetOrder(7); Esperar(revision, "CargarOrden");
+                    revision.PerformLayout();
+                    var titulo = Campo<Label>(revision, "lblTitulo");
+                    Assert.Equal("Revisión de Orden OC-7", titulo.Text);
+                    var ancho = TextRenderer.MeasureText(titulo.Text, titulo.Font, new System.Drawing.Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
+                    Assert.True(ancho <= titulo.Width, "ancho texto " + ancho + " > label " + titulo.Width);
+                }
+                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+            });
+        }
+        [Fact]
         public async Task DeshabilitaMientrasCargaYRechazaDobleEnvio()
         {
             var vista = new Vista(); var executor = new Ejecutor(); var presenter = new OrdenesPresenter(executor, vista);

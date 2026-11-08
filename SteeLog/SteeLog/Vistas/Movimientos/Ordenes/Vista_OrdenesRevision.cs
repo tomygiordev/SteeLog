@@ -92,12 +92,14 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));
 
             var header = new Panel();
+            header.Dock = DockStyle.Fill;
             header.Padding = new Padding(18, 18, 18, 6);
             lblTitulo = new Label();
             lblTitulo.Text = "Revisión de Orden";
             lblTitulo.Font = new Font("Bahnschrift SemiBold", 17F, FontStyle.Bold);
             lblTitulo.ForeColor = Color.White;
             lblTitulo.Dock = DockStyle.Fill;
+            lblTitulo.AutoEllipsis = true;
             header.Controls.Add(lblTitulo);
 
             var resumenCard = new Panel();

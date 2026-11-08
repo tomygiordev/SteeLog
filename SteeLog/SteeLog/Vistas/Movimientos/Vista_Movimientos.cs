@@ -1074,24 +1074,47 @@ namespace SteeLog.Vistas.Movimientos
             string cantTexto = (cantMatMov.Text ?? "").Trim().Replace(',', '.');
             if (decimal.TryParse(cantTexto, System.Globalization.NumberStyles.Any, CultureInfo.InvariantCulture, out decimal valor))
             {
-                // En modo edición, el stockMax considera las cantidades ya cargadas (serán revertidas)
-                decimal stockMax = _recorteSeleccionado != null
-                    ? StockDisponibleRecorte(_recorteSeleccionado.id)
-                    : (_materialSeleccionado != null ? StockDisponibleMaterial(_materialSeleccionado.id) : decimal.MaxValue);
-                
-                // Clamp automático: solo para tipos de movimiento que CONSUMEN stock.
-                string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
-                bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
-
-                if (consumeStock && valor > stockMax)
+                decimal limitado = LimitarCantidadAStock(valor);
+                if (limitado != valor)
                 {
                     isProgrammaticChange = true;
-                    cantMatMov.Text = stockMax.ToString("G29", CultureInfo.InvariantCulture);
+                    cantMatMov.Text = limitado.ToString("G29", CultureInfo.InvariantCulture);
                     cantMatMov.SelectionStart = cantMatMov.Text.Length;
                     isProgrammaticChange = false;
-                    ToastNotification.ShowWarning($"Stock máximo disponible: {stockMax.ToString("G29")}");
                 }
             }
+        }
+
+        // Aviso de stock máximo: inyectable en tests; no se repite para el mismo tope hasta que la cantidad vuelva a ser válida.
+        private Action<string> AvisarStockMaximo = mensaje => ToastNotification.ShowWarning(mensaje);
+        private decimal? _ultimoAvisoStockMax;
+
+        /// <summary>
+        /// Aplica el tope de stock disponible (solo movimientos que consumen stock) y avisa una vez por tope.
+        /// </summary>
+        private decimal LimitarCantidadAStock(decimal valor)
+        {
+            if (_materialSeleccionado == null) return valor;
+
+            // En modo edición, el stockMax considera las cantidades ya cargadas (serán revertidas)
+            decimal stockMax = _recorteSeleccionado != null
+                ? StockDisponibleRecorte(_recorteSeleccionado.id)
+                : StockDisponibleMaterial(_materialSeleccionado.id);
+
+            string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
+            bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
+
+            if (consumeStock && valor > stockMax)
+            {
+                if (_ultimoAvisoStockMax != stockMax)
+                {
+                    _ultimoAvisoStockMax = stockMax;
+                    AvisarStockMaximo($"Stock máximo disponible: {stockMax.ToString("G29")}");
+                }
+                return stockMax;
+            }
+            _ultimoAvisoStockMax = null;
+            return valor;
         }
 
         private void cantMatMov_MouseWheel(object sender, MouseEventArgs e)
@@ -1103,18 +1126,10 @@ namespace SteeLog.Vistas.Movimientos
             string cantTexto = (cantMatMov.Text ?? "").Replace(',', '.');
             decimal.TryParse(cantTexto, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal valor);
 
-            // En modo edición el stockMax considera lo ya cargado (será revertido)
-            decimal stockMax;
-            if (_recorteSeleccionado != null)
-                stockMax = StockDisponibleRecorte(_recorteSeleccionado.id);
-            else if (_materialSeleccionado != null)
-                stockMax = StockDisponibleMaterial(_materialSeleccionado.id);
-            else
-                stockMax = decimal.MaxValue;
-
             valor = (e.Delta > 0) ? valor + 1 : valor - 1;
             
             if (valor < 0) valor = 0;
+            valor = LimitarCantidadAStock(valor);
 
             cantMatMov.Text = valor.ToString("G29");
         }

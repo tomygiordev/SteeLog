@@ -474,7 +474,10 @@ namespace SteeLog.Vistas.Movimientos
             ActualizarVisibilidadPrecios();
 
             // Regresar foco al buscador de materiales para agilizar el flujo de entrada
+            _ultimoAvisoStockMax = null;
             txtBuscadorMaterial.Focus();
+            // El GotFocus programático abre el aviso de mínimo sobre la lista: se oculta.
+            OcultarResultados();
         }
 
         private void AgregarItemLista(MovimientoMaterial item)

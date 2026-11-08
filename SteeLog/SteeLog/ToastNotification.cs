@@ -63,7 +63,7 @@ namespace SteeLog
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
 
-            var screen = Screen.PrimaryScreen.WorkingArea;
+            var screen = ObtenerAreaTrabajoVentanaApp();
             
             if (_isCenter)
             {
@@ -73,12 +73,56 @@ namespace SteeLog
             }
             else
             {
-                // Position: bottom-right of primary screen
+                // Position: bottom-right of the screen where the app window is
                 int offsetY = _activeToastCount * (_toastHeight + 10);
                 _targetY = screen.Bottom - _toastHeight - MARGIN_BOTTOM - offsetY;
                 _startY = _targetY + 40; // start 40px below target (slide up)
                 this.Location = new Point(screen.Right - _toastWidth - MARGIN_RIGHT, _startY);
             }
+        }
+
+        /// <summary>
+        /// Área de trabajo de la pantalla donde está la ventana de la app: formulario activo (no toast),
+        /// si no el primer formulario visible abierto, y como último recurso la pantalla principal.
+        /// </summary>
+        internal static Rectangle ObtenerAreaTrabajoVentanaApp()
+        {
+            Form ventana = Form.ActiveForm;
+            if (ventana == null || ventana is ToastNotification || ventana.IsDisposed)
+            {
+                ventana = null;
+                foreach (Form f in Application.OpenForms)
+                {
+                    if (f is ToastNotification || f.IsDisposed || !f.Visible) continue;
+                    ventana = f;
+                    break;
+                }
+            }
+
+            var areas = new System.Collections.Generic.List<Rectangle>();
+            foreach (var s in Screen.AllScreens) areas.Add(s.WorkingArea);
+            Rectangle? bounds = null;
+            if (ventana != null)
+                bounds = ventana.WindowState == FormWindowState.Minimized ? ventana.RestoreBounds : ventana.Bounds;
+            return SeleccionarAreaTrabajo(bounds, areas, Screen.PrimaryScreen.WorkingArea);
+        }
+
+        /// <summary>
+        /// Elige el área de trabajo con mayor intersección con los bounds de la ventana; sin ventana o sin
+        /// intersección devuelve la primaria. Pura, sin UI.
+        /// </summary>
+        internal static Rectangle SeleccionarAreaTrabajo(Rectangle? boundsVentana, System.Collections.Generic.IList<Rectangle> areasTrabajo, Rectangle areaPrimaria)
+        {
+            if (boundsVentana == null || areasTrabajo == null) return areaPrimaria;
+            Rectangle mejor = areaPrimaria;
+            long mejorArea = 0;
+            foreach (var area in areasTrabajo)
+            {
+                var inter = Rectangle.Intersect(area, boundsVentana.Value);
+                long tam = inter.IsEmpty ? 0 : (long)inter.Width * inter.Height;
+                if (tam > mejorArea) { mejorArea = tam; mejor = area; }
+            }
+            return mejor;
         }
 
         private void SetupControls(string message, ToastType type)
