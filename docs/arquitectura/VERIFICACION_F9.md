@@ -109,3 +109,6 @@ Ante un nuevo rechazo background_unavailable de Cua al iniciar una demo limpia e
 - Paquete de HEAD bd308b4 limpio construido en A:\SteeLog-Pruebas\paquete-bd308b4-657228fabb7640a0853fd89f06374290, con seis verificaciones de paquete aprobadas y SHA256 ZIP 4E419813AA3DBC03D5D6DD44DE4D79B46D3CA29F774AD414E985DA0AE7D175C5. Ese artefacto NO contiene todavía el ajuste de raíz de esta sección; debe reemplazarse por un paquete posterior al commit de corrección.
 
 El alcance estático solicitado queda verificado con los límites indicados. F9 integral no se declara cerrada: GUI/roles completos, Designer y recorrido con Internet desconectado no fueron ejecutados ni reemplazados por análisis estático. El archivo de plan no se modificó.
+### Paquete posterior a la corrección de raíz
+
+Root reconstruyó y verificó A:\SteeLog-Pruebas\paquete-de89aaa-d2a8e2f3e52a4e3dae3d87fcf7105bbb.zip. Manifest: commit de89aaa23d3a4ebbfce8e67556bf69622748e509, arbolModificado=false. SHA256: 8C1CBDE0A0E94D4E640B3BD742F27EED1A4EDB2FBFBE4AB7A89AA75CF7CD9448. Las seis comprobaciones de paquete pasaron sin Main. Contiene el ajuste de raíz; reemplaza al artefacto bd308b4 para este alcance estático. Este registro documental es posterior al paquete y no altera su procedencia. F9 integral conserva los pendientes interactivos ya declarados.
