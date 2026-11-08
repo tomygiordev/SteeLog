@@ -37,7 +37,7 @@ namespace SteeLog.Vistas
 
     {
 
-        private readonly MaterialesPresenter _presenter = new MaterialesPresenter(LocalServices.Current.Executor);
+        private readonly MaterialesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionLista, _versionProveedores;
         private bool _guardando, _cargandoProveedores, _proveedoresDisponibles = true;
@@ -49,10 +49,13 @@ namespace SteeLog.Vistas
 
         private FiltroMaterial filtroAbierto = null;
 
-        public Vista_Materiales()
+        public Vista_Materiales() : this(new MaterialesPresenter(LocalServices.Current.Executor)) { }
+
+        internal Vista_Materiales(MaterialesPresenter presenter)
 
         {
 
+            _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             InitializeComponent();
 
             this.Load += Vista_Materiales_Load;
@@ -139,7 +142,7 @@ namespace SteeLog.Vistas
             int version = ++_versionLista;
             try
             {
-                var consulta = filtro == null ? new FiltroMaterialLectura { Nombre=nombre, SoloStockBajo=soloStockBajo } : new FiltroMaterialLectura { Nombre=filtro.Nombre, Desde=filtro.DesdeCantidad, Hasta=filtro.HastaCantidad, Categorias=filtro.IdsCategoria.ToArray(), Proveedores=filtro.IdsProveedor.ToArray(), SoloStockBajo=filtro.SoloStockBajo };
+                var consulta = filtro == null ? new FiltroMaterialLectura { Nombre=nombre, SoloStockBajo=soloStockBajo } : new FiltroMaterialLectura { Nombre=filtro.Nombre, Desde=filtro.DesdeCantidad > 0 ? (decimal?)filtro.DesdeCantidad : null, Hasta=filtro.HastaCantidad > 0 ? (decimal?)filtro.HastaCantidad : null, Categorias=filtro.IdsCategoria.ToArray(), Proveedores=filtro.IdsProveedor.ToArray(), SoloStockBajo=filtro.SoloStockBajo };
                 var materiales = await _presenter.ListarAsync(consulta, _cierre.Token);
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionLista) return;
                 var listaMateriales = materiales.Select(m => new Material { id=m.Id, nombre=m.Nombre, id_categoria=m.CategoriaId, nombre_categoria=m.Categoria, precioUnitario=m.Precio, stockActual=m.Stock, stockMinimo=m.Minimo, cantidadUsada=m.CantidadUsada, cantidadMovimientos=m.CantidadMovimientos }).ToList();
