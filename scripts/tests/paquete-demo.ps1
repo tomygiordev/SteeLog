@@ -43,6 +43,36 @@ try {
         $null = [Management.Automation.Language.Parser]::ParseFile($script.FullName, [ref]$tokens, [ref]$errors)
         if ($errors) { throw "Script inválido: $($script.Name) $errors" }
     }
+    # Sin alterar Docker: todo caso debe rechazarse antes de crear el destino.
+    $manifestPath = Join-Path $unpacked 'manifest.json'
+    $originalManifest = [IO.File]::ReadAllText($manifestPath)
+    $seedPath = Join-Path $unpacked 'database/02-seed.sql'
+    $originalSeed = [IO.File]::ReadAllText($seedPath)
+    foreach ($case in @('sin-seed','duplicado','alias','extra')) {
+        $changed = $originalManifest | ConvertFrom-Json
+        switch ($case) {
+            'sin-seed' {
+                $changed.archivos = @($changed.archivos | Where-Object { $_.archivo -cne 'database/02-seed.sql' })
+                [IO.File]::AppendAllText($seedPath, "`n-- cambio sin hash")
+            }
+            'duplicado' { $changed.archivos = @($changed.archivos) + @($changed.archivos[0]) }
+            'alias' { $changed.archivos[0].archivo = './' + $changed.archivos[0].archivo }
+            'extra' { [IO.File]::WriteAllText((Join-Path $unpacked 'demo/extra.txt'), 'no versionado') }
+        }
+        [IO.File]::WriteAllText($manifestPath, ($changed | ConvertTo-Json -Depth 5), (New-Object Text.UTF8Encoding($false)))
+        $caseDest = Join-Path $base ('rechazado-' + $case)
+        $rejected = $false
+        try { & (Join-Path $unpacked 'tools/preparar-demo.ps1') -Paquete $unpacked -Destino $caseDest }
+        catch {
+            if ($_.Exception.Message -notmatch '^(Cobertura incompleta del manifest|Archivo sin hash|Ruta duplicada en manifest|Ruta inválida en manifest)') { throw }
+            $rejected = $true
+        }
+        if (-not $rejected -or (Test-Path -LiteralPath $caseDest)) { throw "Manifest $case no rechazado antes de crear recursos." }
+        [IO.File]::WriteAllText($manifestPath, $originalManifest, (New-Object Text.UTF8Encoding($false)))
+        [IO.File]::WriteAllText($seedPath, $originalSeed, (New-Object Text.UTF8Encoding($false)))
+        if ($case -eq 'extra') { Remove-Item -LiteralPath (Join-Path $unpacked 'demo/extra.txt') }
+    }
+    'PASS cobertura completa, duplicados, alias y archivos extra rechazados antes de Docker'
     [IO.File]::AppendAllText((Join-Path $unpacked 'LEEME.md'), 'Alteración intencional de prueba')
     $dest = Join-Path $base 'no-debe-crearse'
     $rejected = $false

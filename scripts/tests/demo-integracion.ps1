@@ -77,7 +77,7 @@ END `$check`$;
     if ($LASTEXITCODE -ne 0) { throw 'No se pudo reiniciar contenedor propio' }
     $ready = $false
     foreach ($attempt in 1..60) {
-        Invoke-DockerExec $name pg_isready -U postgres -d $db
+        Invoke-DockerExec $name pg_isready -h 127.0.0.1 -U postgres -d $db
         if ($LASTEXITCODE -eq 0) { $ready = $true; break }; Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'PostgreSQL no volvió tras reinicio' }

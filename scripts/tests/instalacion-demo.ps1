@@ -15,7 +15,7 @@ try {
     . (Join-Path $PSScriptRoot 'docker-exec-api.ps1')
     $ready=$false
     foreach ($attempt in 1..60) {
-        Invoke-DockerExec $state.contenedor pg_isready -U postgres -d $state.base
+        Invoke-DockerExec $state.contenedor pg_isready -h 127.0.0.1 -U postgres -d $state.base
         if ($LASTEXITCODE -eq 0) { $ready=$true; break }; Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'DB no volvió tras reiniciar.' }

@@ -14,7 +14,7 @@ if (-not $msbuild) { throw 'Se requiere MSBuild de Visual Studio y targeting pac
 $gitEncoding = [Console]::OutputEncoding
 try {
     [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
-    $tracked = git -c core.quotepath=false -C $repo ls-files -- SteeLog demo
+    $tracked = git -c core.quotepath=false -C $repo ls-files -- SteeLog demo docker/demo scripts/ejecutar-demo.ps1 scripts/preparar-demo.ps1 scripts/tests/docker-exec-api.ps1 docs/arquitectura/GUIA_DEMO_Y_DEFENSA.md
     $gitExit = $LASTEXITCODE
 } finally { [Console]::OutputEncoding = $gitEncoding }
 if ($gitExit -ne 0) { throw 'Git ls-files falló.' }
@@ -36,13 +36,13 @@ New-Item -ItemType Directory -Path $dest | Out-Null
 foreach ($file in @('SteeLog.exe','SteeLog.exe.config')) { Copy-Item -LiteralPath (Join-Path $build $file) -Destination $dest }
 [IO.File]::WriteAllText((Join-Path $dest 'appsettings.json'), $config, $utf8)
 New-Item -ItemType Directory -Path (Join-Path $dest 'demo') | Out-Null
-Copy-Item -LiteralPath (Join-Path $repo 'demo/actualizaciones') -Destination (Join-Path $dest 'demo/actualizaciones') -Recurse
+Copy-Item -LiteralPath (Join-Path $snapshot 'demo/actualizaciones') -Destination (Join-Path $dest 'demo/actualizaciones') -Recurse
 New-Item -ItemType Directory -Path (Join-Path $dest 'database'),(Join-Path $dest 'tools') | Out-Null
-Copy-Item (Join-Path $repo 'docker/demo/*') (Join-Path $dest 'database')
-Copy-Item -LiteralPath (Join-Path $repo 'scripts/ejecutar-demo.ps1') -Destination (Join-Path $dest 'tools/ejecutar-demo.ps1')
-Copy-Item -LiteralPath (Join-Path $repo 'scripts/preparar-demo.ps1') -Destination (Join-Path $dest 'tools/preparar-demo.ps1')
-Copy-Item -LiteralPath (Join-Path $repo 'scripts/tests/docker-exec-api.ps1') -Destination (Join-Path $dest 'tools/docker-exec-api.ps1')
-Copy-Item -LiteralPath (Join-Path $repo 'docs/arquitectura/GUIA_DEMO_Y_DEFENSA.md') -Destination (Join-Path $dest 'LEEME.md')
+Copy-Item (Join-Path $snapshot 'docker/demo/*') (Join-Path $dest 'database')
+Copy-Item -LiteralPath (Join-Path $snapshot 'scripts/ejecutar-demo.ps1') -Destination (Join-Path $dest 'tools/ejecutar-demo.ps1')
+Copy-Item -LiteralPath (Join-Path $snapshot 'scripts/preparar-demo.ps1') -Destination (Join-Path $dest 'tools/preparar-demo.ps1')
+Copy-Item -LiteralPath (Join-Path $snapshot 'scripts/tests/docker-exec-api.ps1') -Destination (Join-Path $dest 'tools/docker-exec-api.ps1')
+Copy-Item -LiteralPath (Join-Path $snapshot 'docs/arquitectura/GUIA_DEMO_Y_DEFENSA.md') -Destination (Join-Path $dest 'LEEME.md')
 $commit = git -C $repo rev-parse HEAD
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo registrar el commit de origen.' }
 $hashes = @(Get-ChildItem -LiteralPath $dest -Recurse -File | ForEach-Object {

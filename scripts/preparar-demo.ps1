@@ -6,12 +6,27 @@ $source = (Resolve-Path -LiteralPath $Paquete).Path
 $dest = [IO.Path]::GetFullPath($Destino)
 if (Test-Path -LiteralPath $dest) { throw 'Destino debe ser nuevo. No se actualizan instalaciones existentes.' }
 $manifest = Get-Content -Raw -Encoding UTF8 (Join-Path $source 'manifest.json') | ConvertFrom-Json
+# El manifest no es una firma: sí debe cubrir exactamente todos los archivos usados.
+$seen = New-Object 'System.Collections.Generic.HashSet[string]' ([StringComparer]::OrdinalIgnoreCase)
 foreach ($file in $manifest.archivos) {
-    if ($file.archivo -match '(^/|^[A-Za-z]:|(^|[/\\])\.\.([/\\]|$))') { throw 'Ruta inválida en manifest.' }
-    $path = [IO.Path]::GetFullPath((Join-Path $source $file.archivo))
+    $relative = [string]$file.archivo
+    if (-not $relative -or $relative.Contains('\') -or $relative -match '(^/|^[A-Za-z]:|(^|/)\.{1,2}(/|$)|//|/$)' -or $relative -match '(^|/)[^/]*[. ](/|$)') { throw 'Ruta inválida en manifest.' }
+    if (-not $seen.Add($relative)) { throw 'Ruta duplicada en manifest.' }
+    $path = [IO.Path]::GetFullPath((Join-Path $source $relative))
     if (-not $path.StartsWith($source.TrimEnd('\')+'\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Escape de ruta.' }
-    if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $file.sha256) { throw "Hash alterado: $($file.archivo)" }
+    if ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -cne $file.sha256) { throw "Hash alterado: $relative" }
 }
+$actualFiles = @(Get-ChildItem -LiteralPath $source -Recurse -File -Force | ForEach-Object {
+    $_.FullName.Substring($source.TrimEnd('\').Length+1).Replace('\','/')
+} | Where-Object { $_ -cne 'manifest.json' })
+if ($actualFiles.Count -ne $seen.Count) { throw 'Cobertura incompleta del manifest.' }
+foreach ($relative in $actualFiles) {
+    if (-not $seen.Contains($relative)) { throw "Archivo sin hash: $relative" }
+}
+foreach ($required in @('SteeLog.exe','SteeLog.exe.config','appsettings.json','LEEME.md','demo/actualizaciones/manifiesto.json','demo/actualizaciones/paquete-demo.txt','database/tablas.json','database/01-schema.sql','database/02-seed.sql','tools/ejecutar-demo.ps1','tools/preparar-demo.ps1','tools/docker-exec-api.ps1')) {
+    if (-not $seen.Contains($required)) { throw "Falta archivo requerido: $required" }
+}
+if (-not (Test-Path -LiteralPath (Join-Path $source 'demo') -PathType Container)) { throw 'Falta directorio demo.' }
 $context = docker context inspect | ConvertFrom-Json
 if ($LASTEXITCODE -ne 0) { throw 'Docker no disponible.' }
 $hostDocker = $context.Endpoints.docker.Host
@@ -51,7 +66,7 @@ try {
     . $transport
     $ready = $false
     foreach ($attempt in 1..60) {
-        Invoke-DockerExec $name pg_isready -U postgres -d $db
+        Invoke-DockerExec $name pg_isready -h 127.0.0.1 -U postgres -d $db
         if ($LASTEXITCODE -eq 0) { $ready=$true; break }; Start-Sleep -Seconds 1
     }
     if (-not $ready) { throw 'PostgreSQL no inició.' }

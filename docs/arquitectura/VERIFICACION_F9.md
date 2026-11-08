@@ -89,3 +89,12 @@ La versión final de estas correcciones pasó **277/277 Debug y 277/277 Release*
 - Revisar requisitos F0/F9, diff preparado, UTF-8, cero allowlist y evidencia antes del commit de cierre de fase. No se autoriza autoaplicar F4 ni cambiar bases existentes.
 
 Engram sigue sin identidad de runtime confirmada por el hook: root no realiza escrituras atribuidas ni inventa sesión. Git y esta evidencia preservan el avance. El objetivo vigente es el testeo con Cua Driver, instalación en A: y uso del monitor secundario; no se interpreta como permiso para automatización foreground ni se redefine como un mero build exitoso.
+
+## Retoma 7/11/2026: paquete y Docker WSL2
+
+- Usuario confirmó Docker nativo en WSL2 y lazydocker en A:. Ubuntu estaba detenida; iniciar la distro dejó activo el servicio existente y disponible tcp://127.0.0.1:2375. No se reinstaló ni se cambió a Docker Desktop.
+- Terra 6.1 high implementó cobertura completa del manifest y rechazo de duplicados/alias/archivos extra; root contrastó diff y reconstruyó paquete. Recursos demo/SQL/scripts/guía salen del snapshot versionado, no de carpetas con archivos untracked. Regresión snapshot en Git TEMP aprobada por root.
+- Se reprodujo una carrera real: pg_isready por socket aceptaba el servidor temporal de initdb, que luego se detenía. Se espera ahora TCP interno 127.0.0.1; se conservaron las sondas SQL válida exit 0 e inválida exit 1. No era un defecto demostrado del transporte API.
+- Root: verificar.ps1 -LegacyLocal exit 0, 277/277 Debug y Release más cuatro familias legacy. Log TEMP steelog-retoma-f9-73c8968a275d439e9ba0aaac6e0de02f.log.
+- Paquete reconstruido TEMP steelog-f9-wsl-e6e69439bc4f490ab865672bf2001528: seis comprobaciones smoke aprobadas. instalacion-demo.ps1 aprobó instalación real, reinicio, redescubrimiento de puerto y consulta TCP con Npgsql embebido, sin Main; eliminó exclusivamente contenedor/volumen propios. Evidencia TEMP steelog-install-test-dec4855ac94e49a481e56ff3bd2dae73. No se repitió aún la suite SQL demo integral 99/99 en esta retoma.
+- F9 sigue ABIERTA: no se sustituyen aceptación GUI, Galpón, Designer ni recorrido offline por estas verificaciones. El paquete probado procede del árbol de trabajo previo al commit de estas correcciones; no es todavía la entrega final congelada.
