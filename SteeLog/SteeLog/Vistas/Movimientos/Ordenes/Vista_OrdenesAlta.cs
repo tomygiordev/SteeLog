@@ -18,6 +18,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
     public class Vista_OrdenesAlta : Form, IOrdenesVista
     {
         private OrdenesPresenter _presenter;
+        private readonly Action<string> _avisoExito;
+        private readonly Action<string> _avisoError;
         private readonly CargaVigente _cargas = new CargaVigente();
         private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
         private bool _catalogosListos;
@@ -51,8 +53,11 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private Guna2TextBox txtEstado;
         public Action<int> OnOrdenGuardada { get; set; }
 
-        public Vista_OrdenesAlta()
+        public Vista_OrdenesAlta() : this(null, null) { }
+        public Vista_OrdenesAlta(Action<string> avisoExito, Action<string> avisoError)
         {
+            _avisoExito = avisoExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
+            _avisoError = avisoError ?? (mensaje => ToastNotification.ShowError(mensaje));
             InitializeComponent();
             PrepararNuevaOrden();
             Disposed += (s, e) => _cargas.Dispose();
@@ -575,25 +580,27 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 if (IsDisposed || Disposing || !resultado.Exitoso || !_modelo.Listo || _idOrdenEdicion != idSolicitado) return;
                 int idOrden = resultado.Valor;
 
-                ToastNotification.ShowSuccess(_idOrdenEdicion > 0 ? "Orden actualizada." : "Orden creada en estado Pendiente.");
-                OnOrdenGuardada?.Invoke(idOrden);
-                if (OnOrdenGuardada != null)
-                {
-                    PrepararNuevaOrden();
-                    return;
-                }
-
-                PrepararNuevaOrden();
-                var parent = TopLevelControl as VistaGeneral;
-                if (parent != null)
-                {
-                    parent.RefrescarOrdenesSiAbierto();
-                    parent.OpenOrdenForm(idOrden);
-                }
+                OrdenGuardada(idOrden, idSolicitado > 0);
             }
             catch (Exception ex)
             {
                 ToastNotification.ShowError("No se pudo guardar la orden: " + ex.Message);
+            }
+        }
+
+        private void OrdenGuardada(int idOrden, bool editada)
+        {
+            PrepararNuevaOrden();
+            _avisoExito(editada ? "Orden actualizada." : "Orden creada en estado Pendiente.");
+            try
+            {
+                if (OnOrdenGuardada != null) { OnOrdenGuardada(idOrden); return; }
+                var parent = TopLevelControl as VistaGeneral;
+                if (parent != null) { parent.RefrescarOrdenesSiAbierto(); parent.OpenOrdenForm(idOrden); }
+            }
+            catch (Exception ex)
+            {
+                _avisoError("La orden se guardó, pero no se pudo actualizar la navegación: " + ex.Message);
             }
         }
 

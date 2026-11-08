@@ -19,6 +19,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
     public class Vista_OrdenesRevision : Form, IOrdenesVista
     {
         private OrdenesPresenter _presenter;
+        private readonly Action<string> _avisoExito;
+        private readonly Action<string> _avisoError;
         private readonly CargaVigente _cargas = new CargaVigente();
         private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
         private bool _permiteRecepcion;
@@ -44,8 +46,11 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         public Action OnCancelar { get; set; }
         public int CurrentOrderId => _idOrden;
 
-        public Vista_OrdenesRevision()
+        public Vista_OrdenesRevision() : this(null, null) { }
+        public Vista_OrdenesRevision(Action<string> avisoExito, Action<string> avisoError)
         {
+            _avisoExito = avisoExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
+            _avisoError = avisoError ?? (mensaje => ToastNotification.ShowError(mensaje));
             InitializeComponent();
             Disposed += (s, e) => _cargas.Dispose();
             Load += Vista_OrdenesRevision_Load;
@@ -527,21 +532,32 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 if (IsDisposed || Disposing || !resultado.Exitoso || !_modelo.Listo || _idOrden != idSolicitado) return;
                 string nuevoEstado = resultado.Valor == EstadoOrden.RecibidaCompleta ? "Recibida Completa" : "Recibida Parcial";
 
-                ToastNotification.ShowSuccess("Recepción confirmada: " + nuevoEstado + ".");
-                OnRecepcionConfirmada?.Invoke(_idOrden);
-                if (OnRecepcionConfirmada != null)
-                    return;
-
-                var parent = TopLevelControl as VistaGeneral;
-                if (parent != null)
-                {
-                    parent.RefrescarOrdenesSiAbierto();
-                    parent.OpenRevisionOrden(_idOrden);
-                }
+                RecepcionConfirmada(idSolicitado, nuevoEstado);
             }
             catch (Exception ex)
             {
                 ToastNotification.ShowError("No se pudo confirmar la recepción: " + ex.Message);
+            }
+        }
+
+        private void RecepcionConfirmada(int idOrden, string nuevoEstado)
+        {
+            _permiteRecepcion = false;
+            SetOcupada(false);
+            btnAplicarSiguiente.Enabled = false;
+            btnCompletarActual.Enabled = false;
+            btnCompletarTodo.Enabled = false;
+            txtCantidadRapida.Enabled = false;
+            _avisoExito("Recepción confirmada: " + nuevoEstado + ".");
+            try
+            {
+                if (OnRecepcionConfirmada != null) { OnRecepcionConfirmada(idOrden); return; }
+                var parent = TopLevelControl as VistaGeneral;
+                if (parent != null) { parent.RefrescarOrdenesSiAbierto(); parent.OpenRevisionOrden(idOrden); }
+            }
+            catch (Exception ex)
+            {
+                _avisoError("La recepción se confirmó, pero no se pudo actualizar la navegación: " + ex.Message);
             }
         }
 

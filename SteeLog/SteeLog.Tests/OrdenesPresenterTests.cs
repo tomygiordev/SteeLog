@@ -107,6 +107,44 @@ namespace SteeLog.Tests
             Assert.Null(error);
         }
         [Fact]
+        public void CallbacksFallidosNoReviertenGuardadoNiPermitenReconfirmar()
+        {
+            Exception error = null;
+            var hilo = new Thread(() => {
+                try {
+                    const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                    var avisos = new List<string>(); Action<string> aviso = avisos.Add;
+                    using (var alta = new Vista_OrdenesAlta(aviso, aviso))
+                    using (var revision = new Vista_OrdenesRevision(aviso, aviso)) {
+                        var altaType = alta.GetType();
+                        ((Control)altaType.GetField("txtNroOrden", flags).GetValue(alta)).Text = "OC-123";
+                        int idAlta = 0;
+                        alta.OnOrdenGuardada = id => {
+                            idAlta = id;
+                            Assert.Equal("", ((Control)altaType.GetField("txtNroOrden", flags).GetValue(alta)).Text);
+                            throw new InvalidOperationException("navegación alta");
+                        };
+                        altaType.GetMethod("OrdenGuardada", flags).Invoke(alta, new object[] { 123, false });
+                        Assert.Equal(123, idAlta);
+                        Assert.Contains(avisos, x => x.Contains("se guardó") && x.Contains("navegación alta"));
+                        var revType = revision.GetType(); revision.SetOrder(123);
+                        var estado = (EstadoModeloOrden)revType.GetField("_modelo", flags).GetValue(revision);
+                        Assert.True(estado.Aplicar(123)); revType.GetField("_permiteRecepcion", flags).SetValue(revision, true);
+                        revision.SetOcupada(false);
+                        int idRecepcion = 0;
+                        revision.OnRecepcionConfirmada = id => { idRecepcion = id; throw new InvalidOperationException("navegación recepción"); };
+                        revType.GetMethod("RecepcionConfirmada", flags).Invoke(revision, new object[] { 123, "Recibida Parcial" });
+                        Assert.Equal(123, idRecepcion);
+                        Assert.False((bool)revType.GetField("_permiteRecepcion", flags).GetValue(revision));
+                        Assert.False(((Control)revType.GetField("btnConfirmar", flags).GetValue(revision)).Enabled);
+                        revType.GetMethod("BtnConfirmar_Click", flags).Invoke(revision, new object[] { null, EventArgs.Empty });
+                        Assert.Contains(avisos, x => x.Contains("se confirmó") && x.Contains("navegación recepción"));
+                    }
+                } catch (Exception ex) { error = ex; }
+            });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+        }
+        [Fact]
         public async Task DeshabilitaMientrasCargaYRechazaDobleEnvio()
         {
             var vista = new Vista(); var executor = new Ejecutor(); var presenter = new OrdenesPresenter(executor, vista);
