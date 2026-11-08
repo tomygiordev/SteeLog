@@ -112,3 +112,19 @@ El alcance estático solicitado queda verificado con los límites indicados. F9 
 ### Paquete posterior a la corrección de raíz
 
 Root reconstruyó y verificó A:\SteeLog-Pruebas\paquete-de89aaa-d2a8e2f3e52a4e3dae3d87fcf7105bbb.zip. Manifest: commit de89aaa23d3a4ebbfce8e67556bf69622748e509, arbolModificado=false. SHA256: 8C1CBDE0A0E94D4E640B3BD742F27EED1A4EDB2FBFBE4AB7A89AA75CF7CD9448. Las seis comprobaciones de paquete pasaron sin Main. Contiene el ajuste de raíz; reemplaza al artefacto bd308b4 para este alcance estático. Este registro documental es posterior al paquete y no altera su procedencia. F9 integral conserva los pendientes interactivos ya declarados.
+
+## Retoma 8/11/2026: evidencia automatizada sobre HEAD 6d95eb0
+
+Root orquestó subagentes y contrastó cada resultado contra logs, manifest, hashes y API Docker. Sin Main, sin automatización de escritorio y sin tocar bases o recursos ajenos.
+
+| Verificación | Resultado y evidencia TEMP |
+|---|---|
+| Debug/Release y legacy | `scripts/verificar.ps1 -LegacyLocal`: **325/325 Debug y 325/325 Release**, sin omitidos, cuatro familias legacy, exit 0. `steelog-incierto-commit-verificacion.log` (fuentes idénticas a 6d95eb0). |
+| SQL demo | `scripts/tests/demo-integracion.ps1`: **100/100**, sin omitidos, exit 0: órdenes 6, inventario 41, conteos 15, canaletas 14, catálogos 4, herramientas 8, reportes 12; persistencia tras reinicio, 23 tablas/seed y rechazo de reinstalación. `steelog-f9-cierre-sql.log`, resultados `steelog-demo-bootstrap-addd6d0bae5a499abeb3ed1cf61ace6e/results`. Contenedor y volumen `*-97cc8283da334eb394f3af346f4de52f`: HTTP 404 comprobado por root. |
+| Paquete | `A:\SteeLog-Pruebas\paquete-6d95eb0-77e8b3ee3e48423a8cc219ad97f20fd6(.zip)`. Manifest: commit `6d95eb0113b3de9bcc7416726d9cbc91c0b5c762`, `arbolModificado=false`. SHA-256 ZIP `80962269407DAE86E75A317FBBA7DFC16016986283A0A937A5825A1111F9E4BA`; EXE `B7A57EAD0EA675818202CC04DC9C53C324B88DD1E0719BC0DD381E040BFDA1B0`. `steelog-f9-cierre-paquete.log`. |
+| Pruebas del paquete | `scripts/tests/paquete-demo.ps1`: 6/6 PASS bajo Windows PowerShell 5.1. `steelog-f9-cierre-paquete-pruebas.log`. |
+| Instalación aislada | `scripts/tests/instalacion-demo.ps1`: 2/2 PASS (instalación, reinicio, puerto, TCP con Npgsql embebido; raíz inválida rechazada), Main no ejecutado. `steelog-f9-cierre-instalacion.log`. Contenedor/volumen `*-539a7792a3f1414cbd9cc780c8f9ef80`: HTTP 404 comprobado por root. |
+
+**Hallazgo, no PASS:** bajo pwsh 7 `paquete-demo.ps1` falló con `Assembly.LoadFrom ... Format of the executable (.exe) or library (.dll) is invalid` tras el PASS de hashes (log `steelog-f9-cierre-paquete-pruebas.pwsh7-fallo.log`). Los scripts que cargan el EXE net48 deben ejecutarse con `powershell.exe` 5.1; se repitió sin cambios de código con ese host. No se corrigió el script.
+
+Este paquete es el candidato de entrega congelado. **F9 sigue ABIERTA**: recorrido GUI Admin/Galpón, Designer, PDFs del recorrido real, reinicio y recorrido offline requieren al usuario. Checklist: `docs/arquitectura/CHECKLIST_CIERRE_F9.md`.
