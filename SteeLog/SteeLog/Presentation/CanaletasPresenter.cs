@@ -11,6 +11,12 @@ namespace SteeLog.Presentation
     {
         private readonly IUseCaseExecutor executor;
         public CanaletasPresenter(IUseCaseExecutor executor) { this.executor = executor ?? throw new ArgumentNullException(nameof(executor)); }
+        public static async Task RefrescarTrasOperacionAsync(Func<Task> refrescar, Func<bool> vigente, Action<Exception> advertir)
+        {
+            try { await refrescar(); }
+            catch (OperationCanceledException) { }
+            catch (Exception ex) { if (vigente()) advertir(ex); }
+        }
         public Task<IReadOnlyList<ObraInsumoLectura>> ObrasAsync(CancellationToken t) => executor.ExecuteAsync<ConsultarInsumos, IReadOnlyList<ObraInsumoLectura>>(x => x.ObrasAsync(t));
         public Task<IReadOnlyList<CanaletaLectura>> ListarAsync(int? obra, CancellationToken t) => executor.ExecuteAsync<ConsultarCanaletas, IReadOnlyList<CanaletaLectura>>(x => x.ListarAsync(obra,t));
         public Task<IReadOnlyList<FotoCanaletaLectura>> FotosAsync(int id, CancellationToken t) => executor.ExecuteAsync<ConsultarCanaletas, IReadOnlyList<FotoCanaletaLectura>>(x => x.FotosAsync(id,t));

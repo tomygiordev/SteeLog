@@ -22,6 +22,7 @@ namespace SteeLog.Vistas
         private bool _inicializando = true, _cargandoFotos, _guardando, _errorFotos, _conciliacionIniciada;
         internal Action<string> AdvertirConciliacion = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AdvertirAdjuntos = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Action<string> InformarOperacion = mensaje => ToastNotification.ShowSuccess(mensaje);
         private List<CanaletaPlegado> _items = new List<CanaletaPlegado>();
         private sealed class Obra { public int id { get; set; } public string nombre { get; set; } }
         private sealed class CanaletaPlegado
@@ -117,6 +118,13 @@ namespace SteeLog.Vistas
         {
             var items = await _presenter.ListarAsync(null, _cierre.Token);
             if (!_cierre.IsCancellationRequested && !IsDisposed) AsignarItems(items);
+        }
+
+        private Task RefrescarTrasOperacionAsync()
+        {
+            return CanaletasPresenter.RefrescarTrasOperacionAsync(CargarItemsAsync,
+                () => !IsDisposed && !_cierre.IsCancellationRequested,
+                error => AdvertirAdjuntos("Operación confirmada, pero no se pudo actualizar la lista: " + error.Message));
         }
 
         private void CargarFiltroPagado()
@@ -456,7 +464,7 @@ namespace SteeLog.Vistas
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
                 if (fallidas == 0)
                 {
-                    if (!limpiezaPendiente) ToastNotification.ShowSuccess("Trabajo guardado correctamente.");
+                    if (!limpiezaPendiente) InformarOperacion("Trabajo guardado correctamente.");
                     LimpiarSeleccion();
                 }
                 else
@@ -467,7 +475,7 @@ namespace SteeLog.Vistas
                     AdvertirAdjuntos("Trabajo guardado. " + fallidas + " foto(s) pendientes para reintentar.");
                 }
                 if (limpiezaPendiente) AdvertirAdjuntos("Fotos guardadas; queda limpieza de archivos pendiente.");
-                await CargarItemsAsync();
+                await RefrescarTrasOperacionAsync();
             }
             catch (OperationCanceledException) { }
             catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex)
@@ -502,13 +510,19 @@ namespace SteeLog.Vistas
         {
             if (_inicializando || _cargandoFotos || _guardando || _errorFotos || _idSeleccionado < 0) return;
             if (MessageBox.Show("¿Eliminar este registro?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            await EliminarCoreAsync();
+        }
+
+        private async Task EliminarCoreAsync()
+        {
+            if (_inicializando || _cargandoFotos || _guardando || _errorFotos || _idSeleccionado < 0) return;
             int id = _idSeleccionado, version = _versionSeleccion;
             _guardando = true; CambiarEstadoGuardado(true);
             try
             {
                 await _presenter.EliminarAsync(id, _cierre.Token);
                 if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
-                ToastNotification.ShowSuccess("Registro eliminado."); LimpiarSeleccion(); await CargarItemsAsync();
+                InformarOperacion("Registro eliminado."); LimpiarSeleccion(); await RefrescarTrasOperacionAsync();
             }
             catch (OperationCanceledException) { }
             catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }

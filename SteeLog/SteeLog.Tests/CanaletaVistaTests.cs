@@ -60,6 +60,41 @@ namespace SteeLog.Tests
                 throw new InvalidOperationException();
             }
         }
+        private sealed class EjecutorRecargaFallida : IUseCaseExecutor
+        {
+            public int Escrituras, Lecturas;
+            public Task<TResult> ExecuteAsync<TUseCase, TResult>(Func<TUseCase, Task<TResult>> accion) where TUseCase : class
+            {
+                if (typeof(TResult) == typeof(int)) { Escrituras++; return Task.FromResult((TResult)(object)17); }
+                if (typeof(TResult) == typeof(bool)) { Escrituras++; return Task.FromResult((TResult)(object)true); }
+                if (typeof(TResult) == typeof(IReadOnlyList<CanaletaLectura>)) { Lecturas++; throw new IOException("lectura fallida"); }
+                throw new InvalidOperationException();
+            }
+        }
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void OperacionConfirmadaConRecargaFallidaAdvierteSinRepetir(bool eliminar)
+        {
+            Sta(() => {
+                var ejecutor = new EjecutorRecargaFallida();
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(ejecutor) }, null)) {
+                    var avisos = new List<string>(); var exitos = new List<string>();
+                    tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(avisos.Add));
+                    tipo.GetField("InformarOperacion", Privado).SetValue(vista, new Action<string>(exitos.Add));
+                    tipo.GetField("_inicializando", Privado).SetValue(vista, false);
+                    if (eliminar) tipo.GetField("_idSeleccionado", Privado).SetValue(vista, 17);
+                    var tarea = (Task)tipo.GetMethod(eliminar ? "EliminarCoreAsync" : "GuardarCoreAsync", Privado)
+                        .Invoke(vista, eliminar ? null : new object[] { 1, "trabajo", 10m, false });
+                    tarea.GetAwaiter().GetResult();
+                    Assert.Equal(1, ejecutor.Escrituras); Assert.Equal(1, ejecutor.Lecturas);
+                    Assert.Single(exitos); Assert.Contains("Operación confirmada", Assert.Single(avisos));
+                    Assert.Equal(-1, tipo.GetField("_idSeleccionado", Privado).GetValue(vista));
+                    Assert.False(vista.Visible);
+                }
+            });
+        }
         private const BindingFlags Privado = BindingFlags.Instance | BindingFlags.NonPublic;
         [Fact]
         public void AperturaConciliaUnaVezFueraDeUiSinBloquearCarga()
