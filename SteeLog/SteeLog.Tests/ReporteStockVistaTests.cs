@@ -7,6 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.Core.Application.Inventario;
+using SteeLog.Core.Application.Identidad;
+using SteeLog.Modelos;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Presentation;
 using Xunit;
@@ -23,6 +25,24 @@ namespace SteeLog.Tests
             public TaskCompletionSource<object> Agregar() { var t = new TaskCompletionSource<object>(); Pendientes.Enqueue(t); return t; }
             public async Task<TResult> ExecuteAsync<T, TResult>(Func<T, Task<TResult>> operacion) where T : class { Llamadas++; return (TResult)await Pendientes.Dequeue().Task; }
         }
+        private sealed class ConsultaFiltro : IReporteStockConsulta
+        {
+            public readonly List<FiltroMaterialLectura> Filtros = new List<FiltroMaterialLectura>();
+            public Task<bool> TieneConfiguracionAsync(CancellationToken token = default) => Task.FromResult(true);
+            public Task<IReadOnlyList<ReporteStockItem>> ListarConfiguradosAsync(FiltroMaterialLectura filtro, CancellationToken token = default)
+            { Filtros.Add(filtro); return Task.FromResult((IReadOnlyList<ReporteStockItem>)new ReporteStockItem[0]); }
+            public Task<IReadOnlyList<ReporteStockSeccion>> SeccionesAsync(CancellationToken token = default) => throw new NotImplementedException();
+        }
+        private sealed class ExecutorConsulta : IUseCaseExecutor
+        {
+            private readonly ConsultarReporteStock caso;
+            public ExecutorConsulta(ConsultaFiltro consulta)
+            {
+                var sesion = new Session(); sesion.Start(new Identity("test@example.test", Role.Admin));
+                caso = new ConsultarReporteStock(sesion, consulta, null);
+            }
+            public Task<TResult> ExecuteAsync<T, TResult>(Func<T, Task<TResult>> operacion) where T : class => operacion((T)(object)caso);
+        }
         private sealed class Pdf : IReporteStockPdf
         {
             public int Llamadas; public string Ruta; public ReporteStockSnapshot Snapshot;
@@ -36,11 +56,17 @@ namespace SteeLog.Tests
             while (!condicion() && reloj.Elapsed < TimeSpan.FromSeconds(5)) { Application.DoEvents(); Thread.Sleep(5); }
             Assert.True(condicion());
         }
-        private static void EnSta(Action prueba)
+        private static async Task EnSta(Action prueba)
         {
-            Exception error = null;
-            var hilo = new Thread(() => { try { SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext()); prueba(); } catch (Exception ex) { error = ex; } });
-            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(20))); Assert.Null(error);
+            var terminado = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var hilo = new Thread(() => {
+                try { SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext()); prueba(); terminado.TrySetResult(true); }
+                catch (Exception ex) { terminado.TrySetException(ex); }
+            });
+            hilo.IsBackground = true;
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start();
+            Assert.Same(terminado.Task, await Task.WhenAny(terminado.Task, Task.Delay(TimeSpan.FromSeconds(20))));
+            await terminado.Task;
         }
         private static Type Tipo(string nombre) => Assembly.Load("SteeLog").GetType("SteeLog.Vistas." + nombre, true);
         private static object Campo(object o, string nombre) => o.GetType().GetField(nombre, Privado).GetValue(o);
@@ -59,9 +85,40 @@ namespace SteeLog.Tests
         private static void Exportar(Form vista) => Llamar(vista, "btnExportarPDF_Click", null, EventArgs.Empty);
 
         [Fact]
-        public void CargaPendienteFallidaObsoletaYDisposeNoExportan()
+        public async Task AplicarYLimpiarFiltroAvanzadoConservaBusquedaYToggleVisibles()
         {
-            EnSta(() => {
+            await EnSta(() => {
+                var consulta = new ConsultaFiltro(); var executor = new ExecutorConsulta(consulta);
+                object identidad = new object();
+                using (var vista = (Form)Activator.CreateInstance(Tipo("Vista_ReporteStock"), Privado, null,
+                    new object[] { new ReporteStockPresenter(executor, new Pdf()), (Func<object>)(() => identidad),
+                        (Func<bool>)(() => true), (Func<string>)(() => null), (Action<string>)(_ => { }),
+                        (Action<string>)(_ => { }), (Action<string>)(_ => { }) }, null)) {
+                    var handle = vista.Handle;
+                    ((Control)Campo(vista, "txtFiltroMaterial")).Text = "perfil";
+                    var toggle = Campo(vista, "toggleStockBajo");
+                    toggle.GetType().GetProperty("Checked").SetValue(toggle, true);
+                    var avanzado = new FiltroMaterialParams { DesdeCantidad = 0, HastaCantidad = 0, IdsCategoria = new List<int> { 7 } };
+                    Llamar(vista, "RecibirFiltro", null, avanzado);
+                    var aplicado = consulta.Filtros[consulta.Filtros.Count - 1];
+                    Assert.Equal("perfil", aplicado.Nombre); Assert.True(aplicado.SoloStockBajo);
+                    Assert.Equal(new[] { 7 }, aplicado.Categorias);
+                    Assert.Null(aplicado.Desde); Assert.Null(aplicado.Hasta);
+                    avanzado.DesdeCantidad = 2; avanzado.HastaCantidad = 10;
+                    Llamar(vista, "RecibirFiltro", null, avanzado);
+                    var acotado = consulta.Filtros[consulta.Filtros.Count - 1];
+                    Assert.Equal(2m, acotado.Desde); Assert.Equal(10m, acotado.Hasta);
+                    Llamar(vista, "RecibirFiltro", null, new FiltroMaterialParams());
+                    var limpio = consulta.Filtros[consulta.Filtros.Count - 1];
+                    Assert.Equal("perfil", limpio.Nombre); Assert.True(limpio.SoloStockBajo);
+                    Assert.Empty(limpio.Categorias);
+                }
+            });
+        }
+        [Fact]
+        public async Task CargaPendienteFallidaObsoletaYDisposeNoExportan()
+        {
+            await EnSta(() => {
                 var executor = new Executor(); var a = executor.Agregar(); var b = executor.Agregar(); var c = executor.Agregar(); var d = executor.Agregar();
                 var pdf = new Pdf(); object identidad = new object(); int dialogos = 0; int errores = 0;
                 using (var vista = Vista(executor, pdf, () => identidad, () => true, () => { dialogos++; return "no.pdf"; }, _ => { }, _ => errores++)) {
@@ -75,25 +132,25 @@ namespace SteeLog.Tests
             });
         }
         [Theory] [InlineData(false)] [InlineData(true)]
-        public void RenderPendienteNoAbreNiEscribeTrasDisposeOCambioIdentidad(bool cambioIdentidad)
+        public async Task RenderPendienteNoAbreNiEscribeTrasDisposeOCambioIdentidad(bool cambioIdentidad)
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor(); var carga = executor.Agregar(); var pdf = new Pdf(); object identidad = new object(); int aperturas = 0;
                 string destino = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
-                using (var vista = Vista(executor, pdf, () => identidad, () => false, () => destino, _ => aperturas++, _ => { })) {
+                try { using (var vista = Vista(executor, pdf, () => identidad, () => false, () => destino, _ => aperturas++, _ => { })) {
                     var handle = vista.Handle; Cargar(vista); carga.SetResult(Filas("Perfil")); var grid = (DataGridView)Campo(vista, "dgvMateriales"); Esperar(() => grid.DataSource != null && grid.Rows.Count > 0);
                     Exportar(vista); Esperar(() => pdf.Inicio.Task.IsCompleted); Exportar(vista); Assert.Equal(1, pdf.Llamadas);
                     Assert.DoesNotContain(pdf.Snapshot.Columnas, c => c.Nombre == "precioUnitario");
                     Assert.DoesNotContain(pdf.Snapshot.Filas, f => f.Valores.Contains("73"));
                     if (cambioIdentidad) identidad = new object(); else vista.Dispose();
-                    pdf.Seguir.SetResult(true); Esperar(() => !File.Exists(pdf.Ruta)); Assert.False(File.Exists(destino)); Assert.Equal(0, aperturas);
-                }
+                    pdf.Seguir.TrySetResult(true); Esperar(() => !File.Exists(pdf.Ruta)); Assert.False(File.Exists(destino)); Assert.Equal(0, aperturas);
+                } } finally { pdf.Seguir.TrySetResult(true); }
             });
         }
         [Fact]
-        public void ModalCargaFallidaBloqueaGuardadoYDobleEnvio()
+        public async Task ModalCargaFallidaBloqueaGuardadoYDobleEnvio()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor(); var primera = executor.Agregar(); var materiales = executor.Agregar(); var secciones = executor.Agregar(); var guardar = executor.Agregar();
                 var presenter = new ReporteStockPresenter(executor, new Pdf()); object identidad = new object(); int errores = 0;
                 var tipo = Tipo("Reportes.ModalConfigReporteStock");
@@ -109,9 +166,9 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
-        public void ModalCargaInicialPendienteYFallidaBloqueanEditorYValidaHabilita()
+        public async Task ModalCargaInicialPendienteYFallidaBloqueanEditorYValidaHabilita()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var mat1 = executor.Agregar();
                 var mat2 = executor.Agregar();
@@ -165,9 +222,9 @@ namespace SteeLog.Tests
             });
         }
         [Theory] [InlineData(false)] [InlineData(true)]
-        public void ModalGuardarConfirmadoMantieneBloqueoHastaRecargaValidaYSeparaSuFallo(bool fallaRecarga)
+        public async Task ModalGuardarConfirmadoMantieneBloqueoHastaRecargaValidaYSeparaSuFallo(bool fallaRecarga)
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var matInicial = executor.Agregar();
                 var secInicial = executor.Agregar();
@@ -247,9 +304,9 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
-        public void ModalErroresCargaYGuardadoIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
+        public async Task ModalErroresCargaYGuardadoIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var cargaMat1 = executor.Agregar();
                 var matValido = executor.Agregar();
@@ -292,9 +349,9 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
-        public void VistaErroresCargaYRenderIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
+        public async Task VistaErroresCargaYRenderIdentidadAnteriorNoAvisanNiRecarganContextoNuevo()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var carga1 = executor.Agregar();
                 var cargaValida = executor.Agregar();
@@ -338,14 +395,15 @@ namespace SteeLog.Tests
                     }
                 }
                 finally {
+                    pdf.Seguir.TrySetResult(true);
                     try { if (File.Exists(destino)) File.Delete(destino); } catch { }
                 }
             });
         }
         [Fact]
-        public void ModalCargasFueraDeOrdenDescartaCargaObsoleta()
+        public async Task ModalCargasFueraDeOrdenDescartaCargaObsoleta()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var matA = executor.Agregar();
                 var matB = executor.Agregar();
@@ -384,9 +442,9 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
-        public void ModalYVistaDisposeConPendientesNoLanzanExcepcionNiHabilitan()
+        public async Task ModalYVistaDisposeConPendientesNoLanzanExcepcionNiHabilitan()
         {
-            EnSta(() => {
+            await EnSta(() => {
                 var executor = new Executor();
                 var mat1 = executor.Agregar();
                 var presenter = new ReporteStockPresenter(executor, new Pdf());

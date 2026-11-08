@@ -165,7 +165,7 @@ namespace SteeLog.Vistas
             dgvMateriales.DataSource = null;
             identidadDatos = null;
             var f = filtroActual;
-            var consulta = new FiltroMaterialLectura { Nombre = nombre ?? f?.Nombre, SoloStockBajo = soloStockBajo || (f?.SoloStockBajo ?? false), Desde = f?.DesdeCantidad, Hasta = f?.HastaCantidad, Categorias = f?.IdsCategoria, Proveedores = f?.IdsProveedor };
+            var consulta = new FiltroMaterialLectura { Nombre = nombre ?? f?.Nombre, SoloStockBajo = soloStockBajo || (f?.SoloStockBajo ?? false), Desde = f?.DesdeCantidad == 0 ? null : f?.DesdeCantidad, Hasta = f?.HastaCantidad == 0 ? null : f?.HastaCantidad, Categorias = f?.IdsCategoria, Proveedores = f?.IdsProveedor };
             try
             {
                 var items = await presenter.ListarAsync(consulta, token);
@@ -660,7 +660,7 @@ namespace SteeLog.Vistas
 
         private void RecibirFiltro(object sender, FiltroMaterialParams filtro)
         {
-            CargarMateriales(filtro: filtro);
+            CargarMateriales(txtFiltroMaterial.Text.Trim(), toggleStockBajo.Checked, filtro);
         }
 
         private async void btnExportarPDF_Click(object sender, EventArgs e)
