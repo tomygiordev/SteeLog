@@ -22,8 +22,14 @@ namespace SteeLog.Core.Application.Activos
         private async Task<T> Transaccion<T>(Func<Task<T>> trabajo, CancellationToken token)
         {
             token.ThrowIfCancellationRequested(); await uow.BeginAsync(token).ConfigureAwait(false);
-            try { var r=await trabajo().ConfigureAwait(false); token.ThrowIfCancellationRequested(); await uow.CommitAsync(token).ConfigureAwait(false); return r; }
-            catch { await uow.RollbackAsync().ConfigureAwait(false); throw; }
+            bool inicioCommit = false;
+            try { var r=await trabajo().ConfigureAwait(false); token.ThrowIfCancellationRequested(); inicioCommit=true; await uow.CommitAsync(token).ConfigureAwait(false); return r; }
+            catch (Exception error)
+            {
+                try { await uow.RollbackAsync().ConfigureAwait(false); } catch { }
+                if (inicioCommit && !(error is OperationCanceledException)) throw new ResultadoEscrituraInciertoException(error);
+                throw;
+            }
         }
         public Task<int> CrearAsync(string nombre, int? obraId, string observaciones, CancellationToken token=default)
         {

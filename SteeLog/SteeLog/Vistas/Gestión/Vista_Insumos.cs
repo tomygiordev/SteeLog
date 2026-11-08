@@ -15,18 +15,21 @@ using System.Threading;
 
 namespace SteeLog.Vistas
 {
-    public partial class Vista_Insumos : Form, IInsumosVista
+    public partial class Vista_Insumos : Form, IInsumosVista, IInsumosResultadoIncierto
     {
         private int idSeleccionado = -1;
         private bool ocupada;
         private bool leyendo;
+        private bool resultadoIncierto;
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
         private readonly CargasInsumos cargas = new CargasInsumos();
         private List<Insumo> insumos = new List<Insumo>();
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private InsumosPresenter presenter;
         private InsumosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearInsumosPresenter(this));
-        public void SetOcupada(bool valor) { ocupada=valor; if (!IsDisposed) { btnGuardar.Enabled=!valor && !leyendo; btnEliminar.Enabled=!valor && !leyendo && idSeleccionado!=-1; } }
+        public void SetOcupada(bool valor) { ocupada=valor; if (!IsDisposed) { btnGuardar.Enabled=!valor && !leyendo && !resultadoIncierto; btnEliminar.Enabled=!valor && !leyendo && !resultadoIncierto && idSeleccionado!=-1; } }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
+        public void MarcarResultadoIncierto() { resultadoIncierto = true; if (!IsDisposed && !cierre.IsCancellationRequested) AdvertirResultadoIncierto("Resultado incierto: verifique el listado antes de reintentar. Pulse Ver insumos para recargar."); }
         private PrintDocument printDocument1;
         private Color tabActiveColor = Color.FromArgb(25, 135, 84);
         private Color tabInactiveColor = Color.FromArgb(47, 84, 57);
@@ -68,18 +71,18 @@ namespace SteeLog.Vistas
         private void CambiarLectura(bool valor)
         {
             leyendo = valor;
-            btnGuardar.Enabled = !valor && !ocupada;
-            btnEliminar.Enabled = !valor && !ocupada && idSeleccionado != -1;
+            btnGuardar.Enabled = !valor && !ocupada && !resultadoIncierto;
+            btnEliminar.Enabled = !valor && !ocupada && !resultadoIncierto && idSeleccionado != -1;
             btnVerInsumos.Enabled = !valor;
             btnVerHistorial.Enabled = !valor;
         }
         private void CargarComboFiltroInsumo()
         {
-            var lista = new List<Insumo> { new Insumo { id = 0, nombre = "— Todos —" } };
-            lista.AddRange(insumos);
+            var lista = new List<OpcionFiltroInsumo> { new OpcionFiltroInsumo { Id = 0, Etiqueta = "— Todos —" } };
+            lista.AddRange(InsumosPresenter.OpcionesFiltro(insumos.Select(x => new SteeLog.Core.Application.Activos.InsumoLectura { Id = x.id, Nombre = x.nombre }).ToArray()));
             cboFiltroInsumo.DataSource = lista;
-            cboFiltroInsumo.DisplayMember = "nombre";
-            cboFiltroInsumo.ValueMember = "id";
+            cboFiltroInsumo.DisplayMember = "Etiqueta";
+            cboFiltroInsumo.ValueMember = "Id";
             cboFiltroInsumo.SelectedIndex = 0;
         }
 
@@ -147,6 +150,7 @@ namespace SteeLog.Vistas
                     dgvInsumos.Columns["observaciones"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                     dgvInsumos.Columns["observaciones"].FillWeight = 30;
                 }
+                resultadoIncierto = false;
             }
             catch (Exception ex)
             {
@@ -167,13 +171,10 @@ namespace SteeLog.Vistas
             {
                 var datos = await Presenter.HistorialAsync(cierre.Token);
                 if (!Vigente(actual)) return;
-                var lista = datos.Select(x => new InsumoMovimiento { id=x.Id, nombre_insumo=x.Insumo, obra_origen=x.Origen, obra_destino=x.Destino, fecha=x.Fecha }).ToList();
-
-                if (cboFiltroInsumo.SelectedIndex > 0)
-                {
-                    var seleccionado = (Insumo)cboFiltroInsumo.SelectedItem;
-                    lista = lista.Where(m => m.nombre_insumo == seleccionado.nombre).ToList();
-                }
+                int? insumoId = cboFiltroInsumo.SelectedIndex > 0 && cboFiltroInsumo.SelectedItem is OpcionFiltroInsumo seleccionado
+                    ? (int?)seleccionado.Id : null;
+                var lista = InsumosPresenter.FiltrarHistorial(datos, insumoId)
+                    .Select(x => new InsumoMovimiento { id=x.Id, nombre_insumo=x.Insumo, obra_origen=x.Origen, obra_destino=x.Destino, fecha=x.Fecha }).ToList();
 
                 dgvHistorial.DataSource = lista;
 
@@ -329,7 +330,7 @@ namespace SteeLog.Vistas
 
         private async void btnGuardar_Click(object sender, EventArgs e)
         {
-            if (ocupada || leyendo || cboObra.SelectedItem == null) return;
+            if (ocupada || leyendo || resultadoIncierto || cboObra.SelectedItem == null) return;
             string nombre = txtNombre.Text.Trim();
             if (string.IsNullOrEmpty(nombre))
             {
@@ -360,7 +361,7 @@ namespace SteeLog.Vistas
 
         private async void btnEliminar_Click(object sender, EventArgs e)
         {
-            if (ocupada || leyendo || idSeleccionado == -1) return;
+            if (ocupada || leyendo || resultadoIncierto || idSeleccionado == -1) return;
 
             DialogResult resultado = MessageBox.Show(
                 "¿Estás seguro de eliminar este insumo?",
@@ -508,7 +509,7 @@ namespace SteeLog.Vistas
             y += offset;
 
             string filtro = cboFiltroInsumo.SelectedIndex > 0
-                ? ((Insumo)cboFiltroInsumo.SelectedItem).nombre
+                ? ((OpcionFiltroInsumo)cboFiltroInsumo.SelectedItem).Etiqueta
                 : "Todos";
             e.Graphics.DrawString("Filtro: " + filtro, fontBody, brushText, x, y);
             y += 18;

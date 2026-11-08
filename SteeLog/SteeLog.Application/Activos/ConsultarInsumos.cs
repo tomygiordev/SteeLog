@@ -14,7 +14,7 @@ namespace SteeLog.Core.Application.Activos
     public sealed class ObraInsumoLectura { public int Id { get; set; } public string Nombre { get; set; } }
     public sealed class HistorialInsumoLectura
     {
-        public int Id { get; set; } public string Insumo { get; set; } public string Origen { get; set; }
+        public int Id { get; set; } public int InsumoId { get; set; } public string Insumo { get; set; } public string Origen { get; set; }
         public string Destino { get; set; } public DateTime Fecha { get; set; }
     }
     public interface IInsumosConsulta

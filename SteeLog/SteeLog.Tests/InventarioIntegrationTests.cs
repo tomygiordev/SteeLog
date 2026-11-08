@@ -786,4 +786,20 @@ public sealed class InventarioIntegrationTests
         var countRecorte4 = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material)));
         Assert.Equal(0L, countRecorte4);
     }
+    [Fact]
+    public async Task HistorialInsumosIncluyeIdentidadDeHomónimos()
+    {
+        string nombre = "Insumo homónimo " + Guid.NewGuid().ToString("N");
+        int primero, segundo;
+        using (var u = new NpgsqlUnitOfWork(Factory()))
+            primero = await new GestionarInsumos(Actor(), u, new NpgsqlInsumos(u)).CrearAsync(nombre, null, null);
+        using (var u = new NpgsqlUnitOfWork(Factory()))
+            segundo = await new GestionarInsumos(Actor(), u, new NpgsqlInsumos(u)).CrearAsync(nombre, null, null);
+        var datos = await new ConsultarInsumos(Actor(Role.Galpon), new NpgsqlInsumosConsulta(Factory())).HistorialAsync();
+        var filas = datos.Where(x => x.Insumo == nombre).ToArray();
+        Assert.Equal(2, filas.Length);
+        Assert.Contains(filas, x => x.InsumoId == primero);
+        Assert.Contains(filas, x => x.InsumoId == segundo);
+    }
+
 }

@@ -1,8 +1,10 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using SteeLog.Core.Application.Activos;
+using SteeLog.Core.Application.Common;
 namespace SteeLog.Presentation
 {
     public sealed class CargasInsumos
@@ -13,7 +15,13 @@ namespace SteeLog.Presentation
         public bool EsActual(int solicitud) => Volatile.Read(ref cerrada) == 0 && Volatile.Read(ref revision) == solicitud;
         public void Cerrar() { Interlocked.Exchange(ref cerrada, 1); Interlocked.Increment(ref revision); }
     }
+    public sealed class OpcionFiltroInsumo
+    {
+        public int Id { get; set; }
+        public string Etiqueta { get; set; }
+    }
     public interface IInsumosVista { void SetOcupada(bool ocupada); void MostrarError(Exception error); }
+    public interface IInsumosResultadoIncierto { void MarcarResultadoIncierto(); }
     public sealed class InsumosPresenter
     {
         private readonly IUseCaseExecutor executor; private readonly IInsumosVista vista; private int ocupado;
@@ -23,9 +31,20 @@ namespace SteeLog.Presentation
             if(Interlocked.CompareExchange(ref ocupado,1,0)!=0) return null;
             try { vista.SetOcupada(true); return await operacion(); }
             catch(OperationCanceledException) { return null; }
+            catch(ResultadoEscrituraInciertoException e) { if (vista is IInsumosResultadoIncierto incierto) incierto.MarcarResultadoIncierto(); else vista.MostrarError(e); return null; }
             catch(Exception e) { vista.MostrarError(e); return null; }
             finally { Interlocked.Exchange(ref ocupado,0); vista.SetOcupada(false); }
         }
+        public static IReadOnlyList<OpcionFiltroInsumo> OpcionesFiltro(IReadOnlyList<InsumoLectura> datos)
+        {
+            var repetidos = new HashSet<string>(datos.GroupBy(x => x.Nombre ?? "", StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1).Select(g => g.Key), StringComparer.OrdinalIgnoreCase);
+            return datos.Select(x => new OpcionFiltroInsumo {
+                Id = x.Id, Etiqueta = repetidos.Contains(x.Nombre ?? "") ? $"{x.Nombre} (#{x.Id})" : x.Nombre
+            }).ToArray();
+        }
+        public static IReadOnlyList<HistorialInsumoLectura> FiltrarHistorial(IReadOnlyList<HistorialInsumoLectura> datos, int? insumoId)
+            => insumoId.HasValue ? datos.Where(x => x.InsumoId == insumoId.Value).ToArray() : datos;
         public Task<IReadOnlyList<InsumoLectura>> InsumosAsync(CancellationToken token = default)
             => executor.ExecuteAsync<ConsultarInsumos, IReadOnlyList<InsumoLectura>>(x => x.InsumosAsync(token));
         public Task<IReadOnlyList<ObraInsumoLectura>> ObrasAsync(CancellationToken token = default)

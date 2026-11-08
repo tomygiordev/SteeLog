@@ -29,6 +29,24 @@ namespace SteeLog.Tests
             Assert.Same(uow.ErrorCommit, error.InnerException); Assert.Contains("verificar persistencia antes de reintentar", error.Message);
             Assert.True(uow.Confirmado); Assert.Equal(1, repo.Altas); Assert.Equal(1, repo.Historiales); Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
         }
+        [Fact] public async Task InsumoCommitConfirmadoPeroRespuestaPerdidaSeMarcaIncierto()
+        {
+            var uow = new Uow(); var repo = new InsumosRepo();
+            var servicio = new GestionarInsumos(Sesion(), uow, repo);
+            var error = await Assert.ThrowsAsync<ResultadoEscrituraInciertoException>(() => servicio.CrearAsync("Disco", null, null));
+            Assert.Same(uow.ErrorCommit, error.InnerException);
+            Assert.True(uow.Confirmado); Assert.Equal(1, repo.Altas); Assert.Equal(1, repo.Historiales);
+            Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
+        }
+        private sealed class InsumosRepo : IInsumosEscritura
+        {
+            public int Altas, Historiales;
+            public Task<int> CrearAsync(Insumo x, CancellationToken t=default) { Altas++; return Task.FromResult(1); }
+            public Task RegistrarHistorialAsync(int id, int? origen, int? destino, bool co, bool cd, CancellationToken t=default) { Historiales++; return Task.CompletedTask; }
+            public Task<Insumo> BloquearAsync(int id, CancellationToken t=default) => throw new NotSupportedException();
+            public Task ActualizarAsync(Insumo x, CancellationToken t=default) => throw new NotSupportedException();
+            public Task EliminarAsync(int id, CancellationToken t=default) => throw new NotSupportedException();
+        }
         [Fact] public async Task FalloPrevioACommitConRollbackFallidoConservaErrorOriginal()
         {
             var uow = new Uow(); var repo = new CatalogosRepo { Fallar = true };
