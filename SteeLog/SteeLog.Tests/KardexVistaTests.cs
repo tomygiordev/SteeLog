@@ -79,28 +79,71 @@ namespace SteeLog.Tests
             hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
         }
         [Fact]
-        public void ExportacionNoSeDuplicaYNuncaAbreTrasDispose()
+        public async Task ExportacionNoSeDuplicaYNuncaAbreTrasDispose()
         {
-            Exception error = null;
+            var terminado = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
             var hilo = new Thread(() => {
                 try {
                     SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
                     var ejecutor = new Executor(); var carga = new TaskCompletionSource<List<KardexItem>>(); ejecutor.Pendientes.Enqueue(carga);
                     var pdf = new PdfPendiente(); int aperturas = 0; var identidad = new object();
-                    var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
-                    var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => aperturas++) }, null);
-                    var handle = vista.Handle; tipo.GetMethod("CargarKardex", Privado).Invoke(vista, new object[] { null });
-                    carga.SetResult(new List<KardexItem> { new KardexItem { id_movimiento = 1, fecha = DateTime.Today, nombre_material = "A" } });
-                    var grid = (DataGridView)tipo.GetField("dgvKardex", Privado).GetValue(vista);
-                    Esperar(() => grid.DataSource != null && grid.Rows.Count > 0);
-                    var click = tipo.GetMethod("BtnDescargarPDF_Click", Privado);
-                    click.Invoke(vista, new object[] { null, EventArgs.Empty }); Esperar(() => pdf.Inicio.Task.IsCompleted);
-                    click.Invoke(vista, new object[] { null, EventArgs.Empty }); Assert.Equal(1, pdf.Llamadas);
-                    vista.Dispose(); pdf.Seguir.SetResult(true);
-                    Esperar(() => !System.IO.File.Exists(pdf.Ruta)); Assert.Equal(0, aperturas);
-                } catch (Exception ex) { error = ex; }
+                    try {
+                        var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
+                        var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => aperturas++) }, null);
+                        var handle = vista.Handle; tipo.GetMethod("CargarKardex", Privado).Invoke(vista, new object[] { null });
+                        carga.SetResult(new List<KardexItem> { new KardexItem { id_movimiento = 1, fecha = DateTime.Today, nombre_material = "A" } });
+                        var grid = (DataGridView)tipo.GetField("dgvKardex", Privado).GetValue(vista);
+                        Esperar(() => grid.DataSource != null && grid.Rows.Count > 0);
+                        var click = tipo.GetMethod("BtnDescargarPDF_Click", Privado);
+                        click.Invoke(vista, new object[] { null, EventArgs.Empty }); Esperar(() => pdf.Inicio.Task.IsCompleted);
+                        click.Invoke(vista, new object[] { null, EventArgs.Empty }); Assert.Equal(1, pdf.Llamadas);
+                        vista.Dispose(); pdf.Seguir.SetResult(true);
+                        Esperar(() => !System.IO.File.Exists(pdf.Ruta)); Assert.Equal(0, aperturas);
+                    } finally { pdf.Seguir.TrySetResult(true); }
+                    terminado.TrySetResult(true);
+                } catch (Exception ex) { terminado.TrySetException(ex); }
             });
-            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+            hilo.IsBackground = true; hilo.SetApartmentState(ApartmentState.STA); hilo.Start();
+            Assert.Same(terminado.Task, await Task.WhenAny(terminado.Task, Task.Delay(TimeSpan.FromSeconds(15))));
+            await terminado.Task;
+        }
+        [Fact]
+        public async Task FilasDeSesionAnteriorNoPermitenExportarNiEliminarYErrorPdfObsoletoNoAvisa()
+        {
+            var terminado = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var hilo = new Thread(() => {
+                try {
+                    SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+                    var ejecutor = new Executor(); var carga = new TaskCompletionSource<List<KardexItem>>(); ejecutor.Pendientes.Enqueue(carga);
+                    var pdf = new PdfPendiente(); object identidad = new object(); int avisos = 0, confirmaciones = 0;
+                    try {
+                        var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
+                        using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null)) {
+                            var handle = vista.Handle;
+                            tipo.GetField("avisarPdfFallido", Privado).SetValue(vista, (Action<string>)(_ => avisos++));
+                            tipo.GetField("confirmarEliminacion", Privado).SetValue(vista, (Func<bool>)(() => { confirmaciones++; return true; }));
+                            tipo.GetMethod("CargarKardex", Privado).Invoke(vista, new object[] { null });
+                            var item = new KardexItem { id_movimiento = 42, fecha = DateTime.Today, nombre_material = "A" };
+                            carga.SetResult(new List<KardexItem> { item });
+                            Esperar(() => tipo.GetField("identidadDatos", Privado).GetValue(vista) != null);
+                            var click = tipo.GetMethod("BtnDescargarPDF_Click", Privado);
+                            click.Invoke(vista, new object[] { null, EventArgs.Empty }); Esperar(() => pdf.Inicio.Task.IsCompleted);
+                            identidad = new object();
+                            click.Invoke(vista, new object[] { null, EventArgs.Empty });
+                            tipo.GetMethod("BtnDescargarExcel_Click", Privado).Invoke(vista, new object[] { null, EventArgs.Empty });
+                            var eliminar = (Task)tipo.GetMethod("EliminarAsync", Privado).Invoke(vista, new object[] { item });
+                            Assert.True(eliminar.IsCompleted); Assert.Equal(0, confirmaciones); Assert.Equal(1, ejecutor.Llamadas);
+                            pdf.Seguir.SetException(new InvalidOperationException("fallo obsoleto"));
+                            Esperar(() => !(bool)tipo.GetField("exportando", Privado).GetValue(vista));
+                            Assert.Equal(0, avisos); Assert.Equal(1, pdf.Llamadas);
+                        }
+                    } finally { pdf.Seguir.TrySetResult(true); }
+                    terminado.TrySetResult(true);
+                } catch (Exception ex) { terminado.TrySetException(ex); }
+            });
+            hilo.IsBackground = true; hilo.SetApartmentState(ApartmentState.STA); hilo.Start();
+            Assert.Same(terminado.Task, await Task.WhenAny(terminado.Task, Task.Delay(TimeSpan.FromSeconds(15))));
+            await terminado.Task;
         }
         [Theory]
         [InlineData("dispose", false)]
@@ -122,6 +165,7 @@ namespace SteeLog.Tests
                     tipo.GetField("avisarEliminacionFallida", Privado).SetValue(vista, (Action<string>)(_ => errores++));
                     var eliminar = tipo.GetMethod("EliminarAsync", Privado);
                     var item = new KardexItem { id_movimiento = 42 };
+                    tipo.GetField("identidadDatos", Privado).SetValue(vista, identidad);
                     var primera = (Task)eliminar.Invoke(vista, new object[] { item });
                     var segunda = (Task)eliminar.Invoke(vista, new object[] { item });
                     Assert.True(segunda.IsCompleted); Assert.Equal(1, ejecutor.Escrituras); Assert.Equal(1, confirmaciones);

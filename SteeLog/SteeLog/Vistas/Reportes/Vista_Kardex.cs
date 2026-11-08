@@ -38,9 +38,11 @@ namespace SteeLog.Vistas
         private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
         private Func<bool> ocultarSaldo = () => SessionManager.DebeOcultarCantidadesStockMateriales;
         private Action<string> abrirPdf = ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
+        private Action<string> avisarPdfFallido = mensaje => ToastNotification.ShowError(mensaje);
         private readonly CancellationTokenSource vida = new CancellationTokenSource();
         private CancellationTokenSource carga;
         private int version;
+        private object identidadDatos;
         private bool exportando;
         private bool eliminando;
         private Func<bool> confirmarEliminacion = () => MessageBox.Show("¿Está seguro de eliminar este movimiento? Esto revertirá el stock.", "Confirmar Eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
@@ -469,16 +471,16 @@ namespace SteeLog.Vistas
 
         private async void BtnDescargarPDF_Click(object sender, EventArgs e)
         {
-            if (exportando || presenter == null || vida.IsCancellationRequested) return;
+            if (exportando || presenter == null || vida.IsCancellationRequested || identidadDatos == null || !ReferenceEquals(identidadDatos, identidadActual())) return;
             string ruta = null;
             bool abierto = false;
+            int solicitud = version;
+            var identidad = identidadActual();
             try
             {
                 if (dgvKardex.DataSource == null) { ToastNotification.ShowWarning("No hay datos para exportar."); return; }
                 var historial = ((SortableBindingList<KardexItem>)dgvKardex.DataSource).ToList();
                 if (historial.Count == 0) { ToastNotification.ShowWarning("No hay registros en el filtrado actual."); return; }
-                int solicitud = version;
-                var identidad = identidadActual();
                 ruta = Path.Combine(Path.GetTempPath(), $"Kardex_{Guid.NewGuid():N}.pdf");
                 var snapshot = new KardexSnapshot {
                     Historial = historial, MaterialNombre = lblMaterialNombre.Text,
@@ -496,12 +498,13 @@ namespace SteeLog.Vistas
                 }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!vida.IsCancellationRequested) ToastNotification.ShowError("Error al generar PDF: " + ex.Message); }
+            catch (Exception ex) { if (ContextoVigente(solicitud, identidad)) avisarPdfFallido("Error al generar PDF: " + ex.Message); }
             finally { if (!abierto && ruta != null) { try { if (File.Exists(ruta)) File.Delete(ruta); } catch (IOException) { } catch (UnauthorizedAccessException) { } } exportando = false; if (!IsDisposed && !vida.IsCancellationRequested) btnDescargarPDF.Enabled = true; }
         }
 
         private void BtnDescargarExcel_Click(object sender, EventArgs e)
         {
+            if (identidadDatos == null || !ReferenceEquals(identidadDatos, identidadActual())) return;
             try
             {
                 if (dgvKardex.DataSource == null) { ToastNotification.ShowWarning("No hay datos para exportar."); return; }
@@ -696,7 +699,7 @@ namespace SteeLog.Vistas
 
         private async Task EliminarAsync(KardexItem item)
         {
-            if (eliminando || presenter == null || vida.IsCancellationRequested || IsDisposed) return;
+            if (eliminando || presenter == null || vida.IsCancellationRequested || IsDisposed || identidadDatos == null || !ReferenceEquals(identidadDatos, identidadActual())) return;
             eliminando = true;
             int solicitud = version;
             object identidad = identidadActual();
@@ -742,6 +745,7 @@ namespace SteeLog.Vistas
             var token = carga.Token;
             int solicitud = ++version;
             dgvKardex.DataSource = null;
+            identidadDatos = null;
             var identidad = identidadActual();
             try
             {
@@ -756,6 +760,7 @@ namespace SteeLog.Vistas
                 if (token.IsCancellationRequested || IsDisposed || solicitud != version || !ReferenceEquals(identidad, identidadActual())) return;
                 
                 dgvKardex.DataSource = new SortableBindingList<KardexItem>(historial);
+                identidadDatos = identidad;
 
                 // Ensure columns
                 if (dgvKardex.Columns["id_movimiento"] != null) dgvKardex.Columns["id_movimiento"].Visible = false;
