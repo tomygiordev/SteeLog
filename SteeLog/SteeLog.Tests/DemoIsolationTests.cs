@@ -57,6 +57,39 @@ public sealed class DemoIsolationTests
         }
         finally { Directory.Delete(root, true); }
     }
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("\t")]
+    public void RaizDemoVaciaOEnBlancoNoUsaPerfilPersonal(string valor)
+    {
+        var root = Path.Combine(Path.GetTempPath(), "steelog-demo-isolation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            var error = Assert.Throws<TargetInvocationException>(() => Create(root, valor));
+            Assert.IsType<InvalidOperationException>(error.InnerException);
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
+    [Fact]
+    public void RaizDemoAusenteConservaPerfilNormal()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "steelog-demo-isolation-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        try
+        {
+            using (var services = (IDisposable)Create(root, null))
+            {
+                var paths = services.GetType().GetProperty("Paths", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services);
+                Assert.Equal(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SteeLog", "Storage"),
+                    paths.GetType().GetProperty("StorageDirectory").GetValue(paths));
+            }
+        }
+        finally { Directory.Delete(root, true); }
+    }
+
     [Fact]
     public void PerfilDemoValidoUsaRaizInyectadaSinCargarSesionNiConfiguracion()
     {

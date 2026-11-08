@@ -161,9 +161,9 @@ namespace SteeLog.CompositionRoot
         internal static LocalServices Create() => CreateForEnvironment(AppDomain.CurrentDomain.BaseDirectory, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"));
         internal static LocalServices CreateForEnvironment(string executableDirectory, string demoRoot)
         {
-            if (string.IsNullOrWhiteSpace(demoRoot))
+            if (demoRoot == null)
                 return new LocalServices(executableDirectory, Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData));
-            if (!Path.IsPathRooted(demoRoot) || Path.GetPathRoot(demoRoot).Length <= 2) throw new InvalidOperationException("STEELOG_DEMO_ROOT debe ser una ruta absoluta de una instalación demo preparada.");
+            if (string.IsNullOrWhiteSpace(demoRoot) || !Path.IsPathRooted(demoRoot) || Path.GetPathRoot(demoRoot).Length <= 2) throw new InvalidOperationException("STEELOG_DEMO_ROOT debe ser una ruta absoluta de una instalación demo preparada.");
             var root = Path.GetFullPath(demoRoot);
             var marker = Path.Combine(root, ".steelog-demo");
             if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != "steelog-demo-v1")
