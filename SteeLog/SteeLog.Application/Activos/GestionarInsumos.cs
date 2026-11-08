@@ -27,7 +27,7 @@ namespace SteeLog.Core.Application.Activos
             catch (Exception error)
             {
                 try { await uow.RollbackAsync().ConfigureAwait(false); } catch { }
-                if (inicioCommit && !(error is OperationCanceledException)) throw new ResultadoEscrituraInciertoException(error);
+                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
                 throw;
             }
         }

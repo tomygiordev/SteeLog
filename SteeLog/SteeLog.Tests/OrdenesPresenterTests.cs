@@ -6,6 +6,9 @@ using System.Windows.Forms;
 using System.Threading.Tasks;
 using SteeLog.Vistas.Movimientos.Ordenes;
 using SteeLog.Presentation;
+using SteeLog.Core.Application.Common;
+using SteeLog.Core.Application.OrdenesCompra;
+using SteeLog.Domain.OrdenesCompra;
 using Xunit;
 
 namespace SteeLog.Tests
@@ -143,6 +146,128 @@ namespace SteeLog.Tests
                 } catch (Exception ex) { error = ex; }
             });
             hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+        }
+        private sealed class VistaIncierta : IOrdenesVista, IOrdenesResultadoIncierto
+        {
+            public int Inciertos; public Exception Error;
+            public void SetOcupada(bool ocupada) { }
+            public void MostrarError(Exception error) => Error = error;
+            public void MarcarResultadoIncierto() => Inciertos++;
+        }
+        private sealed class EjecutorIncierto : IUseCaseExecutor
+        {
+            public int Escrituras, Lecturas; public bool FallarLecturas;
+            public Task<TResult> ExecuteAsync<TUseCase, TResult>(Func<TUseCase, Task<TResult>> operation) where TUseCase : class
+            {
+                var orden = new OrdenLectura { Id = 7, Numero = "OC-7", Estado = EstadosOrden.Pendiente, Fecha = DateTime.Today, Proveedor = "P", Destino = "D" };
+                if (typeof(TResult) == typeof(OrdenLectura)) { Lecturas++; if (FallarLecturas) throw new OperationCanceledException(); return Task.FromResult((TResult)(object)orden); }
+                if (typeof(TResult) == typeof(IReadOnlyList<OrdenLectura>)) { Lecturas++; if (FallarLecturas) throw new OperationCanceledException(); return Task.FromResult((TResult)(object)new List<OrdenLectura> { orden }); }
+                Escrituras++; throw new ResultadoEscrituraInciertoException(new Exception("respuesta perdida"));
+            }
+        }
+        [Fact]
+        public async Task EscrituraInciertaAvisaALaVistaQueImplementaLaInterfaz()
+        {
+            var vista = new VistaIncierta(); var presenter = new OrdenesPresenter(new EjecutorIncierto(), vista);
+            var resultado = await presenter.EliminarAsync(5);
+            Assert.False(resultado.Exitoso); Assert.True(resultado.Incierto); Assert.Equal(1, vista.Inciertos); Assert.Null(vista.Error);
+        }
+        [Fact]
+        public async Task EscrituraInciertaMuestraErrorSiLaVistaNoImplementaLaInterfaz()
+        {
+            var vista = new Vista(); var presenter = new OrdenesPresenter(new EjecutorIncierto(), vista);
+            var resultado = await presenter.EliminarAsync(5);
+            Assert.False(resultado.Exitoso); Assert.True(resultado.Incierto);
+            Assert.IsType<ResultadoEscrituraInciertoException>(vista.Error); Assert.Equal(new[] { true, false }, vista.Estados);
+        }
+        private static void EnSta(Action accion)
+        {
+            Exception error = null;
+            var hilo = new Thread(() => { try { accion(); } catch (Exception e) { error = e; } });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+        }
+        private const BindingFlags Flags = BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public;
+        private static T Campo<T>(object o, string nombre) => (T)o.GetType().GetField(nombre, Flags).GetValue(o);
+        private static void Asignar(object o, string nombre, object valor) => o.GetType().GetField(nombre, Flags).SetValue(o, valor);
+        private static void Esperar(object o, string metodo, params object[] args) => ((Task)o.GetType().GetMethod(metodo, Flags).Invoke(o, args)).GetAwaiter().GetResult();
+        [Fact]
+        public void AltaIncierta_BloqueaGuardarYCambioDeMaterialHastaRecargaExitosa()
+        {
+            EnSta(() => {
+                var avisos = new List<string>(); var ejecutor = new EjecutorIncierto();
+                using (var alta = new Vista_OrdenesAlta()) {
+                    Asignar(alta, "AdvertirResultadoIncierto", new Action<string>(avisos.Add));
+                    var presenter = new OrdenesPresenter(ejecutor, alta); Asignar(alta, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
+                    Asignar(alta, "_presenter", presenter); Asignar(alta, "_catalogosListos", true);
+                    var guardar = Campo<Control>(alta, "btnGuardar");
+                    alta.SetEditMode(7); Assert.True(Campo<EstadoModeloOrden>(alta, "_modelo").Aplicar(7)); alta.SetOcupada(false); Assert.True(guardar.Enabled);
+                    Assert.True(presenter.EditarAsync(7, null, null).GetAwaiter().GetResult().Incierto);
+                    Assert.Single(avisos); Assert.False(guardar.Enabled); Assert.Equal(1, ejecutor.Escrituras);
+                    alta.GetType().GetMethod("BtnGuardar_Click", Flags).Invoke(alta, new object[] { guardar, EventArgs.Empty });
+                    alta.GetType().GetMethod("CambiarMaterialImpactado", Flags).Invoke(alta, new object[] { 0 });
+                    Assert.Equal(1, ejecutor.Escrituras); Assert.Equal(2, avisos.Count);
+                    ejecutor.FallarLecturas = true; Esperar(alta, "CargarOrden", 7);
+                    Assert.True(Campo<bool>(alta, "_resultadoIncierto")); Assert.False(guardar.Enabled);
+                    ejecutor.FallarLecturas = false; Esperar(alta, "CargarOrden", 7);
+                    Assert.False(Campo<bool>(alta, "_resultadoIncierto")); Assert.True(guardar.Enabled); Assert.Equal(2, avisos.Count); Assert.False(alta.Visible);
+                    alta.MarcarResultadoIncierto(); Assert.True(Campo<bool>(alta, "_resultadoIncierto")); Assert.Equal(3, avisos.Count);
+                    alta.PrepararNuevaOrden(); Assert.False(Campo<bool>(alta, "_resultadoIncierto"));
+                }
+            });
+        }
+        [Fact]
+        public void ListadoIncierto_BloqueaEliminarHastaRecargaExitosa()
+        {
+            EnSta(() => {
+                var avisos = new List<string>(); var ejecutor = new EjecutorIncierto(); int confirmaciones = 0;
+                using (var listado = new Vista_OrdenesListado()) {
+                    Asignar(listado, "AdvertirResultadoIncierto", new Action<string>(avisos.Add)); Asignar(listado, "ConfirmarEliminacion", new Func<string, bool>(m => { confirmaciones++; return false; }));
+                    var presenter = new OrdenesPresenter(ejecutor, listado); Asignar(listado, "_presenter", presenter);
+                    Asignar(listado, "_rolActual", SteeLog.Servicios.UserRole.Admin);
+                    var grilla = Campo<DataGridView>(listado, "dgvOrdenes");
+                    Esperar(listado, "CargarOrdenes");
+                    Assert.Equal("Eliminar", grilla.Rows[0].Cells["colEliminar"].Value);
+                    var clic = new DataGridViewCellEventArgs(grilla.Columns["colEliminar"].Index, 0);
+                    var manejador = listado.GetType().GetMethod("DgvOrdenes_CellContentClick", Flags);
+                    Assert.True(presenter.EliminarAsync(7).GetAwaiter().GetResult().Incierto);
+                    Assert.Single(avisos); Assert.Equal("", grilla.Rows[0].Cells["colEliminar"].Value);
+                    manejador.Invoke(listado, new object[] { grilla, clic });
+                    Assert.Equal(0, confirmaciones); Assert.Equal(1, ejecutor.Escrituras); Assert.Equal(2, avisos.Count);
+                    ejecutor.FallarLecturas = true; Esperar(listado, "CargarOrdenes");
+                    Assert.True(Campo<bool>(listado, "_resultadoIncierto"));
+                    ejecutor.FallarLecturas = false; Esperar(listado, "CargarOrdenes");
+                    Assert.False(Campo<bool>(listado, "_resultadoIncierto")); Assert.Equal("Eliminar", grilla.Rows[0].Cells["colEliminar"].Value);
+                    manejador.Invoke(listado, new object[] { grilla, clic });
+                    Assert.Equal(1, confirmaciones); Assert.Equal(1, ejecutor.Escrituras); Assert.Equal(2, avisos.Count);
+                }
+            });
+        }
+        [Fact]
+        public void RevisionIncierta_BloqueaConfirmarHastaRecargaExitosa()
+        {
+            EnSta(() => {
+                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                try {
+                var avisos = new List<string>(); var ejecutor = new EjecutorIncierto();
+                using (var revision = new Vista_OrdenesRevision()) {
+                    Asignar(revision, "AdvertirResultadoIncierto", new Action<string>(avisos.Add));
+                    var presenter = new OrdenesPresenter(ejecutor, revision); Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
+                    Asignar(revision, "_presenter", presenter);
+                    var confirmar = Campo<Control>(revision, "btnConfirmar");
+                    revision.SetOrder(7); Assert.True(Campo<EstadoModeloOrden>(revision, "_modelo").Aplicar(7)); Asignar(revision, "_permiteRecepcion", true);
+                    revision.SetOcupada(false); Assert.True(confirmar.Enabled);
+                    Assert.True(presenter.RecibirAsync(7, new Dictionary<int, decimal>(), new Dictionary<int, string>(), "").GetAwaiter().GetResult().Incierto);
+                    Assert.Single(avisos); Assert.False(confirmar.Enabled); Assert.Equal(1, ejecutor.Escrituras);
+                    revision.SetOcupada(false); Assert.False(confirmar.Enabled);
+                    revision.GetType().GetMethod("BtnConfirmar_Click", Flags).Invoke(revision, new object[] { confirmar, EventArgs.Empty });
+                    Assert.Equal(1, ejecutor.Escrituras);
+                    ejecutor.FallarLecturas = true; Esperar(revision, "CargarOrden");
+                    Assert.True(Campo<bool>(revision, "_resultadoIncierto")); Assert.False(confirmar.Enabled);
+                    ejecutor.FallarLecturas = false; Esperar(revision, "CargarOrden");
+                    Assert.False(Campo<bool>(revision, "_resultadoIncierto")); Assert.True(confirmar.Enabled); Assert.Single(avisos); Assert.False(revision.Visible);
+                }
+                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+            });
         }
         [Fact]
         public async Task DeshabilitaMientrasCargaYRechazaDobleEnvio()

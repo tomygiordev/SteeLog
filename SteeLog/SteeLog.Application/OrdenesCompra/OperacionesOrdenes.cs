@@ -58,16 +58,19 @@ namespace SteeLog.Core.Application.OrdenesCompra
         {
             cancellationToken.ThrowIfCancellationRequested();
             await uow.BeginAsync(cancellationToken).ConfigureAwait(false);
+            bool inicioCommit = false;
             try
             {
                 var resultado = await trabajo().ConfigureAwait(false);
                 cancellationToken.ThrowIfCancellationRequested();
+                inicioCommit = true;
                 await uow.CommitAsync(cancellationToken).ConfigureAwait(false);
                 return resultado;
             }
-            catch
+            catch (Exception error)
             {
-                await uow.RollbackAsync().ConfigureAwait(false);
+                try { await uow.RollbackAsync().ConfigureAwait(false); } catch { }
+                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
                 throw;
             }
         }

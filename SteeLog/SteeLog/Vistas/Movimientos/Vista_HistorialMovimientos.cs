@@ -16,13 +16,23 @@ using SteeLog;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class Vista_HistorialMovimientos : Form, IMessageFilter, IRefrescable, IMovimientosVista
+    public partial class Vista_HistorialMovimientos : Form, IMessageFilter, IRefrescable, IMovimientosVista, IMovimientosResultadoIncierto
     {
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private MovimientosPresenter presenter;
         private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
         public void SetOcupada(bool ocupada) { if (!IsDisposed && dgvHistorial != null) dgvHistorial.Enabled = !ocupada; }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
+        private bool resultadoIncierto;
+        private int versionHistorialAlMarcarIncierto;
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
+        public void MarcarResultadoIncierto()
+        {
+            // La eliminación pudo haberse confirmado: no permitir otra hasta releer el historial con éxito.
+            resultadoIncierto = true; versionHistorialAlMarcarIncierto = versionHistorial;
+            if (!IsDisposed && !cierre.IsCancellationRequested)
+                AdvertirResultadoIncierto("Resultado incierto: la eliminación pudo haberse realizado. Verifique el historial antes de reintentar. Pulse F5 para recargar.");
+        }
         private List<HistorialMovimiento> rawHistorial = new List<HistorialMovimiento>();
         private List<MovimientoGrupo> listaGrupos = new List<MovimientoGrupo>();
         private Guna.UI2.WinForms.Guna2DataGridView dgvDetalles;
@@ -591,6 +601,12 @@ namespace SteeLog.Vistas.Movimientos
 
         private async void ConfirmarEliminacion(MovimientoGrupo row)
         {
+            if (resultadoIncierto)
+            {
+                if (!IsDisposed && !cierre.IsCancellationRequested)
+                    AdvertirResultadoIncierto("Hay un resultado incierto pendiente. Recargue el historial (F5) y verifique antes de eliminar.");
+                return;
+            }
             var result = MessageBox.Show(
                 $"¿Está seguro de que desea eliminar el movimiento completo?\r\n\r\n" +
                 $"Movimiento: {row.id_movimiento}\r\n" +
@@ -735,6 +751,7 @@ namespace SteeLog.Vistas.Movimientos
                 }
 
                 lblSubtitulo.Text = $"{listaGrupos.Count} movimiento(s) encontrado(s)";
+                if (resultadoIncierto && version > versionHistorialAlMarcarIncierto) resultadoIncierto = false;
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)

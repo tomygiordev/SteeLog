@@ -35,7 +35,7 @@ namespace SteeLog.Core.Application.Activos
             {
                 try { await uow.RollbackAsync().ConfigureAwait(false); }
                 catch { /* Conservar el fallo original, incluso si falla la limpieza. */ }
-                if (inicioCommit && !(error is OperationCanceledException)) throw new ResultadoEscrituraInciertoException(error);
+                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
                 throw;
             }
         }

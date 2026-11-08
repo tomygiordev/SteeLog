@@ -23,7 +23,7 @@ using System.IO;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista
+    public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista, IMovimientosResultadoIncierto
     {
         private List<MovimientoMaterial> materialesLista = new List<MovimientoMaterial>();
         private FlowLayoutPanel flpMateriales;
@@ -53,12 +53,31 @@ namespace SteeLog.Vistas.Movimientos
         private CancellationTokenSource cargaCatalogos;
         private bool ocupada;
         private bool envioPendiente;
+        private bool resultadoIncierto;
+        private int versionCatalogosAlMarcarIncierto;
+        internal Action<string> AdvertirErrorCarga = mensaje => ToastNotification.ShowError(mensaje);
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
         private int versionCarga;
         private CancellationTokenSource cargaEdicion;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private MovimientosPresenter presenter;
         private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
-        public void SetOcupada(bool valor) { ocupada = valor; if (!IsDisposed && guna2Button2 != null) guna2Button2.Enabled = !valor && modeloListo && catalogosListos; }
+        public void SetOcupada(bool valor) { ocupada = valor; if (!IsDisposed && guna2Button2 != null) guna2Button2.Enabled = !valor && modeloListo && catalogosListos && !resultadoIncierto; }
+        public void MarcarResultadoIncierto()
+        {
+            // El movimiento pudo haberse persistido: se bloquean los reenvíos hasta recargar (F5) con éxito.
+            // Carrito y borrador se conservan para que el usuario pueda verificar el historial.
+            resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos; SetOcupada(ocupada);
+            if (!IsDisposed && !cierre.IsCancellationRequested)
+                AdvertirResultadoIncierto("Resultado incierto: el movimiento pudo haberse guardado. Verifique el historial antes de reintentar. Pulse F5 para recargar.");
+        }
+        private bool BloquearPorResultadoIncierto()
+        {
+            if (!resultadoIncierto) return false;
+            if (!IsDisposed && !cierre.IsCancellationRequested)
+                AdvertirResultadoIncierto("Hay un resultado incierto pendiente. Verifique el historial y pulse F5 para recargar antes de continuar.");
+            return true;
+        }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         private Label lblPrecioMaterial;
         private Guna.UI2.WinForms.Guna2TextBox txtPrecioMaterial;
@@ -220,8 +239,10 @@ namespace SteeLog.Vistas.Movimientos
         {
             await CargarCatalogosAsync();
             if (IsDisposed || cierre.IsCancellationRequested || !catalogosListos) return;
+            // Solo una recarga completada con éxito y posterior a la marca levanta el bloqueo.
+            if (resultadoIncierto && versionCatalogos > versionCatalogosAlMarcarIncierto) { resultadoIncierto = false; SetOcupada(ocupada); }
             if (_idMovimientoAEditar > 0 && !modeloListo) CargarMovimientoParaEdicion();
-            ToastNotification.ShowSuccess("Datos actualizados (F5)");
+            NotificarGuardado("Datos actualizados (F5)");
         }
 
         private async Task CargarCatalogosAsync()
@@ -266,7 +287,7 @@ namespace SteeLog.Vistas.Movimientos
                 catalogosListos=true; if (_idMovimientoAEditar<=0) modeloListo=true; SetOcupada(ocupada);
             }
             catch(OperationCanceledException) { }
-            catch(Exception ex) { if (!IsDisposed && version==versionCatalogos) ToastNotification.ShowError("Error al cargar catálogos: "+ex.Message); }
+            catch(Exception ex) { if (!IsDisposed && version==versionCatalogos) AdvertirErrorCarga("Error al cargar catálogos: "+ex.Message); }
         }
         private void EstablecerFletes(int? incluirId)
         {
@@ -818,7 +839,7 @@ namespace SteeLog.Vistas.Movimientos
         }
         private async void GuardarMovimiento_Click(object sender, EventArgs e)
         {
-            if (!modeloListo || !catalogosListos || ocupada || envioPendiente) return;
+            if (!modeloListo || !catalogosListos || ocupada || envioPendiente || resultadoIncierto) return;
             if (cmbMovimientos.SelectedIndex == -1 || cmbOrigen.SelectedIndex == -1 || cmbDestino.SelectedIndex == -1 || materialesLista.Count == 0)
             {
                 AdvertirGuardado("Completa todos los campos obligatorios.");
@@ -1220,6 +1241,7 @@ namespace SteeLog.Vistas.Movimientos
         // BORRADOR / AUTOGUARDADO
         private async void btnAgregarFlete_Click(object sender, EventArgs e)
         {
+            if (BloquearPorResultadoIncierto()) return;
             using (var modal = new ModalAgregarFlete())
             {
                 if (modal.ShowDialog() == DialogResult.OK)
@@ -1235,6 +1257,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private async void btnEliminarFlete_Click(object sender, EventArgs e)
         {
+            if (BloquearPorResultadoIncierto()) return;
             if (cmbFlete.SelectedValue == null || Convert.ToInt32(cmbFlete.SelectedValue) == 0)
             {
                 ToastNotification.ShowWarning("Seleccione un flete válido para eliminar.");

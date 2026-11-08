@@ -24,6 +24,7 @@ namespace SteeLog.Core.Application.Movimientos
             if (!eliminar) solicitud = ValidarYCopiar(solicitud);
             token.ThrowIfCancellationRequested();
             await uow.BeginAsync(token).ConfigureAwait(false);
+            bool inicioCommit = false;
             try
             {
                 var previo = id.HasValue ? await repo.BloquearAsync(id.Value, token).ConfigureAwait(false) : null;
@@ -94,6 +95,8 @@ namespace SteeLog.Core.Application.Movimientos
                 if (eliminar)
                 {
                     await repo.EliminarCabeceraAsync(id.Value, token).ConfigureAwait(false);
+                    token.ThrowIfCancellationRequested();
+                    inicioCommit = true;
                     await uow.CommitAsync(token).ConfigureAwait(false);
                     return id.Value;
                 }
@@ -116,10 +119,17 @@ namespace SteeLog.Core.Application.Movimientos
                     await repo.RegistrarTrasladoAsync(movimientoId, traslado, token).ConfigureAwait(false);
                 }
                 token.ThrowIfCancellationRequested();
+                inicioCommit = true;
                 await uow.CommitAsync(token).ConfigureAwait(false);
                 return movimientoId;
             }
-            catch { await uow.RollbackAsync().ConfigureAwait(false); throw; }
+            catch (Exception error)
+            {
+                try { await uow.RollbackAsync().ConfigureAwait(false); }
+                catch { /* Conservar el fallo original, incluso si falla la limpieza. */ }
+                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
+                throw;
+            }
         }
         private async Task<decimal> CambiarSaldo(LineaMovimiento linea, decimal delta, IDictionary<int, decimal> materiales, IDictionary<int, decimal> recortes, CancellationToken token)
         {

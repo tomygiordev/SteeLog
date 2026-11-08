@@ -2,6 +2,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using System.IO;
+using SteeLog.Core.Application.Common;
 using SteeLog.Core.Application.Movimientos;
 using SteeLog.Core.Application.Inventario;
 using System.Collections.Generic;
@@ -13,6 +14,7 @@ namespace SteeLog.Presentation
         void SetOcupada(bool ocupada);
         void MostrarError(Exception error);
     }
+    public interface IMovimientosResultadoIncierto { void MarcarResultadoIncierto(); }
     public sealed class MovimientosPresenter
     {
         private readonly IUseCaseExecutor executor;
@@ -30,6 +32,7 @@ namespace SteeLog.Presentation
             if (Interlocked.CompareExchange(ref ocupado, 1, 0) != 0) return null;
             try { vista.SetOcupada(true); return await accion(); }
             catch (OperationCanceledException) { return null; }
+            catch (ResultadoEscrituraInciertoException ex) { if (vista is IMovimientosResultadoIncierto incierto) incierto.MarcarResultadoIncierto(); else vista.MostrarError(ex); return null; }
             catch (Exception ex) { vista.MostrarError(ex); return null; }
             finally { Interlocked.Exchange(ref ocupado, 0); vista.SetOcupada(false); }
         }

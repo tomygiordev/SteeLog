@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using SteeLog.Core.Application.OrdenesCompra;
+using SteeLog.Core.Application.Common;
 using SteeLog.Domain.OrdenesCompra;
 
 namespace SteeLog.Presentation
@@ -12,11 +13,13 @@ namespace SteeLog.Presentation
         void SetOcupada(bool ocupada);
         void MostrarError(Exception error);
     }
+    public interface IOrdenesResultadoIncierto { void MarcarResultadoIncierto(); }
     public sealed class ResultadoOrdenes<T>
     {
         public bool Exitoso { get; }
         public T Valor { get; }
-        internal ResultadoOrdenes(bool exitoso, T valor) { Exitoso = exitoso; Valor = valor; }
+        public bool Incierto { get; }
+        internal ResultadoOrdenes(bool exitoso, T valor, bool incierto = false) { Exitoso = exitoso; Valor = valor; Incierto = incierto; }
     }
     public sealed class OrdenesPresenter
     {
@@ -36,6 +39,11 @@ namespace SteeLog.Presentation
             try {
                 vista.SetOcupada(true);
                 return new ResultadoOrdenes<T>(true, await operacion());
+            }
+            catch (ResultadoEscrituraInciertoException e)
+            {
+                if (vista is IOrdenesResultadoIncierto incierta) incierta.MarcarResultadoIncierto(); else vista.MostrarError(e);
+                return new ResultadoOrdenes<T>(false, default, true);
             }
             catch (OperationCanceledException) { return new ResultadoOrdenes<T>(false, default); }
             catch (Exception e) { vista.MostrarError(e); return new ResultadoOrdenes<T>(false, default); }

@@ -64,19 +64,35 @@ namespace SteeLog.Tests
                 Assert.Equal(0, uow.Commits); Assert.Equal(1, uow.Rollbacks);
             }
         }
-        [Fact] public async Task CancelacionDuranteCommitNoSeClasificaComoIncierta()
+        [Theory]
+        [InlineData("insumo")]
+        [InlineData("herramienta")]
+        [InlineData("catalogo")]
+        public async Task CancelacionDespuesDeInvocarCommitTieneResultadoIncierto(string tipo)
         {
-            var uow = new UowCancelado(); var repo = new HerramientasRepo();
-            var servicio = new GestionarHerramientas(Sesion(), uow, repo);
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => servicio.CrearAsync("Taladro", "Óptima", null, ""));
-            Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
+            var uow = new UowCancelado();
+            Func<Task> operacion;
+            if (tipo == "insumo") operacion = () => new GestionarInsumos(Sesion(), uow, new InsumosRepo()).CrearAsync("Disco", null, null);
+            else if (tipo == "herramienta") operacion = () => new GestionarHerramientas(Sesion(), uow, new HerramientasRepo()).CrearAsync("Taladro", "Óptima", null, "");
+            else operacion = () => new GestionarCatalogos(Sesion(), uow, new CatalogosRepo(), new Fletes()).CrearCategoriaAsync("A", false);
+            var error = await Assert.ThrowsAsync<ResultadoEscrituraInciertoException>(operacion);
+            Assert.IsType<OperationCanceledException>(error.InnerException);
+            Assert.True(uow.Confirmado); Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
         }
-        [Fact] public async Task CatalogoCancelacionDuranteCommitNoSeClasificaComoIncierta()
+        [Theory]
+        [InlineData("insumo")]
+        [InlineData("herramienta")]
+        [InlineData("catalogo")]
+        public async Task CancelacionAntesDeIniciarTransaccionNoEsIncierta(string tipo)
         {
-            var uow = new UowCancelado(); var repo = new CatalogosRepo();
-            var servicio = new GestionarCatalogos(Sesion(), uow, repo, new Fletes());
-            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => servicio.CrearCategoriaAsync("A", false));
-            Assert.Equal(1, uow.Commits); Assert.Equal(1, uow.Rollbacks);
+            var uow = new UowCancelado(); using (var cts = new CancellationTokenSource()) {
+                cts.Cancel(); Func<Task> operacion;
+                if (tipo == "insumo") operacion = () => new GestionarInsumos(Sesion(), uow, new InsumosRepo()).CrearAsync("Disco", null, null, cts.Token);
+                else if (tipo == "herramienta") operacion = () => new GestionarHerramientas(Sesion(), uow, new HerramientasRepo()).CrearAsync("Taladro", "Óptima", null, "", cts.Token);
+                else operacion = () => new GestionarCatalogos(Sesion(), uow, new CatalogosRepo(), new Fletes()).CrearCategoriaAsync("A", false, cts.Token);
+                await Assert.ThrowsAnyAsync<OperationCanceledException>(operacion);
+                Assert.Equal(0, uow.Commits); Assert.Equal(0, uow.Rollbacks);
+            }
         }
         [Fact] public void ConstructoresValidanArgumentosNulos()
         {
@@ -89,9 +105,9 @@ namespace SteeLog.Tests
         private static Session Sesion() { var s = new Session(); s.Start(new Identity("a", Role.Galpon)); return s; }
         private sealed class UowCancelado : IUnitOfWork
         {
-            public int Commits, Rollbacks;
+            public int Commits, Rollbacks; public bool Confirmado;
             public Task BeginAsync(CancellationToken token=default) => Task.CompletedTask;
-            public Task CommitAsync(CancellationToken token=default) { Commits++; throw new OperationCanceledException(); }
+            public Task CommitAsync(CancellationToken token=default) { Commits++; Confirmado=true; throw new OperationCanceledException(); }
             public Task RollbackAsync() { Rollbacks++; return Task.CompletedTask; }
         }
         private sealed class Uow : IUnitOfWork

@@ -15,7 +15,7 @@ using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesListado : Form, IRefrescable, IOrdenesVista
+    public class Vista_OrdenesListado : Form, IRefrescable, IOrdenesVista, IOrdenesResultadoIncierto
     {
         private OrdenesPresenter _presenter;
         private readonly CargaVigente _previews = new CargaVigente();
@@ -34,6 +34,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private Guna2Button btnNuevaOrden;
         private Label lblPreviewMateriales;
         private bool _actualizandoPreview;
+        private bool _resultadoIncierto;
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Func<string, bool> ConfirmarEliminacion = mensaje => MessageBox.Show(mensaje, "Eliminar orden", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
 
         public Vista_OrdenesListado(
             bool soloRecepcion = false,
@@ -76,6 +79,13 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             if (cmbEstado != null) cmbEstado.Enabled = _operacionesActivas == 0;
         }
         public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
+        public void MarcarResultadoIncierto()
+        {
+            _resultadoIncierto = true;
+            if (IsDisposed || Disposing) return;
+            if (dgvOrdenes != null) AplicarAccionesGrilla();
+            AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Pulse Actualizar para recargar.");
+        }
         public void Refrescar()
         {
             if (_presenter != null) _ = CargarOrdenes();
@@ -270,6 +280,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 _actualizandoPreview = true;
                 dgvOrdenes.DataSource = lista;
                 _actualizandoPreview = false;
+                _resultadoIncierto = false;
                 AplicarAccionesGrilla();
                 await ActualizarPreviewMateriales();
             }
@@ -295,7 +306,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 row.Cells["colAbrir"].Value = EstadosOrden.PermiteRecepcion(orden.estado) ? "Revisar" : "Ver";
                 row.Cells["colEditar"].Value = EstadosOrden.PermiteEditarCabecera(orden.estado) ? "Editar" : "";
-                row.Cells["colEliminar"].Value = EstadosOrden.EsEditable(orden.estado) ? "Eliminar" : "";
+                row.Cells["colEliminar"].Value = !_resultadoIncierto && EstadosOrden.EsEditable(orden.estado) ? "Eliminar" : "";
             }
 
             dgvOrdenes.Invalidate();
@@ -466,20 +477,19 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
             else if (columnName == "colEliminar" && _rolActual == UserRole.Admin)
             {
+                if (_resultadoIncierto)
+                {
+                    AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes y pulse Actualizar antes de eliminar.");
+                    return;
+                }
+
                 if (!EstadosOrden.EsEditable(orden.estado))
                 {
                     ToastNotification.ShowWarning("Solo se pueden eliminar órdenes en estado Pendiente.");
                     return;
                 }
 
-                var confirm = MessageBox.Show(
-                    "¿Querés eliminar esta orden pendiente?",
-                    "Eliminar orden",
-                    MessageBoxButtons.YesNo,
-                    MessageBoxIcon.Question,
-                    MessageBoxDefaultButton.Button2);
-
-                if (confirm != DialogResult.Yes)
+                if (!ConfirmarEliminacion("¿Querés eliminar esta orden pendiente?"))
                     return;
 
                 try

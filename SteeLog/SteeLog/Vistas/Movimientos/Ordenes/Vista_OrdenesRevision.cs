@@ -16,7 +16,7 @@ using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesRevision : Form, IOrdenesVista
+    public class Vista_OrdenesRevision : Form, IOrdenesVista, IOrdenesResultadoIncierto
     {
         private OrdenesPresenter _presenter;
         private readonly Action<string> _avisoExito;
@@ -24,6 +24,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private readonly CargaVigente _cargas = new CargaVigente();
         private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
         private bool _permiteRecepcion;
+        private bool _resultadoIncierto;
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
         private int _idOrden;
 
@@ -61,7 +64,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
             if (_idOrden > 0) await CargarOrden();
         }
-        public void SetOcupada(bool ocupada) { if (!IsDisposed && !Disposing && btnConfirmar != null) btnConfirmar.Enabled = !ocupada && _modelo.Listo && _permiteRecepcion; }
+        public void SetOcupada(bool ocupada) { if (!IsDisposed && !Disposing && btnConfirmar != null) btnConfirmar.Enabled = !ocupada && _modelo.Listo && _permiteRecepcion && !_resultadoIncierto; }
+        public void MarcarResultadoIncierto() { _resultadoIncierto = true; if (IsDisposed || Disposing) return; if (btnConfirmar != null) btnConfirmar.Enabled = false; AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Vuelva a abrir la orden para recargarla."); }
         public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
 
         public void SetOrder(int idOrden)
@@ -283,7 +287,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             {
                 var idSolicitado = _idOrden;
                 using (var carga = _cargas.Iniciar(this, () => IsDisposed || Disposing)) {
-                var lector = LocalServices.Current.CrearOrdenesPresenter(carga);
+                var lector = CrearLector(carga);
                 var resultado = await lector.ObtenerAsync(idSolicitado, carga.Token);
                 if (!carga.EsActual || _idOrden != idSolicitado || !resultado.Exitoso) return;
                 var orden = OrdenesMapeo.Orden(resultado.Valor);
@@ -318,6 +322,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 dgvDetalles.Columns["colObs"].ReadOnly = !puedeRevisar;
                 _permiteRecepcion = puedeRevisar;
                 _modelo.Aplicar(idSolicitado);
+                _resultadoIncierto = false;
                 btnConfirmar.Enabled = puedeRevisar;
                 btnAplicarSiguiente.Enabled = puedeRevisar;
                 btnCompletarActual.Enabled = puedeRevisar;
@@ -506,7 +511,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private async void BtnConfirmar_Click(object sender, EventArgs e)
         {
-            if (!_modelo.Listo || _modelo.Id != _idOrden || !_permiteRecepcion) return;
+            if (_resultadoIncierto || !_modelo.Listo || _modelo.Id != _idOrden || !_permiteRecepcion) return;
             if (SessionManager.Role != UserRole.Galpon && SessionManager.Role != UserRole.Admin)
             {
                 ToastNotification.ShowWarning("Solo Galpón o Admin pueden confirmar la recepción.");

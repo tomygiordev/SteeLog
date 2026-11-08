@@ -15,7 +15,7 @@ using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesAlta : Form, IOrdenesVista
+    public class Vista_OrdenesAlta : Form, IOrdenesVista, IOrdenesResultadoIncierto
     {
         private OrdenesPresenter _presenter;
         private readonly Action<string> _avisoExito;
@@ -23,6 +23,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private readonly CargaVigente _cargas = new CargaVigente();
         private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
         private bool _catalogosListos;
+        private bool _resultadoIncierto;
+        internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
         private string _destino = "";
         private int _ordenPendiente;
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
@@ -76,13 +79,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             if (_ordenPendiente > 0) await CargarOrden(_ordenPendiente);
             else { txtDestino.Text = _destino; ActualizarDisponibilidad(); }
         }
-        private void ActualizarDisponibilidad() { if (!IsDisposed && !Disposing && btnGuardar != null) btnGuardar.Enabled = _catalogosListos && _modelo.Listo; }
+        private void ActualizarDisponibilidad() { if (!IsDisposed && !Disposing && btnGuardar != null) btnGuardar.Enabled = _catalogosListos && _modelo.Listo && !_resultadoIncierto; }
+        public void MarcarResultadoIncierto() { _resultadoIncierto = true; if (IsDisposed || Disposing) return; ActualizarDisponibilidad(); AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Reabra la orden o pulse Limpiar para cargar una nueva."); }
         public void SetOcupada(bool ocupada) { if (IsDisposed || Disposing) return; if (ocupada) btnGuardar.Enabled = false; else ActualizarDisponibilidad(); }
         public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
 
         public void PrepararNuevaOrden()
         {
             _cargas.Invalidar();
+            // Descartar explícitamente el formulario libera el bloqueo: el reenvío idéntico ya no es inmediato
+            // y el número de orden UNIQUE impide duplicar la misma OC si el alta incierta se confirmó.
+            _resultadoIncierto = false;
             _modelo.Nueva();
             _ordenPendiente = 0;
             _idOrdenEdicion = 0;
@@ -457,6 +464,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private async void CambiarMaterialImpactado(int rowIndex)
         {
+            if (_resultadoIncierto) { AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de corregir el material."); return; }
             var detalle = dgvDetalles.Rows[rowIndex].DataBoundItem as OrdenCompraDetalle;
             if (detalle == null)
                 return;
@@ -541,7 +549,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private async void BtnGuardar_Click(object sender, EventArgs e)
         {
-            if (!_catalogosListos || !_modelo.Listo || _modelo.Id != _idOrdenEdicion) return;
+            if (_resultadoIncierto || !_catalogosListos || !_modelo.Listo || _modelo.Id != _idOrdenEdicion) return;
             if (SessionManager.Role != UserRole.Admin)
             {
                 ToastNotification.ShowWarning("Solo un usuario Admin puede guardar órdenes.");
@@ -609,7 +617,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             try
             {
                 using (var carga = _cargas.Iniciar(this, () => IsDisposed || Disposing)) {
-                var lector = LocalServices.Current.CrearOrdenesPresenter(carga);
+                var lector = CrearLector(carga);
                 var resultado = await lector.ObtenerAsync(idOrden, carga.Token);
                 if (!carga.EsActual || _idOrdenEdicion != idOrden || !resultado.Exitoso) return;
                 var orden = OrdenesMapeo.Orden(resultado.Valor);
@@ -643,6 +651,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 AplicarModoDetalleEditable(detalleEditable);
                 _modelo.Aplicar(idOrden);
+                _resultadoIncierto = false;
                 ActualizarDisponibilidad();
                 }
             }

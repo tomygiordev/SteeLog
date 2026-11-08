@@ -68,6 +68,85 @@ namespace SteeLog.Tests
                 return (TResult)resultado;
             }
         }
+        private sealed class EjecutorIncierto : IUseCaseExecutor
+        {
+            public int Guardados; public bool FallaCatalogos;
+            public Task<TResult> ExecuteAsync<TUseCase,TResult>(Func<TUseCase,Task<TResult>> action) where TUseCase:class
+            {
+                if (typeof(TResult)==typeof(int)) { Guardados++; throw new SteeLog.Core.Application.Common.ResultadoEscrituraInciertoException(new IOException("commit")); }
+                if (typeof(TResult)==typeof(CatalogosMovimiento)) { if (FallaCatalogos) throw new IOException("sin red"); return Task.FromResult((TResult)(object)new CatalogosMovimiento()); }
+                if (typeof(TResult)==typeof(IReadOnlyList<MaterialInventarioLectura>)) return Task.FromResult((TResult)(object)new List<MaterialInventarioLectura>());
+                if (typeof(TResult)==typeof(IReadOnlyList<CategoriaMaterialLectura>)) return Task.FromResult((TResult)(object)new List<CategoriaMaterialLectura>());
+                if (typeof(TResult)==typeof(IReadOnlyList<RecorteLectura>)) return Task.FromResult((TResult)(object)new List<RecorteLectura>());
+                throw new InvalidOperationException("Caso inesperado en test.");
+            }
+        }
+        private static void Esperar(Func<bool> condicion)
+        {
+            var reloj=Stopwatch.StartNew();
+            while(!condicion() && reloj.Elapsed<TimeSpan.FromSeconds(5)) { Application.DoEvents(); Thread.Sleep(5); }
+        }
+        [Fact]
+        public void ResultadoInciertoBloqueaReenvioConservaDatosYSoloUnaRecargaExitosaLoLibera()
+        {
+            Exception error=null;
+            var hilo=new Thread(() => {
+                try
+                {
+                    using(var vista=new Vista_Movimientos())
+                    {
+                        var handle=vista.Handle;
+                        var executor=new EjecutorIncierto();
+                        Fijar(vista,"presenter",new MovimientosPresenter(executor,vista));
+                        Fijar(vista,"catalogosListos",true); Fijar(vista,"modeloListo",true);
+                        Fijar(vista,"ConfirmarGuardado",new Func<DialogResult>(() => DialogResult.Yes));
+                        Fijar(vista,"VersionBorrador",new Func<string>(() => null));
+                        int borradoresRetirados=0;
+                        Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(_ => borradoresRetirados++));
+                        var avisos=new List<string>(); var notificaciones=new List<string>(); var errores=new List<string>();
+                        Fijar(vista,"AdvertirResultadoIncierto",new Action<string>(m => avisos.Add(m)));
+                        Fijar(vista,"AdvertirGuardado",new Action<string>(m => {}));
+                        Fijar(vista,"NotificarGuardado",new Action<string>(m => notificaciones.Add(m)));
+                        Fijar(vista,"AdvertirErrorCarga",new Action<string>(m => errores.Add(m)));
+                        var tipos=new DataTable(); tipos.Columns.Add("id_tipomovimiento",typeof(int)); tipos.Columns.Add("nombre",typeof(string)); tipos.Rows.Add(4,"Salida");
+                        var tipo=Campo<ComboBox>(vista,"cmbMovimientos"); tipo.DataSource=tipos; tipo.DisplayMember="nombre"; tipo.ValueMember="id_tipomovimiento"; tipo.SelectedIndex=0;
+                        var origen=Campo<ComboBox>(vista,"cmbOrigen"); origen.DataSource=null; origen.Items.Add(new Vista_Movimientos.ItemCombo { IdReal=1,Tipo="UBICACION",TextoDisplay="Galpón" }); origen.SelectedIndex=0;
+                        var destino=Campo<ComboBox>(vista,"cmbDestino"); destino.DataSource=null; destino.Items.Add(new Vista_Movimientos.ItemCombo { IdReal=2,Tipo="UBICACION",TextoDisplay="Depósito" }); destino.SelectedIndex=0;
+                        Campo<Control>(vista,"nroRemitoTxt").Text="123";
+                        var carrito=Campo<List<MovimientoMaterial>>(vista,"materialesLista");
+                        carrito.Add(new MovimientoMaterial { id_material=1,NombreMaterial="Material",cantidad=1 });
+                        var boton=Campo<Control>(vista,"guna2Button2");
+                        var click=vista.GetType().GetMethod("GuardarMovimiento_Click",Flags);
+                        click.Invoke(vista,new object[]{vista,EventArgs.Empty});
+                        Esperar(() => avisos.Count>0 && !Campo<bool>(vista,"ocupada"));
+                        Assert.Equal(1,executor.Guardados); Assert.Single(avisos); Assert.Contains("Resultado incierto",avisos[0]);
+                        Assert.False(boton.Enabled);
+                        Assert.Single(carrito); Assert.Equal("123",Campo<Control>(vista,"nroRemitoTxt").Text); Assert.Equal(0,borradoresRetirados);
+                        // Un segundo clic no vuelve a escribir.
+                        click.Invoke(vista,new object[]{vista,EventArgs.Empty});
+                        Assert.Equal(1,executor.Guardados);
+                        // El autoguardado conserva el dato del usuario.
+                        var borradores=new List<object>();
+                        Fijar(vista,"GuardarBorradorActual",new Action<MovimientoDraft>(d => borradores.Add(d)));
+                        vista.GetType().GetMethod("GuardarBorrador",Flags).Invoke(vista,null);
+                        Assert.Single(borradores);
+                        // Una recarga fallida no libera.
+                        executor.FallaCatalogos=true;
+                        vista.GetType().GetMethod("RefrescarDatos",Flags).Invoke(vista,null);
+                        Esperar(() => errores.Count>0); Assert.Single(errores);
+                        Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.False(boton.Enabled);
+                        // Una recarga exitosa explícita sí.
+                        executor.FallaCatalogos=false;
+                        vista.GetType().GetMethod("RefrescarDatos",Flags).Invoke(vista,null);
+                        Esperar(() => notificaciones.Count>0); Assert.Single(notificaciones);
+                        Assert.False(Campo<bool>(vista,"resultadoIncierto")); Assert.True(boton.Enabled);
+                        Assert.Single(carrito); Assert.Single(avisos);
+                    }
+                }
+                catch(Exception e) { error=e; }
+            });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(20))); Assert.Null(error);
+        }
         private static T Campo<T>(object target,string nombre) => (T)target.GetType().GetField(nombre,Flags).GetValue(target);
         private static void Fijar(object target,string nombre,object value) => target.GetType().GetField(nombre,Flags).SetValue(target,value);
         [Theory]
