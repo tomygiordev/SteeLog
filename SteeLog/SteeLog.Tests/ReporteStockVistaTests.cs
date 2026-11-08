@@ -131,6 +131,29 @@ namespace SteeLog.Tests
                 }
             });
         }
+        [Fact]
+        public async Task FechaDatosSeFijaSoloConLaCargaVigente()
+        {
+            await EnSta(() => {
+                var executor = new Executor(); var a = executor.Agregar(); var b = executor.Agregar(); var c = executor.Agregar();
+                var pdf = new Pdf(); object identidad = new object(); string destino = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
+                try { using (var vista = Vista(executor, pdf, () => identidad, () => false, () => destino, _ => { }, _ => { })) {
+                    var handle = vista.Handle; var grid = (DataGridView)Campo(vista, "dgvMateriales");
+                    Cargar(vista); Cargar(vista); Assert.Null(Campo(vista, "fechaDatos"));
+                    var antes = DateTime.Now; b.SetResult(Filas("B")); Esperar(() => grid.DataSource != null && grid.Rows.Count > 0);
+                    var despues = DateTime.Now; var fecha = (DateTime?)Campo(vista, "fechaDatos");
+                    Assert.NotNull(fecha); Assert.InRange(fecha.Value, antes, despues);
+                    Thread.Sleep(30); a.SetResult(Filas("A")); Application.DoEvents(); Application.DoEvents();
+                    Assert.Equal(fecha, (DateTime?)Campo(vista, "fechaDatos")); Assert.Equal("B", grid.Rows[0].Cells["nombre"].Value);
+                    Cargar(vista); Assert.Null(Campo(vista, "fechaDatos"));
+                    c.SetResult(Filas("C")); Esperar(() => grid.DataSource != null && grid.Rows.Count > 0 && Campo(vista, "fechaDatos") != null);
+                    var fechaC = (DateTime?)Campo(vista, "fechaDatos"); Assert.True(fechaC >= fecha);
+                    Exportar(vista); Esperar(() => pdf.Inicio.Task.IsCompleted);
+                    Assert.Equal(fechaC, pdf.Snapshot.FechaDatos);
+                    pdf.Seguir.TrySetResult(true);
+                } } finally { pdf.Seguir.TrySetResult(true); }
+            });
+        }
         [Theory] [InlineData(false)] [InlineData(true)]
         public async Task RenderPendienteNoAbreNiEscribeTrasDisposeOCambioIdentidad(bool cambioIdentidad)
         {

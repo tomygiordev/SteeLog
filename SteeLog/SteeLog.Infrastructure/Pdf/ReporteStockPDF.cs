@@ -31,7 +31,7 @@ namespace SteeLog.Infrastructure.Pdf
                 header.AddCell(izq);
                 var der = new PdfPCell { Border = Rectangle.NO_BORDER };
                 der.AddElement(new Paragraph("REPORTE DE STOCK", Fuente(20, true)) { Alignment = Element.ALIGN_RIGHT });
-                der.AddElement(new Paragraph("Inventario al " + marca.FechaLocal.ToString("dd/MM/yyyy HH:mm"), Fuente(11)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
+                der.AddElement(new Paragraph(snapshot.FechaDatos.HasValue ? "Datos al " + snapshot.FechaDatos.Value.ToString("dd/MM/yyyy HH:mm") : "Inventario al " + marca.FechaLocal.ToString("dd/MM/yyyy HH:mm"), Fuente(11)) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 4 });
                 header.AddCell(der); doc.Add(header);
                 var linea = new PdfPTable(1) { WidthPercentage = 100, SpacingBefore = 5, SpacingAfter = 15 };
                 linea.AddCell(new PdfPCell { Border = Rectangle.BOTTOM_BORDER, BorderColor = new BaseColor(25, 135, 84), BorderWidth = 2, FixedHeight = 3 }); doc.Add(linea);
@@ -78,7 +78,7 @@ namespace SteeLog.Infrastructure.Pdf
                 var cb = writer.DirectContent;
                 cb.SetColorStroke(new BaseColor(25, 135, 84)); cb.SetLineWidth(1); cb.MoveTo(document.LeftMargin, document.Bottom - 15); cb.LineTo(document.PageSize.Width - document.RightMargin, document.Bottom - 15); cb.Stroke();
                 cb.BeginText(); cb.SetFontAndSize(BaseFont.CreateFont(BaseFont.HELVETICA_OBLIQUE, BaseFont.CP1252, BaseFont.NOT_EMBEDDED), 8); cb.SetColorFill(new BaseColor(120, 120, 120));
-                cb.ShowTextAligned(Element.ALIGN_LEFT, (marca.Pie ?? "") + " — Generado " + marca.FechaLocal.ToString("dd/MM/yyyy HH:mm"), document.LeftMargin, document.Bottom - 28, 0);
+                cb.ShowTextAligned(Element.ALIGN_LEFT, marca.Pie ?? "", document.LeftMargin, document.Bottom - 28, 0);
                 cb.ShowTextAligned(Element.ALIGN_RIGHT, "Página " + writer.PageNumber, document.PageSize.Width - document.RightMargin, document.Bottom - 28, 0); cb.EndText();
             }
         }

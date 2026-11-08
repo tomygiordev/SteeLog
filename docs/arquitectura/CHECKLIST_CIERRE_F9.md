@@ -1,5 +1,7 @@
 # Checklist manual de cierre F9 (demo aislada)
 
+> **Estado 8/11/2026:** secciones B, C, reinicio y PDFs (Stock, Kardex, Conteo) recorridas por root sobre la instalación aislada; ver «Recorrido GUI real» en `VERIFICACION_F9.md`. **Pendientes del usuario: D (Designer) y E (offline)**, más inspección visual propia si se desea y reconstruir el paquete con las correcciones del recorrido.
+
 Solo ejecución humana. Datos ficticios. Credenciales demo: **admin/admin** y **galpon/galpon** (ver `GUIA_DEMO_Y_DEFENSA.md`). Usar **Windows PowerShell 5.1** (`powershell.exe`), no pwsh 7: los scripts que cargan el EXE net48 fallan en pwsh 7.
 
 Paquete candidato ya probado (HEAD `6d95eb0`): `A:\SteeLog-Pruebas\paquete-6d95eb0-77e8b3ee3e48423a8cc219ad97f20fd6`, ZIP SHA-256 `80962269407DAE86E75A317FBBA7DFC16016986283A0A937A5825A1111F9E4BA`.
@@ -34,8 +36,7 @@ Estado inicial esperado: montantes 140, OC `DEMO-OC-001` pedida 10/recibida 0, c
 - [ ] No ve "Nueva orden" ni Editar/Eliminar en Órdenes.
 - [ ] No ve cantidades de stock de materiales ni precios en Inventario.
 - [ ] No puede crear/editar/eliminar materiales ni usar precio eventual.
-- [ ] No puede eliminar conteos, editar ni eliminar movimientos desde Historial.
-- [ ] No puede abrir Reporte de stock.
+- [ ] No puede eliminar conteos ni editar movimientos. (Eliminar movimientos y abrir el Reporte de stock enmascarado SÍ están permitidos por diseño en Application; confirmar si es la política deseada.)
 - [ ] Ocultar controles no es confidencialidad: si un dato sigue visible en pantalla o exportación, anotarlo como hallazgo.
 
 ## D. Designer (Visual Studio)

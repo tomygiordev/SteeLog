@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 namespace SteeLog.Core.Application.Reportes
 {
@@ -10,6 +11,7 @@ namespace SteeLog.Core.Application.Reportes
     }
     public sealed class ReporteStockSnapshot
     {
+        public DateTime? FechaDatos { get; set; }
         public string TotalMateriales { get; set; }
         public string TotalStockBajo { get; set; }
         public List<ReporteStockColumnaPdf> Columnas { get; set; } = new List<ReporteStockColumnaPdf>();

@@ -113,7 +113,8 @@ namespace SteeLog.Tests
                 }
             }
             public bool Invalido;
-            public MarcaPdf Capturar() => new MarcaPdf { LogoPng = Invalido ? new byte[] { 1, 2 } : Logo(), FechaLocal = new DateTime(2024, 2, 1, 12, 30, 0), Pie = "SteeLog - Sistema de Gestión de Inventario" };
+            public string Pie = "SteeLog - Sistema de Gestión de Inventario";
+            public MarcaPdf Capturar() => new MarcaPdf { LogoPng = Invalido ? new byte[] { 1, 2 } : Logo(), FechaLocal = new DateTime(2024, 2, 1, 12, 30, 0), Pie = Pie };
         }
 
         [Theory] [InlineData(true)] [InlineData(false)]
@@ -158,6 +159,46 @@ namespace SteeLog.Tests
                     }
                 }
             }
+        }
+
+        private static string TextoPdf(ReporteStockSnapshot snapshot, Recursos recursos)
+        {
+            using (var scope = PdfTestScope.CrearTemporal("stock-texto"))
+            {
+                string ruta = scope.ObtenerRuta("texto.pdf");
+                snapshot.Columnas.Add(new ReporteStockColumnaPdf { Nombre = "nombre", Titulo = "Material" });
+                snapshot.Filas.Add(new ReporteStockFilaPdf { Valores = { "Material Test" } });
+                new ReporteStockPDF(recursos).Generar(ruta, snapshot);
+                using (var pdf = new PdfReader(ruta))
+                    return string.Join("\n", Enumerable.Range(1, pdf.NumberOfPages).Select(i => PdfTextExtractor.GetTextFromPage(pdf, i)));
+            }
+        }
+
+        [Fact]
+        public void PieTieneUnSoloGeneradoComoPieDeMarcaReal()
+        {
+            // Igual que RecursosPdfLocales: el Pie ya trae " — Generado <fecha>".
+            var recursos = new Recursos { Pie = "SteeLog - Sistema de Gestión de Inventario — Generado 01/02/2024 12:30" };
+            string texto = TextoPdf(new ReporteStockSnapshot { TotalMateriales = "1", TotalStockBajo = "0" }, recursos);
+            Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(texto, "Generado").Count);
+        }
+
+        [Fact]
+        public void EncabezadoConFechaDatosMuestraDatosAlYNoLaFechaDeExportacion()
+        {
+            var snapshot = new ReporteStockSnapshot { TotalMateriales = "1", TotalStockBajo = "0", FechaDatos = new DateTime(2024, 1, 31, 9, 5, 0) };
+            string texto = TextoPdf(snapshot, new Recursos());
+            Assert.Contains("Datos al 31/01/2024 09:05", texto);
+            Assert.DoesNotContain("Inventario al", texto);
+            Assert.DoesNotContain("01/02/2024 12:30", texto);
+        }
+
+        [Fact]
+        public void EncabezadoSinFechaDatosConservaInventarioAl()
+        {
+            string texto = TextoPdf(new ReporteStockSnapshot { TotalMateriales = "1", TotalStockBajo = "0" }, new Recursos());
+            Assert.Contains("Inventario al 01/02/2024 12:30", texto);
+            Assert.DoesNotContain("Datos al", texto);
         }
 
         [Fact]

@@ -33,6 +33,35 @@ namespace SteeLog.Tests
         }
 
         [Fact]
+        public void ComboDeCategoriaBuscableNoLanzaConElEstiloQueImponeGuna()
+        {
+            Exception error = null;
+            var hilo = new Thread(() =>
+            {
+                try
+                {
+                    var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Inventario", true);
+                    const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new Ejecutor()))
+                    {
+                        var combo = (ComboBox)tipo.GetField("cmbCategoria", flags).GetValue(vista);
+                        var handle = combo.Handle;
+                        combo.Items.Add("PERFILERIA"); combo.Items.Add("PLACAS");
+                        // Recorrido F9: en la demo real esta configuración lanzaba InvalidOperationException
+                        // y CargarFiltros abandonaba obras/estado de filtros sin avisar.
+                        tipo.GetMethod("ConfigurarComboBuscable", flags).Invoke(vista, new object[] { combo });
+                        Assert.Equal(AutoCompleteSource.ListItems, combo.AutoCompleteSource);
+                        Assert.Equal(AutoCompleteMode.SuggestAppend, combo.AutoCompleteMode);
+                        Assert.False(vista.Visible);
+                    }
+                }
+                catch (Exception e) { error = e is TargetInvocationException t && t.InnerException != null ? t.InnerException : e; }
+            });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); hilo.Join();
+            if (error != null) throw new Xunit.Sdk.XunitException(error.ToString());
+        }
+
+        [Fact]
         public void VistaRealDescartaCargaViejaYCierreCancelaSinConsultaEnConstructor()
         {
             Exception error = null;

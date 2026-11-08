@@ -322,8 +322,10 @@ namespace SteeLog.Vistas.Inventario
         private void ConfigurarComboBuscable(Guna2ComboBox combo)
         {
             combo.DropDownStyle = ComboBoxStyle.DropDown;
-            combo.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
+            // La fuente debe fijarse antes del modo: Guna2ComboBox conserva DropDownList y WinForms
+            // solo admite autocompletar en ese estilo con AutoCompleteSource.ListItems.
             combo.AutoCompleteSource = AutoCompleteSource.ListItems;
+            combo.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
         }
 
         // ======================== CARGA ========================

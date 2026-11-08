@@ -128,3 +128,30 @@ Root orquestó subagentes y contrastó cada resultado contra logs, manifest, has
 **Hallazgo, no PASS:** bajo pwsh 7 `paquete-demo.ps1` falló con `Assembly.LoadFrom ... Format of the executable (.exe) or library (.dll) is invalid` tras el PASS de hashes (log `steelog-f9-cierre-paquete-pruebas.pwsh7-fallo.log`). Los scripts que cargan el EXE net48 deben ejecutarse con `powershell.exe` 5.1; se repitió sin cambios de código con ese host. No se corrigió el script.
 
 Este paquete es el candidato de entrega congelado. **F9 sigue ABIERTA**: recorrido GUI Admin/Galpón, Designer, PDFs del recorrido real, reinicio y recorrido offline requieren al usuario. Checklist: `docs/arquitectura/CHECKLIST_CIERRE_F9.md`.
+
+## Recorrido GUI real 8/11/2026 (instalación aislada, monitor secundario)
+
+Autorizado explícitamente por el usuario. Paquete `6d95eb0` instalado en `A:\SteeLog-Pruebas\cierre-f9-c98a9123605b4846a1d16468febb45ce` (identidad `b03eac25215d44cdb15a037dcfea4b08`, puerto 32780). Lanzado con `STEELOG_DEMO_DISPLAY=\.\DISPLAY1` (1600×900). **Sin Cua Driver ni movimiento de cursor/foco:** UI Automation + MSAA `accDoDefaultAction` para botones de menú, `WM_SETTEXT`/teclas posteadas a HWND concretos, clics posteados a controles Guna (requieren que ninguna ventana ajena tape SteeLog: WinForms valida `WindowFromPoint`), `EnumWindows` para MessageBox `#32770` (UIA no los lista), capturas `PrintWindow` y verificación SQL READ ONLY con identidad validada. Ninguna acción robó el foco al usuario, salvo la ventana de login tras «Cerrar sesión» (en el monitor secundario).
+
+| Rol / módulo | Resultado verificado (UI + SQL) |
+|---|---|
+| Admin: Inventario | 140/120 iniciales en pantalla y SQL. |
+| Admin: Movimiento | Envío a obra `DEMO-GUI-F9-001` (id 3) de 1 montante: 140→139. Un segundo «Confirmar guardado» se respondió No: sin duplicado. Selector rápido: Enter sobre el ítem selecciona y agrega la línea (el Down con la app inactiva no se pudo certificar). |
+| Admin: cantidad excesiva | La UI recorta la cantidad al stock (99999→139) sin aviso; no se ejercitó la validación de saldo al guardar. **Decisión de producto pendiente.** |
+| Admin: Órdenes | Alta `DEMO-GUI-OC-002` (Pendiente, 5). Recepción parcial de `DEMO-OC-001`: Recibida Parcial 3/7, soleras 120→123. |
+| Admin: Conteo #1 | Editado a 138 y finalizado: diferencia −1, stock sin ajuste. |
+| Admin: Gestión | Categoría «DEMO GUI F9» creada (7→8). Herramientas, Insumos, Recortes, Proveedores, Obras y Fletes visibles con datos demo. |
+| Galpón | Menú Gestión reducido; sin Nueva orden/Editar/Eliminar en Órdenes; inventario, stock y PDF enmascarados («Hay stock»); sin eliminar conteos ni editar movimientos. Recepción de +2 soleras: recibida 5, faltante 5, soleras 125, `usuario_revision` galpon. |
+| Galpón: diseño confirmado en Application | Puede **eliminar movimientos** (`EliminarMovimiento` exige `Role.Galpon`) y **abrir el reporte de stock enmascarado** (`ConsultarReporteStock` exige Galpon; secciones Admin). El Kardex muestra cantidades por movimiento, que permiten reconstruir saldos. No son defectos del código, pero conviene que el usuario confirme si es la política deseada. |
+| Reinicio | Salir y relanzar: sesión Admin recuperada sin login, en el monitor secundario; 139/125 visibles en pantalla. «Cerrar sesión» reinicia el proceso (`Application.Restart`) conservando la instalación aislada (ejecutable y entorno verificados). |
+| PDFs | Stock-Admin (SHA-256 `309E5A27…080EE`), Kardex-Admin (`BDFB213A…228F`), Conteo1-Admin (`E8F6CB82…E244`), Stock-Galpon (`FCECCD2B…9F65`) y Conteo1-Galpon (`99660C9B…B149`) en el scratchpad de la sesión. Root inspeccionó Stock y Conteo: Conteo correcto y legible; columnas de Stock alineadas. |
+
+### Defectos reales encontrados y corregidos (sin cambiar el paquete ya instalado)
+
+1. **Inventario: filtros sin cargar.** `ConfigurarComboBuscable` asignaba `AutoCompleteMode` antes que `AutoCompleteSource`; Guna mantiene `DropDownList` y WinForms lanzaba `NotSupportedException`, capturada solo con `Console.WriteLine`. El combo «Cat:» quedaba vacío y no se cargaban obras ni el estado de filtros (visible en la captura tras el reinicio). Corregido el orden; regresión STA que reproducía la excepción.
+2. **Reporte de stock PDF: fecha engañosa.** Exporta (por diseño) la grilla visible, pero titulaba «Inventario al <hora de exportación>»: en la demo dijo 18:17 con 140/120 cuando la base ya tenía 139/123. Ahora el snapshot lleva la hora de la carga vigente y el PDF dice «Datos al …» (fallback anterior sin fecha).
+3. **Pie de PDF duplicado** en Reporte de stock («— Generado … — Generado …») y Kardex («— Kardex generado …»): `MarcaPdf.Pie` ya incluye la fecha; ahora ambos usan solo `Pie`.
+
+Cosméticos observados, no corregidos: grilla de Recortes con columnas repetidas/encabezados truncados; checkbox «Activo» de Fletes superpuesto con su etiqueta; aviso «Escribí al menos 2 letras…» queda sobre el carrito; título «Revisión de» sin número en Recepción. Los toasts aparecen en el monitor principal.
+
+**F9 sigue ABIERTA:** quedan Designer y recorrido con Internet desconectado (solo el usuario), y reconstruir el paquete con estas correcciones.

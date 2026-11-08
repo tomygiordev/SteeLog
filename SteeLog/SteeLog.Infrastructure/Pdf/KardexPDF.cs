@@ -289,7 +289,7 @@ namespace SteeLog.Infrastructure.Pdf
             cb.SetFontAndSize(bf, 8);
             cb.SetColorFill(new BaseColor(120, 120, 120));
             cb.ShowTextAligned(Element.ALIGN_LEFT,
-                marca.Pie + " — Kardex generado " + marca.FechaLocal.ToString("dd/MM/yyyy HH:mm"),
+                marca.Pie ?? "",
                 document.LeftMargin, document.Bottom - 28, 0);
             cb.ShowTextAligned(Element.ALIGN_RIGHT,
                 "Pág. " + writer.PageNumber,

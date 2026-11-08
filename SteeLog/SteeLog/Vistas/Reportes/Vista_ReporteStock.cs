@@ -41,6 +41,7 @@ namespace SteeLog.Vistas
         private int version;
         private bool exportando;
         private object identidadDatos;
+        private DateTime? fechaDatos;
         private FiltroMaterialParams filtroActual;
         private void CancelarOperaciones()
         {
@@ -163,7 +164,7 @@ namespace SteeLog.Vistas
             int solicitud = ++version;
             var identidad = identidadActual();
             dgvMateriales.DataSource = null;
-            identidadDatos = null;
+            identidadDatos = null; fechaDatos = null;
             var f = filtroActual;
             var consulta = new FiltroMaterialLectura { Nombre = nombre ?? f?.Nombre, SoloStockBajo = soloStockBajo || (f?.SoloStockBajo ?? false), Desde = f?.DesdeCantidad == 0 ? null : f?.DesdeCantidad, Hasta = f?.HastaCantidad == 0 ? null : f?.HastaCantidad, Categorias = f?.IdsCategoria, Proveedores = f?.IdsProveedor };
             try
@@ -174,7 +175,7 @@ namespace SteeLog.Vistas
                 AplicarCabecerasDeSeccion(lista);
                 dgvMateriales.DataSource = new SortableBindingList<Material>(ConstruirFilasConSeparadores(lista));
                 ConfigurarGrid(); AplicarAlturaFilasEspeciales(); CalcularTotales(); ActualizarGrafico();
-                identidadDatos = identidad;
+                identidadDatos = identidad; fechaDatos = DateTime.Now;
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (!token.IsCancellationRequested && !vida.IsCancellationRequested && !IsDisposed && solicitud == version && ReferenceEquals(identidad, identidadActual())) avisarError("No se pudo cargar los materiales: " + ex.Message); }
@@ -672,7 +673,7 @@ namespace SteeLog.Vistas
             if (IsDisposed || vida.IsCancellationRequested || versionExportacion != version || !ReferenceEquals(identidadDatos, identidadActual())) return;
             {
                 var columnas = dgvMateriales.Columns.Cast<DataGridViewColumn>().Where(c => c.Visible).ToList();
-                var snapshot = new ReporteStockSnapshot { TotalMateriales = lblTotalVal.Text, TotalStockBajo = lblBajoVal.Text,
+                var snapshot = new ReporteStockSnapshot { FechaDatos = fechaDatos, TotalMateriales = lblTotalVal.Text, TotalStockBajo = lblBajoVal.Text,
                     Columnas = columnas.Select(c => new ReporteStockColumnaPdf { Nombre = c.Name, Titulo = c.HeaderText }).ToList() };
                 foreach (DataGridViewRow row in dgvMateriales.Rows)
                 {
