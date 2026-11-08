@@ -37,6 +37,40 @@ namespace SteeLog.Tests
                 Escrituras++; throw new InvalidOperationException("No debe crear durante carga.");
             }
         }
+        private sealed class EjecutorRecuperacion : IUseCaseExecutor
+        {
+            public bool FallarCreacion, FallarLectura, Existe;
+            public int Creaciones;
+            public Task<TResult> ExecuteAsync<TUseCase,TResult>(Func<TUseCase,Task<TResult>> accion) where TUseCase : class
+            {
+                object resultado;
+                if (typeof(TResult) == typeof(int)) {
+                    Creaciones++;
+                    if (FallarCreacion) { FallarCreacion = false; throw new InvalidOperationException("fallo antes de crear"); }
+                    Existe = true; resultado = 42;
+                } else if (typeof(TResult) == typeof(ConteoLectura)) {
+                    if (FallarLectura) { FallarLectura = false; throw new InvalidOperationException("fallo de lectura"); }
+                    resultado = Existe ? new ConteoLectura { Id = 42, Estado = "abierto" } : null;
+                } else if (typeof(TResult) == typeof(IReadOnlyList<MaterialInventarioLectura>)) resultado = new List<MaterialInventarioLectura>();
+                else if (typeof(TResult) == typeof(IReadOnlyList<DetalleConteoLectura>)) resultado = new List<DetalleConteoLectura>();
+                else throw new InvalidOperationException("Consulta inesperada");
+                return Task.FromResult((TResult)resultado);
+            }
+        }
+        private sealed class EjecutorCargaIncierta : IUseCaseExecutor
+        {
+            public int Escrituras;
+            public Task<TResult> ExecuteAsync<TUseCase,TResult>(Func<TUseCase,Task<TResult>> accion) where TUseCase : class
+            {
+                object resultado;
+                if (typeof(TResult) == typeof(bool)) { Escrituras++; throw new InvalidOperationException("respuesta perdida"); }
+                if (typeof(TResult) == typeof(ConteoLectura)) resultado = new ConteoLectura { Id = 42, Estado = "abierto" };
+                else if (typeof(TResult) == typeof(IReadOnlyList<MaterialInventarioLectura>)) resultado = new List<MaterialInventarioLectura>();
+                else if (typeof(TResult) == typeof(IReadOnlyList<DetalleConteoLectura>)) resultado = new List<DetalleConteoLectura> { new DetalleConteoLectura { ConteoId = 42, MaterialId = 9, Cantidad = 3 } };
+                else throw new InvalidOperationException("Consulta inesperada");
+                return Task.FromResult((TResult)resultado);
+            }
+        }
         private sealed class EjecutorPdf : IUseCaseExecutor
         {
             public Task<TResult> ExecuteAsync<TUseCase,TResult>(Func<TUseCase,Task<TResult>> accion) where TUseCase : class
@@ -154,8 +188,10 @@ namespace SteeLog.Tests
             });
             hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
         }
-        [Fact]
-        public void CerrarMientrasRenderizaNoAbreVisorNiPublicaResultadoTardio()
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void InicioFallidoExigeRefrescarAntesDeReintentar(bool falloAntesDeCrear)
         {
             Exception error = null;
             var hilo = new Thread(() => {
@@ -163,7 +199,74 @@ namespace SteeLog.Tests
                     SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
-                    var pdf = new PdfBloqueado(); int abiertos = 0; Action<string> abrir = _ => abiertos++;
+                    var ejecutor = new EjecutorRecuperacion { FallarCreacion = falloAntesDeCrear, FallarLectura = !falloAntesDeCrear };
+                    var avisos = new List<string>(); Action<string> aviso = avisos.Add; Action<string> exito = _ => { };
+                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null, null, aviso, exito)) {
+                        var handle = vista.Handle;
+                        tipo.GetField("entradaLista", f).SetValue(vista, true);
+                        var iniciar = tipo.GetMethod("BtnIniciarConteo_Click", f);
+                        iniciar.Invoke(vista, new object[] { null, EventArgs.Empty });
+                        Assert.Single(avisos);
+                        Assert.False((bool)tipo.GetField("entradaLista", f).GetValue(vista));
+                        iniciar.Invoke(vista, new object[] { null, EventArgs.Empty });
+                        Assert.Equal(1, ejecutor.Creaciones);
+                        tipo.GetMethod("Refrescar").Invoke(vista, null);
+                        Assert.True((bool)tipo.GetField("entradaLista", f).GetValue(vista));
+                        if (falloAntesDeCrear) {
+                            Assert.Null(tipo.GetField("_conteoActual", f).GetValue(vista));
+                            iniciar.Invoke(vista, new object[] { null, EventArgs.Empty });
+                            Assert.Equal(2, ejecutor.Creaciones);
+                        } else {
+                            Assert.Equal(42, ((ConteoLectura)tipo.GetField("_conteoActual", f).GetValue(vista)).Id);
+                            iniciar.Invoke(vista, new object[] { null, EventArgs.Empty });
+                            Assert.Equal(1, ejecutor.Creaciones);
+                        }
+                    }
+                } catch (Exception ex) { error = ex; }
+            });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+        }
+        [Fact]
+        public void CargaInciertaBloqueaReenvioHastaConsultarDatosConF5()
+        {
+            Exception error = null;
+            var hilo = new Thread(() => {
+                try {
+                    SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+                    var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
+                    const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
+                    var ejecutor = new EjecutorCargaIncierta(); var avisos = new List<string>(); Action<string> aviso = avisos.Add;
+                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null, null, aviso, aviso)) {
+                        var handle = vista.Handle;
+                        tipo.GetField("entradaLista", f).SetValue(vista, true);
+                        tipo.GetField("_conteoActual", f).SetValue(vista, new ConteoLectura { Id = 42 });
+                        tipo.GetField("_materialSeleccionado", f).SetValue(vista, new MaterialInventarioLectura { Id = 9 });
+                        ((Control)tipo.GetField("txtCantidad", f).GetValue(vista)).Text = "3";
+                        var agregar = tipo.GetMethod("BtnAgregar_Click", f);
+                        agregar.Invoke(vista, new object[] { null, EventArgs.Empty });
+                        Assert.Single(avisos); Assert.False((bool)tipo.GetField("entradaLista", f).GetValue(vista));
+                        agregar.Invoke(vista, new object[] { null, EventArgs.Empty }); Assert.Equal(1, ejecutor.Escrituras);
+                        tipo.GetMethod("Refrescar").Invoke(vista, null);
+                        Assert.True((bool)tipo.GetField("entradaLista", f).GetValue(vista));
+                        var grid = (DataGridView)tipo.GetField("dgvEntrada", f).GetValue(vista);
+                        Assert.Equal(3, ((List<DetalleConteoLectura>)grid.DataSource)[0].Cantidad);
+                        Assert.Equal(1, ejecutor.Escrituras);
+                    }
+                } catch (Exception ex) { error = ex; }
+            });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+        }
+        [Fact]
+        public async Task CerrarMientrasRenderizaNoAbreVisorNiPublicaResultadoTardio()
+        {
+            var terminado = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+            var hilo = new Thread(() => {
+                var pdf = new PdfBloqueado();
+                try {
+                    SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+                    var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
+                    const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
+                    int abiertos = 0; Action<string> abrir = _ => abiertos++;
                     using (var vista = (Form)Activator.CreateInstance(tipo, new EjecutorPdf(), pdf, abrir)) {
                         var handle = vista.Handle;
                         tipo.GetField("_tabActual", f).SetValue(vista, "historial");
@@ -177,9 +280,14 @@ namespace SteeLog.Tests
                         while ((bool)tipo.GetField("ocupada", f).GetValue(vista) && reloj.Elapsed < TimeSpan.FromSeconds(5)) { Application.DoEvents(); Thread.Sleep(5); }
                         Assert.False((bool)tipo.GetField("ocupada", f).GetValue(vista)); Assert.Equal(0, abiertos);
                     }
-                } catch (Exception ex) { error = ex; }
+                    terminado.TrySetResult(true);
+                } catch (Exception ex) { terminado.TrySetException(ex); }
+                finally { pdf.Continuar.Set(); }
             });
-            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(15))); Assert.Null(error);
+            hilo.IsBackground = true;
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start();
+            Assert.Same(terminado.Task, await Task.WhenAny(terminado.Task, Task.Delay(TimeSpan.FromSeconds(15))));
+            await terminado.Task;
         }
     }
 }

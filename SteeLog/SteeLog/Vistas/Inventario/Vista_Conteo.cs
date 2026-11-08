@@ -26,6 +26,8 @@ namespace SteeLog.Vistas.Inventario
         private ConteosPresenter presenter;
         private IConteoPdf pdf;
         private readonly Action<string> abrirPdf;
+        private readonly Action<string> mostrarError;
+        private readonly Action<string> mostrarExito;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private int versionEntrada, versionHistorial, versionDetalle, versionMateriales;
         private bool ocupada, entradaLista;
@@ -81,8 +83,11 @@ namespace SteeLog.Vistas.Inventario
 
         public Vista_Conteo() : this(null, null, null) { }
         public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer) : this(executor, renderer, null) { }
-        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf)
+        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf) : this(executor, renderer, abrirPdf, null, null) { }
+        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf, Action<string> mostrarError, Action<string> mostrarExito)
         {
+            this.mostrarError = mostrarError ?? (mensaje => ToastNotification.ShowError(mensaje));
+            this.mostrarExito = mostrarExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
             this.abrirPdf = abrirPdf ?? (ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true }));
             if (executor != null) presenter = new ConteosPresenter(executor);
             pdf = renderer;
@@ -104,8 +109,8 @@ namespace SteeLog.Vistas.Inventario
             timerBusqueda?.Stop(); timerBusqueda?.Dispose();
         }
         private bool Vigente => !cierre.IsCancellationRequested && !IsDisposed;
-        private bool Comenzar() { if (ocupada || !Vigente) return false; ocupada = true; ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); return true; }
-        private void Terminar() { ocupada = false; if (Vigente) { ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); } }
+        private bool Comenzar() { if (ocupada || !Vigente) return false; ocupada = true; btnTabEntrada.Enabled = false; btnTabHistorial.Enabled = false; ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); return true; }
+        private void Terminar() { ocupada = false; if (Vigente) { btnTabEntrada.Enabled = true; btnTabHistorial.Enabled = true; ActualizarEstadoEntrada(); ActualizarBotonesHistorial(); } }
 
         public bool PreFilterMessage(ref Message m)
         {
@@ -128,9 +133,9 @@ namespace SteeLog.Vistas.Inventario
 
         public async void Refrescar()
         {
-            if (presenter == null || !Vigente) return;
+            if (presenter == null || !Vigente || ocupada) return;
             await CargarMateriales();
-            if (!Vigente) return;
+            if (!Vigente || ocupada) return;
             if (_tabActual == "entrada") await CargarConteoActual(); else await CargarHistorial();
         }
 
@@ -624,10 +629,17 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnIniciarConteo_Click(object sender, EventArgs e)
         {
             if (!entradaLista || _conteoActual != null || !Comenzar()) return; int version = versionEntrada;
-            try { int id = await presenter.CrearAsync(cierre.Token); var conteo = await presenter.ObtenerAsync(id, cierre.Token);
+            bool creado = false;
+            try { int id = await presenter.CrearAsync(cierre.Token); creado = true; var conteo = await presenter.ObtenerAsync(id, cierre.Token);
                 if (!Vigente || _tabActual != "entrada" || version != versionEntrada) return;
-                _conteoActual = conteo; ActualizarEstadoEntrada(); await CargarDetallesEntrada(); ToastNotification.ShowSuccess("Conteo iniciado.");
-            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo iniciar: " + ex.Message); } finally { Terminar(); }
+                if (conteo == null) throw new InvalidOperationException("No se encontró el conteo creado.");
+                _conteoActual = conteo; ActualizarEstadoEntrada(); await CargarDetallesEntrada(); mostrarExito("Conteo iniciado.");
+            } catch (OperationCanceledException) { } catch (Exception ex) {
+                if (Vigente && _tabActual == "entrada" && version == versionEntrada) {
+                    entradaLista = false; ActualizarEstadoEntrada();
+                    mostrarError((creado ? "El conteo se creó, pero no se pudo recuperar. " : "No se pudo confirmar si se creó el conteo. ") + "Actualizá con F5 antes de volver a intentar. " + ex.Message);
+                }
+            } finally { Terminar(); }
         }
 
         private async void BtnAgregar_Click(object sender, EventArgs e)
@@ -639,7 +651,12 @@ namespace SteeLog.Vistas.Inventario
             try { await presenter.CargarAsync(id, material, cantidad, cierre.Token);
                 if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
                 _materialSeleccionado = null; txtBuscadorMaterial.Clear(); txtCantidad.Clear(); OcultarResultados(); await CargarDetallesEntrada();
-            } catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo agregar: " + ex.Message); } finally { Terminar(); }
+            } catch (OperationCanceledException) { } catch (Exception ex) {
+                if (Vigente && _tabActual == "entrada" && _conteoActual?.Id == id && version == versionEntrada) {
+                    entradaLista = false; ActualizarEstadoEntrada();
+                    mostrarError("No se pudo confirmar si se agregó la cantidad. Actualizá con F5 y verificá el conteo antes de volver a cargarla. " + ex.Message);
+                }
+            } finally { Terminar(); }
         }
 
         private async void BtnFinalizar_Click(object sender, EventArgs e)
