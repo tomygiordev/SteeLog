@@ -35,7 +35,7 @@ namespace SteeLog.Vistas.Movimientos
         {
             try
             {
-                if (!catalogosListos || !modeloListo || ocupada) return;
+                if (!catalogosListos || !modeloListo || ocupada || envioPendiente) return;
                 // Si no hay nada cargado, no guardar un borrador vacío
                 if (cmbMovimientos.SelectedIndex < 0 && materialesLista.Count == 0) return;
 
@@ -63,7 +63,7 @@ namespace SteeLog.Vistas.Movimientos
                     materiales: materialesLista
                 );
 
-                MovimientoDraftService.Guardar(draft);
+                GuardarBorradorActual(draft);
             }
             catch { /* silencioso */ }
         }

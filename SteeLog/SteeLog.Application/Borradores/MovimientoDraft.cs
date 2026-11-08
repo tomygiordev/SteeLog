@@ -26,6 +26,7 @@ namespace SteeLog.Core.Application.Borradores
     public class MovimientoDraft
     {
         [DataMember] public DateTime FechaGuardado { get; set; }
+        [DataMember(EmitDefaultValue = false)] public string Version { get; set; }
         [DataMember] public int IdTipoMovimiento { get; set; }
         [DataMember] public string NombreTipoMovimiento { get; set; }
         [DataMember] public string NroRemito { get; set; }

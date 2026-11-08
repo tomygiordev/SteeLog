@@ -1,12 +1,34 @@
 using System;
 using System.Text;
+using System.IO;
 using SteeLog.Core.Application.Borradores;
+using SteeLog.Infrastructure.Files;
 using Xunit;
 
 namespace SteeLog.Tests
 {
     public class BorradorMovimientoTests
     {
+        [Fact]
+        public void VersionUnicaConRelojIgualProtegeBorradorNuevoEnArchivoTemporal()
+        {
+            var directorio = Path.Combine(Path.GetTempPath(), "steelog_draft_test_" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var servicio = new BorradorMovimiento(new LocalDraftStore(Path.Combine(directorio, "draft.json")), () => new DateTime(2026, 1, 2));
+                servicio.Guardar(new MovimientoDraft { NroRemito = "primero" });
+                var anterior = servicio.VersionActual();
+                servicio.Guardar(new MovimientoDraft { NroRemito = "segundo" });
+                var nuevo = servicio.VersionActual();
+                Assert.NotEqual(anterior, nuevo);
+                servicio.EliminarSiCoincide(null);
+                servicio.EliminarSiCoincide(anterior);
+                Assert.Equal("segundo", servicio.Leer().NroRemito);
+                servicio.EliminarSiCoincide(nuevo);
+                Assert.Null(servicio.Leer());
+            }
+            finally { if (Directory.Exists(directorio)) Directory.Delete(directorio, true); }
+        }
         private sealed class Memoria : IDraftStore
         {
             public byte[] Bytes;

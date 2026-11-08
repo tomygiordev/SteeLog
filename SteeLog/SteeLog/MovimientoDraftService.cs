@@ -36,6 +36,17 @@ namespace SteeLog
             catch { }
         }
 
+        public static string VersionActual()
+        {
+            try { return Servicio.VersionActual(); }
+            catch { return null; }
+        }
+
+        public static void EliminarSiCoincide(string version)
+        {
+            Servicio.EliminarSiCoincide(version);
+        }
+
         public static MovimientoDraft CrearDesde(
             DateTime fecha, string nroRemito, int idTipoMov, string nombreTipoMov,
             int idOrigen, string tipoOrigen, int idDestino, string tipoDestino,

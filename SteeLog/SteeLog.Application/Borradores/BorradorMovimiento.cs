@@ -17,6 +17,7 @@ namespace SteeLog.Core.Application.Borradores
         {
             if (draft == null) return;
             draft.FechaGuardado = ahora();
+            draft.Version = Guid.NewGuid().ToString("N");
             using (var stream = new MemoryStream())
             {
                 new DataContractJsonSerializer(typeof(MovimientoDraft)).WriteObject(stream, draft);
@@ -46,5 +47,15 @@ namespace SteeLog.Core.Application.Borradores
             return draft;
         }
         public void Eliminar() => store.Eliminar();
+        public string VersionActual()
+        {
+            var draft = Leer();
+            if (draft == null) return null;
+            return draft.Version ?? "legacy:" + draft.FechaGuardado.Ticks;
+        }
+        public void EliminarSiCoincide(string version)
+        {
+            if (version != null && string.Equals(version, VersionActual(), StringComparison.Ordinal)) store.Eliminar();
+        }
     }
 }

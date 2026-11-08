@@ -39,6 +39,11 @@ namespace SteeLog.Vistas.Movimientos
         internal Func<DialogResult> ConfirmarGuardado = () => MessageBox.Show(
             "¿Estás seguro que querés guardar este remito?", "Confirmar guardado",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
+        internal Action<string> NotificarGuardado = mensaje => ToastNotification.ShowSuccess(mensaje);
+        internal Action<string> AdvertirGuardado = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Func<string> VersionBorrador = () => MovimientoDraftService.VersionActual();
+        internal Action<string> EliminarBorradorConfirmado = version => MovimientoDraftService.EliminarSiCoincide(version);
+        internal Action<SteeLog.Core.Application.Borradores.MovimientoDraft> GuardarBorradorActual = draft => MovimientoDraftService.Guardar(draft);
         private int _idMovimientoAEditar = 0;
         private bool modeloListo = false;
         private bool catalogosListos;
@@ -47,6 +52,7 @@ namespace SteeLog.Vistas.Movimientos
         private int versionCatalogos;
         private CancellationTokenSource cargaCatalogos;
         private bool ocupada;
+        private bool envioPendiente;
         private int versionCarga;
         private CancellationTokenSource cargaEdicion;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
@@ -67,7 +73,6 @@ namespace SteeLog.Vistas.Movimientos
 
         // ── Borrador / Autoguardado ──────────────────────────────
         private Timer _timerDraft;
-        private bool _guardadoExitoso = false; // true = el form cerró con éxito
 
         public class ItemCombo
         {
@@ -163,7 +168,6 @@ namespace SteeLog.Vistas.Movimientos
             Application.RemoveMessageFilter(this);
             _timerDraft?.Stop(); _timerDraft?.Dispose(); _timerDraft = null;
             _timerDebounce?.Stop(); _timerDebounce?.Dispose(); _timerDebounce = null;
-            if (_guardadoExitoso) MovimientoDraftService.Eliminar();
         }
 
         public bool PreFilterMessage(ref Message m)
@@ -814,10 +818,10 @@ namespace SteeLog.Vistas.Movimientos
         }
         private async void GuardarMovimiento_Click(object sender, EventArgs e)
         {
-            if (!modeloListo || !catalogosListos || ocupada) return;
+            if (!modeloListo || !catalogosListos || ocupada || envioPendiente) return;
             if (cmbMovimientos.SelectedIndex == -1 || cmbOrigen.SelectedIndex == -1 || cmbDestino.SelectedIndex == -1 || materialesLista.Count == 0)
             {
-                ToastNotification.ShowWarning("Completa todos los campos obligatorios.");
+                AdvertirGuardado("Completa todos los campos obligatorios.");
                 return;
             }
 
@@ -832,6 +836,7 @@ namespace SteeLog.Vistas.Movimientos
                 return;
             }
 
+            bool confirmado = false;
             try
             {
                 // Separate materials from insumos
@@ -876,34 +881,44 @@ namespace SteeLog.Vistas.Movimientos
                     Insumos = insumosSolo.Select(m => m.IdInsumo ?? 0).ToList(), OrigenNombre=origenNombre, DestinoNombre=destinoNombre
                 };
                 int versionOperacion = versionCarga, idOperacion = _idMovimientoAEditar;
-                int? guardado = await Presenter.GuardarAsync(idOperacion > 0 ? (int?)idOperacion : null, solicitud, cierre.Token);
-                if (!guardado.HasValue || IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
+                string versionBorrador = idOperacion <= 0 ? VersionBorrador() : null;
+                int? guardado;
+                envioPendiente = true;
+                try { guardado = await Presenter.GuardarAsync(idOperacion > 0 ? (int?)idOperacion : null, solicitud, cierre.Token); }
+                finally { envioPendiente = false; }
+                if (!guardado.HasValue) return;
+                confirmado = true;
+                bool errorAlRetirarBorrador = false;
+                try { EliminarBorradorConfirmado(versionBorrador); }
+                catch (Exception ex) { errorAlRetirarBorrador = true; System.Diagnostics.Debug.WriteLine("No se pudo retirar el borrador confirmado: " + ex.Message); }
+                if (IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
                 int idMovimientoFinal = guardado.Value;
 
-                ToastNotification.ShowSuccess(_idMovimientoAEditar > 0 ? "Movimiento actualizado." : "Movimiento guardado.");
-                _guardadoExitoso = true;
-                MovimientoDraftService.Eliminar(); // Borrador ya no necesario
+                bool eraEdicion = _idMovimientoAEditar > 0;
+                // La operación ya está confirmada: retirar el carrito antes de cualquier
+                // espera posterior, para que otro clic no vuelva a registrar lo mismo.
+                LimpiarFormulario();
+                int versionConfirmada = versionCarga;
+                NotificarGuardado(eraEdicion ? "Movimiento actualizado." : "Movimiento guardado.");
+                if (errorAlRetirarBorrador)
+                    AdvertirGuardado("El movimiento se guardó, pero no se pudo retirar su borrador. No lo recupere ni lo vuelva a guardar.");
+                (this.TopLevelControl as VistaGeneral)?.RefrescarHistorialSiAbierto();
 
                 // Consultar el saldo confirmado antes de emitir alertas.
                 await RefrescarInventarioAsync(cierre.Token);
-                if (IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
+                if (IsDisposed || cierre.IsCancellationRequested || versionConfirmada != versionCarga) return;
                 VerificarStockMinimoPorMateriales(materialesSolo);
 
                 string archivoPdf = await Presenter.GenerarRemitoAsync(idMovimientoFinal, cierre.Token);
-                if (archivoPdf != null && !IsDisposed && !cierre.IsCancellationRequested && versionOperacion == versionCarga && idOperacion == _idMovimientoAEditar)
+                if (archivoPdf != null && !IsDisposed && !cierre.IsCancellationRequested && versionConfirmada == versionCarga)
                 {
                     try { System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo { FileName = archivoPdf, UseShellExecute = true }); }
                     catch (Exception exPdf) { ToastNotification.ShowError("Error al abrir PDF: " + exPdf.Message); }
                 }
-                if (IsDisposed || cierre.IsCancellationRequested || versionOperacion != versionCarga || idOperacion != _idMovimientoAEditar) return;
-
-                LimpiarFormulario();
-                _guardadoExitoso = true; // Permitir cierre limpio
-                (this.TopLevelControl as VistaGeneral)?.RefrescarHistorialSiAbierto();
             }
             catch (Exception ex)
             {
-                ToastNotification.ShowError("Error al guardar: " + ex.Message);
+                ToastNotification.ShowError((confirmado ? "Movimiento guardado, pero falló una acción posterior: " : "Error al guardar: ") + ex.Message);
             }
         }
 
