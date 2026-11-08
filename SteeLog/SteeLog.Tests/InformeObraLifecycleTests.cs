@@ -152,6 +152,24 @@ namespace SteeLog.Tests
             });
         }
         [Fact]
+        public void RutaTemporalNoDependeDelNombreDeObraYEsUnica()
+        {
+            Sta(() => {
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
+                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                    var handle = form.Handle; var rutas = new List<string>();
+                    Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> generar = (ruta, id, nombre, desde, hasta, token) => { rutas.Add(ruta); return Task.CompletedTask; };
+                    tipo.GetField("GenerarInforme", Private).SetValue(form, generar);
+                    tipo.GetField("AbrirInforme", Private).SetValue(form, new Action<string>(_ => { }));
+                    var metodo = tipo.GetMethod("GenerarInformeAsync", Private);
+                    Esperar((Task)metodo.Invoke(form, new object[] { 1, "Obra A/B", null, null }));
+                    Esperar((Task)metodo.Invoke(form, new object[] { 1, "Obra A/B", null, null }));
+                    Assert.Equal(2, rutas.Count); Assert.NotEqual(rutas[0], rutas[1]);
+                    foreach (var ruta in rutas) { Assert.Equal(Path.GetTempPath(), Path.GetDirectoryName(ruta) + Path.DirectorySeparatorChar); Assert.DoesNotContain("A/B", ruta); }
+                }
+            });
+        }
+        [Fact]
         public void GeneracionEnCursoImpideDobleEnvio()
         {
             Sta(() => {

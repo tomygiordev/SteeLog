@@ -816,7 +816,7 @@ namespace SteeLog.Vistas.Reportes
             {
                 lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
                 lblEstado.Text = "Generando...";
-                string ruta = Path.Combine(Path.GetTempPath(), $"InformeObra_{nombreObra.Replace(" ", "_")}_{DateTime.Now:yyyyMMdd_HHmmss}.pdf");
+                string ruta = Path.Combine(Path.GetTempPath(), $"InformeObra_{Guid.NewGuid():N}.pdf");
                 if (GenerarInforme != null) await GenerarInforme(ruta, idObra, nombreObra, desde, hasta, token);
                 else await new InformeObraPDF().GenerarAsync(ruta, idObra, nombreObra, desde, hasta, token);
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
