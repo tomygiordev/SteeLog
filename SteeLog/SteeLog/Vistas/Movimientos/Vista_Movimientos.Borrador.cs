@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using Timer = System.Windows.Forms.Timer;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Movimientos;
 using System.Windows.Forms;
 using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
@@ -53,7 +52,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 decimal ptDraft = CalcularPrecioTotalMateriales();
 
-                var draft = MovimientoDraftService.CrearDesde(
+                var draft = servicios.Borrador.CrearDesde(
                     fecha: guna2DateTimePicker1.Value,
                     nroRemito: nroRemitoTxt.Text.Trim(),
                     idTipoMov: cmbMovimientos.SelectedIndex >= 0 ? Convert.ToInt32(cmbMovimientos.SelectedValue) : 0,

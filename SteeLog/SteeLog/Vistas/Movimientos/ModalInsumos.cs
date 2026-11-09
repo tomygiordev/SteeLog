@@ -5,7 +5,6 @@ using System.Windows.Forms;
 using SteeLog.Modelos;
 using SteeLog;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using System.Threading;
 using System.Drawing;
 using SteeLog.UI;
@@ -14,18 +13,21 @@ namespace SteeLog.Vistas.Movimientos
 {
     public partial class ModalInsumos : Form, IInsumosVista
     {
+        private readonly IServiciosVista servicios;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private List<Insumo> _todosInsumos = new List<Insumo>();
         private InsumosPresenter presenter;
         private readonly CargasInsumos cargas = new CargasInsumos();
         private bool cargando;
-        private InsumosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearInsumosPresenter(this));
+        private InsumosPresenter Presenter => presenter ?? (presenter = servicios.CrearInsumosPresenter(this));
         public void SetOcupada(bool valor) { if (!IsDisposed) btnConfirmar.Enabled = !valor && !cargando; }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public Insumo InsumoSeleccionado { get; private set; }
 
-        public ModalInsumos()
+        public ModalInsumos(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
             InitializeComponent();
             AplicarTema();
             Load += async (s, e) => await CargarInsumos();

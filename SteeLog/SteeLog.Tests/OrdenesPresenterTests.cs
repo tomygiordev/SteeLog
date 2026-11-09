@@ -61,7 +61,7 @@ namespace SteeLog.Tests
             Exception error = null;
             var hilo = new Thread(() => {
                 try {
-                    using (var alta = new Vista_OrdenesAlta()) using (var revision = new Vista_OrdenesRevision()) {
+                    using (var alta = new Vista_OrdenesAlta(new ServiciosVistaDePrueba())) using (var revision = new Vista_OrdenesRevision(new ServiciosVistaDePrueba())) {
                         const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
                         var altaType = alta.GetType(); var altaEstado = (EstadoModeloOrden)altaType.GetField("_modelo", flags).GetValue(alta);
                         altaType.GetField("_catalogosListos", flags).SetValue(alta, true);
@@ -98,10 +98,10 @@ namespace SteeLog.Tests
             Exception error = null;
             var hilo = new Thread(() => {
                 try {
-                    using (var alta = new Vista_OrdenesAlta())
-                    using (var listado = new Vista_OrdenesListado())
-                    using (var revision = new Vista_OrdenesRevision())
-                    using (var modulo = new Vista_OrdenesModulo()) {
+                    using (var alta = new Vista_OrdenesAlta(new ServiciosVistaDePrueba()))
+                    using (var listado = new Vista_OrdenesListado(new ServiciosVistaDePrueba()))
+                    using (var revision = new Vista_OrdenesRevision(new ServiciosVistaDePrueba()))
+                    using (var modulo = new Vista_OrdenesModulo(new ServiciosVistaDePrueba())) {
                         alta.PrepararNuevaOrden(); alta.SetEditMode(12); revision.SetOrder(12); listado.Refrescar(); modulo.Refrescar();
                     }
                 } catch (Exception e) { error = e; }
@@ -117,8 +117,8 @@ namespace SteeLog.Tests
                 try {
                     const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
                     var avisos = new List<string>(); Action<string> aviso = avisos.Add;
-                    using (var alta = new Vista_OrdenesAlta(aviso, aviso))
-                    using (var revision = new Vista_OrdenesRevision(aviso, aviso)) {
+                    using (var alta = new Vista_OrdenesAlta(new ServiciosVistaDePrueba(), aviso, aviso))
+                    using (var revision = new Vista_OrdenesRevision(new ServiciosVistaDePrueba(), aviso, aviso)) {
                         var altaType = alta.GetType();
                         ((Control)altaType.GetField("txtNroOrden", flags).GetValue(alta)).Text = "OC-123";
                         int idAlta = 0;
@@ -195,7 +195,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var avisos = new List<string>(); var ejecutor = new EjecutorIncierto();
-                using (var alta = new Vista_OrdenesAlta()) {
+                using (var alta = new Vista_OrdenesAlta(new ServiciosVistaDePrueba())) {
                     Asignar(alta, "AdvertirResultadoIncierto", new Action<string>(avisos.Add));
                     var presenter = new OrdenesPresenter(ejecutor, alta); Asignar(alta, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
                     Asignar(alta, "_presenter", presenter); Asignar(alta, "_catalogosListos", true);
@@ -232,7 +232,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var ejecutor = new EjecutorLecturaControlada();
-                using (var alta = new Vista_OrdenesAlta()) {
+                using (var alta = new Vista_OrdenesAlta(new ServiciosVistaDePrueba())) {
                     Asignar(alta, "AdvertirResultadoIncierto", new Action<string>(m => { }));
                     Asignar(alta, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
                     alta.SetEditMode(7); Asignar(alta, "_presenter", new OrdenesPresenter(ejecutor, alta)); Asignar(alta, "_catalogosListos", true);
@@ -251,10 +251,10 @@ namespace SteeLog.Tests
         public void RevisionIncierta_CargaIniciadaAntesDeLaMarcaNoLiberaYLaPosteriorSi()
         {
             EnSta(() => {
-                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                var servicios = new ServiciosVistaDePrueba(); servicios.Sesion.SetSession("admin@tesis.local");
                 try {
                 var ejecutor = new EjecutorLecturaControlada();
-                using (var revision = new Vista_OrdenesRevision()) {
+                using (var revision = new Vista_OrdenesRevision(servicios)) {
                     Asignar(revision, "AdvertirResultadoIncierto", new Action<string>(m => { }));
                     Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
                     revision.SetOrder(7); Asignar(revision, "_presenter", new OrdenesPresenter(ejecutor, revision));
@@ -267,7 +267,7 @@ namespace SteeLog.Tests
                     posterior.SetResult(EjecutorLecturaControlada.Orden()); tareaPosterior.GetAwaiter().GetResult();
                     Assert.False(Campo<bool>(revision, "_resultadoIncierto")); Assert.True(confirmar.Enabled);
                 }
-                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+                } finally { servicios.Sesion.Clear(); }
             });
         }
         [Fact]
@@ -275,7 +275,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var avisos = new List<string>(); var ejecutor = new EjecutorIncierto(); int confirmaciones = 0;
-                using (var listado = new Vista_OrdenesListado()) {
+                using (var listado = new Vista_OrdenesListado(new ServiciosVistaDePrueba())) {
                     Asignar(listado, "AdvertirResultadoIncierto", new Action<string>(avisos.Add)); Asignar(listado, "ConfirmarEliminacion", new Func<string, bool>(m => { confirmaciones++; return false; }));
                     var presenter = new OrdenesPresenter(ejecutor, listado); Asignar(listado, "_presenter", presenter);
                     Asignar(listado, "_rolActual", SteeLog.Servicios.UserRole.Admin);
@@ -301,10 +301,10 @@ namespace SteeLog.Tests
         public void RevisionIncierta_BloqueaConfirmarHastaRecargaExitosa()
         {
             EnSta(() => {
-                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                var servicios = new ServiciosVistaDePrueba(); servicios.Sesion.SetSession("admin@tesis.local");
                 try {
                 var avisos = new List<string>(); var ejecutor = new EjecutorIncierto();
-                using (var revision = new Vista_OrdenesRevision()) {
+                using (var revision = new Vista_OrdenesRevision(servicios)) {
                     Asignar(revision, "AdvertirResultadoIncierto", new Action<string>(avisos.Add));
                     var presenter = new OrdenesPresenter(ejecutor, revision); Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
                     Asignar(revision, "_presenter", presenter);
@@ -321,17 +321,17 @@ namespace SteeLog.Tests
                     ejecutor.FallarLecturas = false; Esperar(revision, "CargarOrden");
                     Assert.False(Campo<bool>(revision, "_resultadoIncierto")); Assert.True(confirmar.Enabled); Assert.Single(avisos); Assert.False(revision.Visible);
                 }
-                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+                } finally { servicios.Sesion.Clear(); }
             });
         }
         [Fact]
         public void RevisionCargada_TituloIncluyeNumeroYLabelEntraEnElAncho()
         {
             EnSta(() => {
-                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                var servicios = new ServiciosVistaDePrueba(); servicios.Sesion.SetSession("admin@tesis.local");
                 try {
                 var ejecutor = new EjecutorIncierto();
-                using (var revision = new Vista_OrdenesRevision()) {
+                using (var revision = new Vista_OrdenesRevision(servicios)) {
                     Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
                     revision.Size = new System.Drawing.Size(1000, 700);
                     revision.SetOrder(7); Esperar(revision, "CargarOrden");
@@ -341,7 +341,7 @@ namespace SteeLog.Tests
                     var ancho = TextRenderer.MeasureText(titulo.Text, titulo.Font, new System.Drawing.Size(int.MaxValue, int.MaxValue), TextFormatFlags.NoPadding).Width;
                     Assert.True(ancho <= titulo.Width, "ancho texto " + ancho + " > label " + titulo.Width);
                 }
-                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+                } finally { servicios.Sesion.Clear(); }
             });
         }
         [Fact]

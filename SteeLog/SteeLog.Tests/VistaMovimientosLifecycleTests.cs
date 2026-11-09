@@ -93,7 +93,7 @@ namespace SteeLog.Tests
             var hilo=new Thread(() => {
                 try
                 {
-                    using(var vista=new Vista_Movimientos())
+                    using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                     {
                         var handle=vista.Handle;
                         var executor=new EjecutorIncierto();
@@ -185,7 +185,7 @@ namespace SteeLog.Tests
         public void RecargaExitosaConNoLiberaYDescartaCarritoYBorrador()
         {
             Sta(() => {
-                using(var vista=new Vista_Movimientos())
+                using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var carrito=PrepararIncierto(vista,new EjecutorIncierto());
                     var preguntas=new List<string>(); var avisos=new List<string>(); var borradores=new List<string>();
@@ -205,7 +205,7 @@ namespace SteeLog.Tests
         public void RecargaFallidaNoPreguntaYMantieneBloqueo()
         {
             Sta(() => {
-                using(var vista=new Vista_Movimientos())
+                using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var executor=new EjecutorIncierto { FallaCatalogos=true };
                     var carrito=PrepararIncierto(vista,executor);
@@ -223,7 +223,7 @@ namespace SteeLog.Tests
         public void RecargaIniciadaAntesDeLaMarcaNoPregunta()
         {
             Sta(() => {
-                using(var vista=new Vista_Movimientos())
+                using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var executor=new EjecutorRefresco();
                     var carrito=PrepararIncierto(vista,new EjecutorIncierto());
@@ -246,7 +246,7 @@ namespace SteeLog.Tests
         }
         private static Vista_Movimientos VistaNuevaConBorradorIncierto(MovimientoDraft draft,List<string> preguntas,bool respuesta,List<MovimientoDraft> escritos,List<string> retirados)
         {
-            var vista=new Vista_Movimientos();
+            var vista=new Vista_Movimientos(new ServiciosVistaDePrueba());
             var handle=vista.Handle;
             Fijar(vista,"presenter",new MovimientosPresenter(new EjecutorIncierto(),vista));
             Fijar(vista,"catalogosListos",true); Fijar(vista,"modeloListo",true);
@@ -323,7 +323,7 @@ namespace SteeLog.Tests
         public void AvisoDeStockMaximoVuelveAAvisarTrasCambiarDeMaterial()
         {
             Sta(() => {
-                using(var vista=new Vista_Movimientos())
+                using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var handle=vista.Handle;
                     var avisos=new List<string>();
@@ -355,7 +355,7 @@ namespace SteeLog.Tests
                     var servicio = new BorradorMovimiento(new LocalDraftStore(Path.Combine(directorio,"draft.json")), () => new DateTime(2026,1,2));
                     servicio.Guardar(new MovimientoDraft { NroRemito = "original" });
                     var versionOriginal = servicio.VersionActual();
-                    var vista = new Vista_Movimientos();
+                    var vista = new Vista_Movimientos(new ServiciosVistaDePrueba());
                     var handle = vista.Handle;
                     var executor = new Ejecutor();
                     Fijar(vista,"presenter",new MovimientosPresenter(executor,vista));
@@ -403,7 +403,7 @@ namespace SteeLog.Tests
             var hilo = new Thread(() => {
                 try
                 {
-                    using (var vista = new Vista_Movimientos())
+                    using (var vista = new Vista_Movimientos(new ServiciosVistaDePrueba()))
                     {
                         var handle = vista.Handle;
                         var executor = new EjecutorGuardadoYRefresco();
@@ -448,7 +448,7 @@ namespace SteeLog.Tests
             var hilo=new Thread(() => {
                 try
                 {
-                    using(var vista=new Vista_Movimientos())
+                    using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                     {
                         var handle=vista.Handle;
                         var executor=new Ejecutor();
@@ -486,7 +486,7 @@ namespace SteeLog.Tests
             var hilo=new Thread(() => {
                 try
                 {
-                    using(var vista=new Vista_Movimientos())
+                    using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                     {
                         var handle=vista.Handle;
                         var executor=new EjecutorEdicion();
@@ -517,7 +517,7 @@ namespace SteeLog.Tests
             var hilo=new Thread(() => {
                 try
                 {
-                    var vista=new Vista_Movimientos();
+                    var vista=new Vista_Movimientos(new ServiciosVistaDePrueba());
                     var handle=vista.Handle;
                     var executor=new EjecutorEdicion();
                     Fijar(vista,"presenter",new MovimientosPresenter(executor,vista));
@@ -543,7 +543,7 @@ namespace SteeLog.Tests
             var hilo=new Thread(() => {
                 try
                 {
-                    using(var vista=new Vista_Movimientos())
+                    using(var vista=new Vista_Movimientos(new ServiciosVistaDePrueba()))
                     {
                         var handle=vista.Handle;
                         var executor=new EjecutorRefresco();

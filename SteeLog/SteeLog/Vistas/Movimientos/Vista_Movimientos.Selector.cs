@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using Timer = System.Windows.Forms.Timer;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Movimientos;
 using System.Windows.Forms;
 using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
@@ -144,8 +143,8 @@ namespace SteeLog.Vistas.Movimientos
 
             foreach (var m in mats)
             {
-                string infoStockMaterial = SessionManager.DebeOcultarCantidadesStockMateriales
-                    ? $"Material • {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
+                string infoStockMaterial = servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                    ? $"Material • {servicios.Sesion.ObtenerEstadoStockMaterial(m.stockActual)}"
                     : $"Material • Stock: {m.stockActual:N0}";
 
                 itemsCandidatos.Add(new ItemBuscador

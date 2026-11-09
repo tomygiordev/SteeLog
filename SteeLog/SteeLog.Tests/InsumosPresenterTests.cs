@@ -185,7 +185,7 @@ namespace SteeLog.Tests
                     Assert.True(cancelacionVista.IsCancellationRequested);
                     var tipoModal = host.GetType("SteeLog.Vistas.Movimientos.ModalInsumos", true);
                     CancellationTokenSource cancelacionModal;
-                    using (var modal = (Form)Activator.CreateInstance(tipoModal))
+                    using (var modal = (Form)Activator.CreateInstance(tipoModal, new object[] { new ServiciosVistaDePrueba() }))
                     {
                         cancelacionModal = (CancellationTokenSource)tipoModal.GetField("cierre", flags).GetValue(modal);
                         Assert.False(((Control)tipoModal.GetField("btnConfirmar", flags).GetValue(modal)).Enabled);

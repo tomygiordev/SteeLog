@@ -1,3 +1,4 @@
+using SteeLog.Presentation;
 using Guna.UI2.WinForms;
 using System;
 using System.Drawing;
@@ -9,6 +10,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 {
     public class Vista_OrdenesModulo : Form, IRecargaCatalogos
     {
+        private readonly IServiciosVista servicios;
         private Guna2Button btnTabListado;
         private Guna2Button btnTabNueva;
         private Guna2Button btnTabRecepcion;
@@ -23,8 +25,10 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private Control _activeControl;
         private bool _revisionDesdeHistorial;
 
-        public Vista_OrdenesModulo()
+        public Vista_OrdenesModulo(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
             InitializeComponent();
             Load += Vista_OrdenesModulo_Load;
         }
@@ -32,7 +36,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private void Vista_OrdenesModulo_Load(object sender, EventArgs e)
         {
             if (DesignMode) return;
-            btnTabNueva.Visible = SessionManager.Role == UserRole.Admin;
+            btnTabNueva.Visible = servicios.Sesion.Role == UserRole.Admin;
             InicializarVistas();
             MostrarListado();
         }
@@ -92,33 +96,33 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private void InicializarVistas()
         {
-            _vistaListado = new Vista_OrdenesListado(
+            _vistaListado = new Vista_OrdenesListado(servicios,
                 soloRecepcion: false,
                 mostrarNuevaOrden: false,
                 onNuevaOrden: MostrarAlta,
                 onEditarOrden: MostrarAlta,
                 onRevisarOrden: MostrarRevision);
 
-            _vistaRecepcion = new Vista_OrdenesListado(
+            _vistaRecepcion = new Vista_OrdenesListado(servicios,
                 soloRecepcion: true,
                 mostrarNuevaOrden: false,
                 onEditarOrden: MostrarAlta,
                 onRevisarOrden: MostrarRevisionDesdeRecepcion);
 
-            _vistaHistorial = new Vista_OrdenesListado(
+            _vistaHistorial = new Vista_OrdenesListado(servicios,
                 soloHistorial: true,
                 mostrarNuevaOrden: false,
                 onEditarOrden: MostrarAlta,
                 onRevisarOrden: MostrarRevisionDesdeHistorial);
 
-            _vistaAlta = new Vista_OrdenesAlta();
+            _vistaAlta = new Vista_OrdenesAlta(servicios);
             _vistaAlta.OnOrdenGuardada = idOrden =>
             {
                 RefrescarListas();
                 MostrarListado();
             };
 
-            _vistaRevision = new Vista_OrdenesRevision();
+            _vistaRevision = new Vista_OrdenesRevision(servicios);
             _vistaRevision.OnRecepcionConfirmada = idOrden =>
             {
                 RefrescarListas();
@@ -161,7 +165,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private void MostrarAlta()
         {
-            if (SessionManager.Role != UserRole.Admin)
+            if (servicios.Sesion.Role != UserRole.Admin)
                 return;
 
             ActivarTab(btnTabNueva);
@@ -171,7 +175,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private void MostrarAlta(int idOrden)
         {
-            if (SessionManager.Role != UserRole.Admin)
+            if (servicios.Sesion.Role != UserRole.Admin)
                 return;
 
             ActivarTab(btnTabNueva);

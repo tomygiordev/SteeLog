@@ -8,7 +8,6 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Threading.Tasks;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
@@ -18,6 +17,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 {
     public class Vista_OrdenesListado : Form, IRefrescable, IOrdenesVista, IOrdenesResultadoIncierto
     {
+        private readonly IServiciosVista servicios;
         private OrdenesPresenter _presenter;
         private readonly CargaVigente _previews = new CargaVigente();
         private int _operacionesActivas;
@@ -39,7 +39,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Func<string, bool> ConfirmarEliminacion = mensaje => Dialogo.Confirmar(mensaje, "Eliminar orden", true);
 
-        public Vista_OrdenesListado(
+        public Vista_OrdenesListado(IServiciosVista servicios,
             bool soloRecepcion = false,
             bool soloHistorial = false,
             bool mostrarNuevaOrden = true,
@@ -47,6 +47,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             Action<int> onEditarOrden = null,
             Action<int> onRevisarOrden = null)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
             _soloRecepcion = soloRecepcion;
             _soloHistorial = soloHistorial;
             _mostrarNuevaOrden = mostrarNuevaOrden;
@@ -61,7 +63,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private async void Vista_OrdenesListado_Load(object sender, EventArgs e)
         {
             if (DesignMode) return;
-            _rolActual = SessionManager.Role;
+            _rolActual = servicios.Sesion.Role;
             btnNuevaOrden.Visible = _rolActual == UserRole.Admin && _mostrarNuevaOrden && !_soloRecepcion;
             dgvOrdenes.Columns["colAbrir"].Visible = _soloRecepcion || _rolActual == UserRole.Galpon || _rolActual == UserRole.Admin;
             dgvOrdenes.Columns["colEditar"].Visible = _rolActual == UserRole.Admin;
@@ -74,7 +76,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 layout.RowStyles[2] = conPreview ? new RowStyle(SizeType.Percent, 42F) : new RowStyle(SizeType.Absolute, 0F);
             }
             CargarEstados();
-            _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
+            _presenter = servicios.CrearOrdenesPresenter(this);
             await CargarOrdenes();
         }
         public void SetOcupada(bool ocupada)
@@ -362,7 +364,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             {
                 if (_presenter == null) return;
                 using (var carga = _previews.Iniciar(this, () => IsDisposed || Disposing, false)) {
-                var previewPresenter = LocalServices.Current.CrearOrdenesPresenter(carga);
+                var previewPresenter = servicios.CrearOrdenesPresenter(carga);
                 var resultado = await previewPresenter.ObtenerAsync(ordenResumen.id_orden_compra, carga.Token);
                 if (!carga.EsActual || !resultado.Exitoso) return;
                 var actual = dgvOrdenes.CurrentRow == null ? null : dgvOrdenes.CurrentRow.DataBoundItem as OrdenCompra;
@@ -410,7 +412,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             try
             {
                 
-                string directorio = LocalServices.Current.ReportsDirectory;
+                string directorio = servicios.ReportsDirectory;
                 if (!Directory.Exists(directorio))
                     Directory.CreateDirectory(directorio);
 

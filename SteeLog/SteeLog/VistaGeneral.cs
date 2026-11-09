@@ -353,7 +353,7 @@ namespace SteeLog
             }
             else
             {
-                var form = new Vista_Movimientos();
+                var form = new Vista_Movimientos(servicios);
                 form.SetEditMode(idMovimiento);
                 openChildForm(form);
             }
@@ -379,7 +379,7 @@ namespace SteeLog
             }
             else
             {
-                openChildForm(() => new Vista_HistorialMovimientos());
+                openChildForm(() => new Vista_HistorialMovimientos(servicios));
             }
         }
 
@@ -418,7 +418,7 @@ namespace SteeLog
             }
             else
             {
-                form = new Vista_OrdenesAlta();
+                form = new Vista_OrdenesAlta(servicios);
             }
 
             if (idOrden > 0)
@@ -438,7 +438,7 @@ namespace SteeLog
             }
             else
             {
-                form = new Vista_OrdenesRevision();
+                form = new Vista_OrdenesRevision(servicios);
             }
 
             form.SetOrder(idOrden);
@@ -602,13 +602,13 @@ namespace SteeLog
 
         private void btnEntrada_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Movimientos());
+            openChildForm(() => new Vista_Movimientos(servicios));
             hideSubMenu();
         }
 
         private void btnHistorial_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_HistorialMovimientos());
+            openChildForm(() => new Vista_HistorialMovimientos(servicios));
             hideSubMenu();
         }
 
@@ -685,7 +685,7 @@ namespace SteeLog
             btnNuevaOrden.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
             btnNuevaOrden.Click += (s, e) =>
             {
-                openChildForm(() => new Vista_OrdenesModulo());
+                openChildForm(() => new Vista_OrdenesModulo(servicios));
                 hideSubMenu();
             };
             panelMovimientos.Controls.Add(btnNuevaOrden);

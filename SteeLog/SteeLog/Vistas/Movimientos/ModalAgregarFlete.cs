@@ -1,7 +1,6 @@
 using System;
 using System.Windows.Forms;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using System.Threading;
 using System.Drawing;
 using SteeLog.UI;
@@ -10,16 +9,19 @@ namespace SteeLog.Vistas.Movimientos
 {
     public partial class ModalAgregarFlete : Form, IMovimientosVista
     {
+        private readonly IServiciosVista servicios;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private MovimientosPresenter presenter;
-        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        private MovimientosPresenter Presenter => presenter ?? (presenter = servicios.CrearMovimientosPresenter(this));
         public void SetOcupada(bool valor) { if (!IsDisposed) btnConfirmar.Enabled = !valor; }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public int IdFleteCreado { get; private set; }
         public string NombreFleteCreado { get; private set; }
 
-        public ModalAgregarFlete()
+        public ModalAgregarFlete(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
             InitializeComponent();
             AplicarTema();
             FormClosed += (s,e) => cierre.Cancel();

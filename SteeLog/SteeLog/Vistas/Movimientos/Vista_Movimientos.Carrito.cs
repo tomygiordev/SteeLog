@@ -11,7 +11,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using Timer = System.Windows.Forms.Timer;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Movimientos;
 using System.Windows.Forms;
 using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
@@ -33,7 +32,7 @@ namespace SteeLog.Vistas.Movimientos
             int idMat = _materialSeleccionado.id;
             string nomMat = _materialSeleccionado.nombre;
 
-            using (var modal = new ModalRecortes(idMat, nomMat))
+            using (var modal = new ModalRecortes(servicios, idMat, nomMat))
             {
                 if (modal.ShowDialog() == DialogResult.OK)
                 {
@@ -111,7 +110,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private void btnInsumo_Click(object sender, EventArgs e)
         {
-            using (var modal = new ModalInsumos())
+            using (var modal = new ModalInsumos(servicios))
             {
                 if (modal.ShowDialog() == DialogResult.OK)
                 {
@@ -313,7 +312,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (consumeStock && totalSolicitado > stockDisponible)
                 {
-                    string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                    string mensaje = servicios.Sesion.DebeOcultarCantidadesStockMateriales
                         ? "Stock insuficiente para agregar ese material."
                         : $"Stock insuficiente. Disponible: {stockDisponible}";
                     ToastNotification.ShowWarning(mensaje);
@@ -338,7 +337,7 @@ namespace SteeLog.Vistas.Movimientos
                     decimal totalSolicitado = yaEnLista + cantidad;
                     if (consumeStock && totalSolicitado > stockDisponibleRec)
                     {
-                        string mensaje = SessionManager.DebeOcultarCantidadesStockMateriales
+                        string mensaje = servicios.Sesion.DebeOcultarCantidadesStockMateriales
                             ? "Stock de recorte insuficiente."
                             : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
                         ToastNotification.ShowWarning(mensaje);
@@ -347,7 +346,7 @@ namespace SteeLog.Vistas.Movimientos
                 }
                 else if (consumeStock)
                 {
-                    ToastNotification.ShowWarning(SessionManager.DebeOcultarCantidadesStockMateriales
+                    ToastNotification.ShowWarning(servicios.Sesion.DebeOcultarCantidadesStockMateriales
                         ? "Stock de recorte insuficiente."
                         : "Stock de recorte insuficiente. Disponible: 0");
                     return;
@@ -400,7 +399,7 @@ namespace SteeLog.Vistas.Movimientos
                     if (lblMat != null)
                     {
                         string textoPrecio = "";
-                        if (nuevoItem.EsCompraEventual && nuevoItem.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
+                        if (nuevoItem.EsCompraEventual && nuevoItem.precio_unitario > 0 && servicios.Sesion.Role == UserRole.Admin)
                         {
                             textoPrecio = $" (${nuevoItem.precio_unitario:N2})";
                         }
@@ -509,7 +508,7 @@ namespace SteeLog.Vistas.Movimientos
 
             Label lblMaterial = new Label();
             string textoPrecio = "";
-            if (item.EsCompraEventual && item.precio_unitario > 0 && SessionManager.Role == UserRole.Admin)
+            if (item.EsCompraEventual && item.precio_unitario > 0 && servicios.Sesion.Role == UserRole.Admin)
             {
                 textoPrecio = $" (${item.precio_unitario:N2})";
             }

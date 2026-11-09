@@ -49,7 +49,7 @@ namespace SteeLog.Tests
         private static OpcionMovimiento Obra(int id, string nombre) => new OpcionMovimiento { Id = id, Nombre = nombre, Tipo = "OBRA", Activo = true };
         private static Vista_Movimientos VistaListaParaRecarga(EjecutorCatalogos ejecutor, List<string> toasts)
         {
-            var vista = new Vista_Movimientos(); var h = vista.Handle;
+            var vista = new Vista_Movimientos(new ServiciosVistaDePrueba()); var h = vista.Handle;
             Fijar(vista, "presenter", new MovimientosPresenter(ejecutor, vista));
             Fijar(vista, "catalogosListos", true); Fijar(vista, "modeloListo", true);
             Fijar(vista, "NotificarGuardado", new Action<string>(toasts.Add));
@@ -104,10 +104,10 @@ namespace SteeLog.Tests
         public void LimpiarDesmarcaEventualYOcultaPrecio()
         {
             EnSta(() => {
-                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                var servicios = new ServiciosVistaDePrueba(); servicios.Sesion.SetSession("admin@tesis.local");
                 try
                 {
-                    using (var vista = new Vista_Movimientos())
+                    using (var vista = new Vista_Movimientos(servicios))
                     {
                         var h = vista.Handle;
                         var chk = Campo<Control>(vista, "chkCompraEventual"); var checkedProp = chk.GetType().GetProperty("Checked"); checkedProp.SetValue(chk, true);
@@ -117,14 +117,14 @@ namespace SteeLog.Tests
                         Assert.False((bool)checkedProp.GetValue(chk)); Assert.Equal(0F, cols.ColumnStyles[6].Width); Assert.Equal("", precio.Text);
                     }
                 }
-                finally { SteeLog.Servicios.SessionManager.Clear(); }
+                finally { servicios.Sesion.Clear(); }
             });
         }
         [Fact]
         public void RecepcionConValorExcedidoRevierteCeldaYResumen()
         {
             EnSta(() => {
-                using (var revision = new Vista_OrdenesRevision())
+                using (var revision = new Vista_OrdenesRevision(new ServiciosVistaDePrueba()))
                 {
                     var h = revision.Handle; var avisos = new List<string>();
                     Fijar(revision, "AdvertirEdicion", new Action<string>(avisos.Add));
@@ -157,7 +157,7 @@ namespace SteeLog.Tests
         public void ListadoNoPendienteNoMuestraBotonEliminarVacio()
         {
             EnSta(() => {
-                using (var listado = new Vista_OrdenesListado())
+                using (var listado = new Vista_OrdenesListado(new ServiciosVistaDePrueba()))
                 {
                     var h = listado.Handle;
                     var grilla = Campo<DataGridView>(listado, "dgvOrdenes");
@@ -181,7 +181,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var tipo = typeof(Vista_OrdenesAlta).GetNestedType("ModalCambioMaterialOrden", BindingFlags.NonPublic);
-                using (var modal = (Form)Activator.CreateInstance(tipo, new object[] { new List<Material>(), 0 }))
+                using (var modal = (Form)Activator.CreateInstance(tipo, new object[] { new ServiciosVistaDePrueba(), new List<Material>(), 0 }))
                 {
                     var h = modal.Handle;
                     var a = (Control)tipo.GetField("btnAceptar", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(modal);

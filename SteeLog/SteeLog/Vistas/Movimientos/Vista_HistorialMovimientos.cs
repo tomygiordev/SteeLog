@@ -8,7 +8,6 @@ using System.Windows.Forms;
 using System.Threading;
 using System.ComponentModel;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using Guna.UI2.WinForms;
 using SteeLog.Modelos;
 using SteeLog.Servicios;
@@ -20,9 +19,10 @@ namespace SteeLog.Vistas.Movimientos
 {
     public partial class Vista_HistorialMovimientos : Form, IMessageFilter, IRefrescable, IMovimientosVista, IMovimientosResultadoIncierto
     {
+        private readonly IServiciosVista servicios;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private MovimientosPresenter presenter;
-        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        private MovimientosPresenter Presenter => presenter ?? (presenter = servicios.CrearMovimientosPresenter(this));
         public void SetOcupada(bool ocupada) { if (!IsDisposed && dgvHistorial != null) dgvHistorial.Enabled = !ocupada; }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         private bool resultadoIncierto;
@@ -43,8 +43,10 @@ namespace SteeLog.Vistas.Movimientos
         private CheckTema chkHasta;
         private decimal precioUnitarioAnterior;
 
-        public Vista_HistorialMovimientos()
+        public Vista_HistorialMovimientos(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
             InitializeComponent();
             Tema.SinEscala(this);
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
@@ -118,7 +120,7 @@ namespace SteeLog.Vistas.Movimientos
             materiales.SetColumnSpan(dgvDetalles, 8);
 
             dgvDetalles.AutoGenerateColumns = false;
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            bool esAdmin = servicios.Sesion.Role == UserRole.Admin;
             dgvDetalles.ReadOnly = !esAdmin;
             dgvDetalles.EditMode = DataGridViewEditMode.EditOnEnter;
             
@@ -537,7 +539,7 @@ namespace SteeLog.Vistas.Movimientos
             dgvHistorial.Columns.Add(colEditar);
 
             // Ocultar Editar para rol Galpon
-            if (SteeLog.Servicios.SessionManager.Role != SteeLog.Servicios.UserRole.Admin)
+            if (servicios.Sesion.Role != SteeLog.Servicios.UserRole.Admin)
             {
                 colEditar.Visible = false;
             }

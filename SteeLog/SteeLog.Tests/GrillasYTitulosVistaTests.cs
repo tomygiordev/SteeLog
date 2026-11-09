@@ -86,8 +86,6 @@ namespace SteeLog.Tests
             EnSta(() => {
                 var tipos = new[] {
                     typeof(Vista_Login),
-                    typeof(Vista_Movimientos),
-                    typeof(Vista_HistorialMovimientos),
                     typeof(SteeLog.Vistas.Inventario.Vista_Conteo),
                     typeof(SteeLog.Vistas.Inventario.Vista_Inventario),
                     typeof(Vista_Kardex),

@@ -112,7 +112,7 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                using (var vista = new Vista_Movimientos())
+                using (var vista = new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var h = vista.Handle;
                     var buscar = vista.GetType().GetMethod("EjecutarBusqueda", Flags);
@@ -133,7 +133,7 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                using (var vista = new Vista_Movimientos())
+                using (var vista = new Vista_Movimientos(new ServiciosVistaDePrueba()))
                 {
                     var h = vista.Handle;
                     var avisos = new List<string>();

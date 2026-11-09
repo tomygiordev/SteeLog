@@ -9,7 +9,6 @@ using System.Text;
 using System.Windows.Forms;
 using System.Threading.Tasks;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Domain.OrdenesCompra;
 using SteeLog.Modelos;
 using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
@@ -19,6 +18,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 {
     public class Vista_OrdenesRevision : Form, IOrdenesVista, IOrdenesResultadoIncierto
     {
+        private readonly IServiciosVista servicios;
         private OrdenesPresenter _presenter;
         private readonly Action<string> _avisoExito;
         private readonly Action<string> _avisoError;
@@ -29,7 +29,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private long _versionCarga;
         private long _versionIncierto;
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
-        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
+        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector;
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
         // Último valor de "Recibida" aceptado por línea: el DataBinding escribe la propiedad antes de CellEndEdit,
         // así que al rechazar una edición se revierte a este valor y no al ya modificado.
@@ -56,9 +56,11 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         public Action OnCancelar { get; set; }
         public int CurrentOrderId => _idOrden;
 
-        public Vista_OrdenesRevision() : this(null, null) { }
-        public Vista_OrdenesRevision(Action<string> avisoExito, Action<string> avisoError)
+        public Vista_OrdenesRevision(IServiciosVista servicios, Action<string> avisoExito = null, Action<string> avisoError = null)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            CrearLector = v => servicios.CrearOrdenesPresenter(v);
+
             _avisoExito = avisoExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
             _avisoError = avisoError ?? (mensaje => ToastNotification.ShowError(mensaje));
             InitializeComponent();
@@ -68,7 +70,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private async void Vista_OrdenesRevision_Load(object sender, EventArgs e)
         {
             if (DesignMode) return;
-            _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
+            _presenter = servicios.CrearOrdenesPresenter(this);
             if (_idOrden > 0) await CargarOrden();
         }
         public void SetOcupada(bool ocupada) { if (!IsDisposed && !Disposing && btnConfirmar != null) btnConfirmar.Enabled = !ocupada && _modelo.Listo && _permiteRecepcion && !_resultadoIncierto; }
@@ -331,7 +333,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     _recibidaValida[detalle] = detalle.cantidad_recibida;
                 }
 
-                bool puedeRevisar = (SessionManager.Role == UserRole.Galpon || SessionManager.Role == UserRole.Admin)
+                bool puedeRevisar = (servicios.Sesion.Role == UserRole.Galpon || servicios.Sesion.Role == UserRole.Admin)
                     && EstadosOrden.PermiteRecepcion(orden.estado);
                 dgvDetalles.ReadOnly = !puedeRevisar;
                 dgvDetalles.Columns["colMaterial"].ReadOnly = true;
@@ -538,7 +540,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private async void BtnConfirmar_Click(object sender, EventArgs e)
         {
             if (_resultadoIncierto || !_modelo.Listo || _modelo.Id != _idOrden || !_permiteRecepcion) return;
-            if (SessionManager.Role != UserRole.Galpon && SessionManager.Role != UserRole.Admin)
+            if (servicios.Sesion.Role != UserRole.Galpon && servicios.Sesion.Role != UserRole.Admin)
             {
                 ToastNotification.ShowWarning("Solo Galpón o Admin pueden confirmar la recepción.");
                 return;
@@ -704,7 +706,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             var parent = TopLevelControl as VistaGeneral;
             if (parent != null)
-                parent.openChildForm(() => new Vista_OrdenesModulo());
+                parent.openChildForm(() => new Vista_OrdenesModulo(servicios));
         }
 
         private void BtnCompletarTodo_Click(object sender, EventArgs e)

@@ -6,7 +6,6 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Threading;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using SteeLog;
 using System.Drawing;
@@ -16,17 +15,21 @@ namespace SteeLog.Vistas.Movimientos
 {
     public partial class ModalRecortes : Form
     {
+        private readonly IServiciosVista servicios;
         private int _idMaterial;
         private string _nombreMaterial;
-        private readonly RecortesPresenter _presenter = new RecortesPresenter(LocalServices.Current.Executor);
+        private readonly RecortesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionCarga;
         private List<Recorte> _listaOriginal = new List<Recorte>();
         public Recorte RecorteSeleccionado { get; private set; }
         public decimal CantidadSeleccionada { get; private set; } = 1;
 
-        public ModalRecortes(int idMaterial, string nombreMaterial)
+        public ModalRecortes(IServiciosVista servicios, int idMaterial, string nombreMaterial)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            _presenter = new RecortesPresenter(servicios.Executor);
+
             InitializeComponent();
             AplicarTema();
             _idMaterial = idMaterial;

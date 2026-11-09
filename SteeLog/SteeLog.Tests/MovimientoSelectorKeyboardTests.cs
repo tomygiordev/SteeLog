@@ -4,6 +4,7 @@ using System.Reflection;
 using System.Threading;
 using System.Windows.Forms;
 using SteeLog.Modelos;
+using SteeLog.Tests;
 using SteeLog.Vistas.Movimientos;
 using Xunit;
 
@@ -38,7 +39,7 @@ public sealed class MovimientoSelectorKeyboardTests
     public void ResultadoDeBusquedaSeleccionaElMismoMaterialQueElClic(Keys key, bool selecciona)
     {
         EnSta(() => {
-            using (var vista = new Vista_Movimientos())
+            using (var vista = new Vista_Movimientos(new ServiciosVistaDePrueba()))
             {
                 var type = typeof(Vista_Movimientos);
                 var itemType = type.GetNestedType("ItemBuscador", BindingFlags.NonPublic);

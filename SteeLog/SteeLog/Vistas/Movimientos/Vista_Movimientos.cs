@@ -10,7 +10,6 @@ using System.Threading.Tasks;
 using System.Threading;
 using Timer = System.Windows.Forms.Timer;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Movimientos;
 using System.Windows.Forms;
 using ImpactoStock = SteeLog.Domain.Inventario.ImpactoStock;
@@ -26,6 +25,7 @@ namespace SteeLog.Vistas.Movimientos
 {
     public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista, IMovimientosResultadoIncierto, IRecargaCatalogos
     {
+        private readonly IServiciosVista servicios;
         private List<MovimientoMaterial> materialesLista = new List<MovimientoMaterial>();
         private FlowLayoutPanel flpMateriales;
         private Panel panelSeleccionado = null;
@@ -42,11 +42,11 @@ namespace SteeLog.Vistas.Movimientos
             MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
         internal Action<string> NotificarGuardado = mensaje => ToastNotification.ShowSuccess(mensaje);
         internal Action<string> AdvertirGuardado = mensaje => ToastNotification.ShowWarning(mensaje);
-        internal Func<string> VersionBorrador = () => MovimientoDraftService.VersionActual();
-        internal Action<string> EliminarBorradorConfirmado = version => MovimientoDraftService.EliminarSiCoincide(version);
-        internal Action<SteeLog.Core.Application.Borradores.MovimientoDraft> GuardarBorradorActual = draft => MovimientoDraftService.Guardar(draft);
-        internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft> LeerBorrador = () => MovimientoDraftService.Leer();
-        internal Action DescartarBorrador = () => MovimientoDraftService.Eliminar();
+        internal Func<string> VersionBorrador;
+        internal Action<string> EliminarBorradorConfirmado;
+        internal Action<SteeLog.Core.Application.Borradores.MovimientoDraft> GuardarBorradorActual;
+        internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft> LeerBorrador;
+        internal Action DescartarBorrador;
         // Inyectable en tests: reemplaza el MessageBox "¿Desea recuperarlo?".
         internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft, bool> ConfirmarRecuperacion;
         private int _idMovimientoAEditar = 0;
@@ -66,7 +66,7 @@ namespace SteeLog.Vistas.Movimientos
         private CancellationTokenSource cargaEdicion;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private MovimientosPresenter presenter;
-        private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
+        private MovimientosPresenter Presenter => presenter ?? (presenter = servicios.CrearMovimientosPresenter(this));
         public void SetOcupada(bool valor) { ocupada = valor; if (!IsDisposed && guna2Button2 != null) guna2Button2.Enabled = !valor && modeloListo && catalogosListos && !resultadoIncierto; }
         // Remito del intento incierto: se conserva para el texto de confirmación. El estado estático sobrevive
         // al cierre y reapertura de la vista dentro del mismo proceso (no entre reinicios de la aplicación).
@@ -157,8 +157,15 @@ namespace SteeLog.Vistas.Movimientos
         }
 
 
-        public Vista_Movimientos()
+        public Vista_Movimientos(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            VersionBorrador = () => servicios.Borrador.VersionActual();
+            EliminarBorradorConfirmado = version => servicios.Borrador.EliminarSiCoincide(version);
+            GuardarBorradorActual = draft => servicios.Borrador.Guardar(draft);
+            LeerBorrador = () => servicios.Borrador.Leer();
+            DescartarBorrador = () => servicios.Borrador.Eliminar();
+
             InitializeComponent();
             Tema.SinEscala(this);
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
@@ -624,7 +631,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private void ConfigurarPreciosUI()
         {
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            bool esAdmin = servicios.Sesion.Role == UserRole.Admin;
 
             // 1. Inicializar lblPrecioMaterial y txtPrecioMaterial
             lblPrecioMaterial = new Label
@@ -799,7 +806,7 @@ namespace SteeLog.Vistas.Movimientos
 
         private void ActualizarVisibilidadPrecios()
         {
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            bool esAdmin = servicios.Sesion.Role == UserRole.Admin;
             string tipoMovStr = cmbMovimientos.Text.ToUpper();
             // El total del movimiento siempre se calcula desde sus detalles.
             bool mostrarPrecioGeneral = false;
@@ -1430,8 +1437,8 @@ namespace SteeLog.Vistas.Movimientos
                     {
                         t.Stop();
                         t.Dispose();
-                        string detalle = SessionManager.DebeOcultarCantidadesStockMateriales
-                            ? $"Estado: {SessionManager.ObtenerEstadoStockMaterial(capturedMat.stockActual)}"
+                        string detalle = servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                            ? $"Estado: {servicios.Sesion.ObtenerEstadoStockMaterial(capturedMat.stockActual)}"
                             : $"Actual: {capturedMat.stockActual} | Mínimo: {capturedMat.stockMinimo}";
                         ToastNotification.ShowWarning(
                             $"⚠ Stock bajo: {capturedMat.nombre}\n" +
@@ -1450,7 +1457,7 @@ namespace SteeLog.Vistas.Movimientos
         private async void btnAgregarFlete_Click(object sender, EventArgs e)
         {
             if (BloquearPorResultadoIncierto()) return;
-            using (var modal = new ModalAgregarFlete())
+            using (var modal = new ModalAgregarFlete(servicios))
             {
                 if (modal.ShowDialog() == DialogResult.OK)
                 {

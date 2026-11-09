@@ -8,7 +8,6 @@ using System.Linq;
 using System.Windows.Forms;
 using System.Threading.Tasks;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
@@ -18,6 +17,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 {
     public class Vista_OrdenesAlta : Form, IOrdenesVista, IOrdenesResultadoIncierto, IRecargaCatalogos
     {
+        private readonly IServiciosVista servicios;
         private bool _ocupada;
         private OrdenesPresenter _presenter;
         private readonly Action<string> _avisoExito;
@@ -29,7 +29,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private long _versionCarga;
         private long _versionIncierto;
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
-        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
+        internal Func<IOrdenesVista, OrdenesPresenter> CrearLector;
         private string _destino = "";
         private int _ordenPendiente;
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
@@ -60,9 +60,11 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private Guna2TextBox txtEstado;
         public Action<int> OnOrdenGuardada { get; set; }
 
-        public Vista_OrdenesAlta() : this(null, null) { }
-        public Vista_OrdenesAlta(Action<string> avisoExito, Action<string> avisoError)
+        public Vista_OrdenesAlta(IServiciosVista servicios, Action<string> avisoExito = null, Action<string> avisoError = null)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            CrearLector = v => servicios.CrearOrdenesPresenter(v);
+
             _avisoExito = avisoExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
             _avisoError = avisoError ?? (mensaje => ToastNotification.ShowError(mensaje));
             InitializeComponent();
@@ -74,7 +76,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private async void Vista_OrdenesAlta_Load(object sender, EventArgs e)
         {
             if (DesignMode) return;
-            _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
+            _presenter = servicios.CrearOrdenesPresenter(this);
             _catalogosListos = await CargarCombos();
             if (IsDisposed || Disposing || !_catalogosListos) return;
             var destino = await _presenter.DestinoAsync();
@@ -493,7 +495,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             if (detalle == null)
                 return;
 
-            using (var modal = new ModalCambioMaterialOrden(_materiales, detalle.id_material))
+            using (var modal = new ModalCambioMaterialOrden(servicios, _materiales, detalle.id_material))
             {
                 if (modal.ShowDialog(this) != DialogResult.OK || modal.MaterialSeleccionado == null)
                     return;
@@ -574,7 +576,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private async void BtnGuardar_Click(object sender, EventArgs e)
         {
             if (_resultadoIncierto || !_catalogosListos || !_modelo.Listo || _modelo.Id != _idOrdenEdicion) return;
-            if (SessionManager.Role != UserRole.Admin)
+            if (servicios.Sesion.Role != UserRole.Admin)
             {
                 ToastNotification.ShowWarning("Solo un usuario Admin puede guardar órdenes.");
                 return;
@@ -853,8 +855,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 {
                     Mat = m,
                     NombreMostrar = m.nombre,
-                    InfoMostrar = SessionManager.DebeOcultarCantidadesStockMateriales
-                        ? $"Material • {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
+                    InfoMostrar = servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                        ? $"Material • {servicios.Sesion.ObtenerEstadoStockMaterial(m.stockActual)}"
                         : $"Material • Stock: {m.stockActual:N0}",
                     ColorAcento = Tema.Acento,
                     Icono = "📦"
@@ -1016,14 +1018,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private class ModalCambioMaterialOrden : Form
         {
+            private readonly IServiciosVista servicios;
             private readonly Guna2ComboBox cmbMateriales;
             private readonly Guna2Button btnAceptar;
             private readonly Guna2Button btnCancelar;
 
             public Material MaterialSeleccionado { get; private set; }
 
-            public ModalCambioMaterialOrden(List<Material> materiales, int idMaterialActual)
+            public ModalCambioMaterialOrden(IServiciosVista servicios, List<Material> materiales, int idMaterialActual)
             {
+                this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+
                 Text = "Cambiar material";
                 StartPosition = FormStartPosition.CenterParent;
                 FormBorderStyle = FormBorderStyle.FixedDialog;
