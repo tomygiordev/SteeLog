@@ -123,12 +123,19 @@ namespace SteeLog.UI
                     return owner;
                 }
                 var act = Form.ActiveForm;
-                if (act != null && !act.IsDisposed && act.IsHandleCreated && act.Visible && !(act is FormDialogo)
-                    && act.WindowState != FormWindowState.Minimized)
-                    return act;
+                if (OwnerValido(act)) return act;
+                // Sin formulario activo (la app perdió el foco): ventana principal abierta.
+                foreach (Form f in Application.OpenForms)
+                    if (OwnerValido(f)) return f;
             }
             catch { }
             return null;
+        }
+
+        private static bool OwnerValido(Form f)
+        {
+            return f != null && !f.IsDisposed && f.IsHandleCreated && f.Visible && f.TopLevel && !(f is FormDialogo) && !(f is ToastNotification)
+                && f.WindowState != FormWindowState.Minimized;
         }
 
         private static DialogResult EjecutarUi(IWin32Window owner, string mensaje, string titulo, MessageBoxButtons botones,
