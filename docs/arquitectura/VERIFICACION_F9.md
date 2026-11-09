@@ -209,3 +209,9 @@ Método: instalaciones aisladas reconstruidas desde cada HEAD (`109c284`, `a49f5
 **Diseño confirmado, no defecto:** recepción de OC no genera movimiento Kardex (documentado); alta de herramienta/insumo con historial inicial «Galpón → Galpón» y prefijo de ID en herramientas (F7); Galpón puede eliminar movimientos y ver el reporte de stock enmascarado (Application). **Sin corregir (requiere esquema):** el historial de herramientas muestra el estado actual, no el histórico.
 
 **No probado por automatización:** PDF de pendientes de órdenes (abre el visor externo sin diálogo), «Buscar actualizaciones», resultado incierto real (requiere cortar la base). **F9 sigue ABIERTA:** Designer interactivo y recorrido sin Internet requieren al usuario.
+
+### Paquete y smoke final sobre `c71a095`
+
+Paquete `A:\SteeLog-Pruebas\paquete-c71a095-c1585b13351348efb7d42b669f90c014(.zip)`: commit `c71a09582af53bf8146ed8855e925ef345ec8f57`, `arbolModificado=false`, ZIP SHA-256 `91EDD98D1A396A7D5BBC6BE16EB4E9120518BACFF3F9B0F93DB35D65D6F50809`; `paquete-demo.ps1` 6/6 PASS. Smoke GUI sobre su instalación aislada, 5/5 OK sin fallas: catálogo nuevo visible en vistas en caché sin reiniciar (ubicación en Movimientos, categoría en Materiales); ubicación y obra en uso rechazadas con aviso de negocio y sin borrar; celda de recepción excedida revertida sin «+89» ni cambios en base; Limpiar desmarca Eventual; eliminación de movimiento revierte stock. Base idéntica a la línea base al finalizar (ubicaciones 4, categorías 7, movimientos 2, obras 3, stock 485, DEMO-OC-001 Pendiente), confirmado por root.
+
+Pendiente exclusivamente del usuario para cerrar F9: Designer interactivo, recorrido con Internet desconectado y PDF de pendientes de órdenes (abre visor externo sin diálogo).
