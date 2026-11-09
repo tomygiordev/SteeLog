@@ -529,6 +529,7 @@
     <Compile Include="CompositionRoot\UseCaseExecutor.cs" />
     <Compile Include="Presentation\IUseCaseExecutor.cs" />
     <Compile Include="Presentation\OrdenesPresenter.cs" />
+    <Compile Include="Presentation\EjecucionExclusiva.cs" />
     <Compile Include="Presentation\MovimientosPresenter.cs" />
     <Compile Include="Presentation\InsumosPresenter.cs" />
     <Compile Include="Presentation\HerramientasPresenter.cs" />

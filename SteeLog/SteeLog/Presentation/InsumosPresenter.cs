@@ -24,17 +24,11 @@ namespace SteeLog.Presentation
     public interface IInsumosResultadoIncierto { void MarcarResultadoIncierto(); }
     public sealed class InsumosPresenter
     {
-        private readonly IUseCaseExecutor executor; private readonly IInsumosVista vista; private int ocupado;
-        public InsumosPresenter(IUseCaseExecutor executor,IInsumosVista vista) { this.executor=executor; this.vista=vista; }
-        private async Task<int?> Ejecutar(Func<Task<int>> operacion)
-        {
-            if(Interlocked.CompareExchange(ref ocupado,1,0)!=0) return null;
-            try { vista.SetOcupada(true); return await operacion(); }
-            catch(OperationCanceledException) { return null; }
-            catch(ResultadoEscrituraInciertoException e) { if (vista is IInsumosResultadoIncierto incierto) incierto.MarcarResultadoIncierto(); else vista.MostrarError(e); return null; }
-            catch(Exception e) { vista.MostrarError(e); return null; }
-            finally { Interlocked.Exchange(ref ocupado,0); vista.SetOcupada(false); }
-        }
+        private readonly IUseCaseExecutor executor; private readonly IInsumosVista vista; private readonly EjecucionExclusiva ejecucion;
+        public InsumosPresenter(IUseCaseExecutor executor,IInsumosVista vista) { this.executor=executor; this.vista=vista; ejecucion=new EjecucionExclusiva(valor => vista.SetOcupada(valor), error => vista.MostrarError(error)); }
+        private Task<int?> Ejecutar(Func<Task<int>> operacion)
+            => ejecucion.Ejecutar<int?>(async () => await operacion(),
+                e => { if (vista is IInsumosResultadoIncierto incierto) incierto.MarcarResultadoIncierto(); else vista.MostrarError(e); });
         public static IReadOnlyList<OpcionFiltroInsumo> OpcionesFiltro(IReadOnlyList<InsumoLectura> datos)
         {
             var repetidos = new HashSet<string>(datos.GroupBy(x => x.Nombre ?? "", StringComparer.OrdinalIgnoreCase)
