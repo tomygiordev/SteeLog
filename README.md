@@ -4,7 +4,7 @@
 
 ## Identidad académica y compatibilidad
 
-La solución `SteeLog/SteeLog.sln`, el proyecto `SteeLog/SteeLog/SteeLog.csproj`, los namespaces y el ejecutable `SteeLog.exe` usan la identidad SteeLog. Se conservan las dependencias de terceros y el certificado sin alterar sus contenidos.
+La solución `SteeLog/SteeLog.sln`, el proyecto `SteeLog/SteeLog/SteeLog.csproj`, los namespaces y el ejecutable `SteeLog.exe` usan la identidad SteeLog.
 
 La procedencia, los prompts y las variantes de la marca están en [Resources/Branding](SteeLog/SteeLog/Resources/Branding/README.md). Esta separación visual no certifica la anonimización de datos de bases existentes ni del historial del repositorio.
 
