@@ -55,6 +55,21 @@ public sealed class InventarioIntegrationTests
         Assert.Equal(new DateTime(2025, 1, 1), clock.FechaNegocio);
     }
 
+    [Fact]
+    public async Task ImpactoExplicitoGobiernaStockReversionYKardexAunqueElNombreDigaCompra()
+    {
+        int material = Material(10m);
+        int tipo = Convert.ToInt32(Sql("INSERT INTO public.tipo_movimiento(nombre,impacto) VALUES (@nombre,'salida') RETURNING id_tipomovimiento", new NpgsqlParameter("nombre", "Compra renombrada " + Guid.NewGuid().ToString("N"))));
+        int id = await Crear(Solicitud(material,tipo,2m));
+        Assert.Equal(8m, Stock(material));
+        var kardex = await new SteeLog.Infrastructure.Reportes.NpgsqlKardexConsulta(Factory()).HistorialAsync(material,null,null);
+        Assert.Equal(SteeLog.Domain.Inventario.ImpactoStock.Salida, kardex.Single(x => x.id_movimiento == id).impacto);
+        await Editar(id, Solicitud(material,tipo,3m));
+        Assert.Equal(7m, Stock(material));
+        await Eliminar(id);
+        Assert.Equal(10m, Stock(material));
+    }
+
     [Theory]
     [InlineData("1.2345", "1.23")]
     [InlineData("1.2350", "1.24")]
@@ -165,7 +180,7 @@ public sealed class InventarioIntegrationTests
         private readonly IMovimientosEscritura inner;
         public FallarDespuesTraslado(IMovimientosEscritura inner) { this.inner = inner; }
         public Task<MovimientoPersistido> BloquearAsync(int id, CancellationToken t = default) => inner.BloquearAsync(id,t);
-        public Task<string> NombreTipoAsync(int id, CancellationToken t = default) => inner.NombreTipoAsync(id,t);
+        public Task<TipoMovimiento> TipoAsync(int id, CancellationToken t = default) => inner.TipoAsync(id,t);
         public Task<IDictionary<int,int>> ObtenerMaterialesRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.ObtenerMaterialesRecortesAsync(ids,t);
         public Task<IDictionary<int,decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearRecortesAsync(ids,t);
         public Task<IDictionary<int,InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearInsumosAsync(ids,t);

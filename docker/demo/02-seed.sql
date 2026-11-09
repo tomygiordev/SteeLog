@@ -10,16 +10,16 @@ END $guard$;
 -- =============================================================================
 
 -- Tipos de Movimiento
-INSERT INTO public.tipo_movimiento (id_tipomovimiento, nombre) VALUES
-(1, 'Carga inicial de inventario'),
-(2, 'Compra'),
-(3, 'Compra eventual'),
-(4, 'Envio a Obra'),
-(5, 'Devolucion de obra'),
-(6, 'Aporte de cliente'),
-(7, 'Venta de material'),
-(8, 'Uso interno'),
-(11, 'REGISTRO INTERNO')
+INSERT INTO public.tipo_movimiento (id_tipomovimiento, nombre, impacto) VALUES
+(1, 'Carga inicial de inventario', 'entrada'),
+(2, 'Compra', 'entrada'),
+(3, 'Compra eventual', 'sin_impacto'),
+(4, 'Envio a Obra', 'salida'),
+(5, 'Devolucion de obra', 'entrada'),
+(6, 'Aporte de cliente', 'sin_impacto'),
+(7, 'Venta de material', 'salida'),
+(8, 'Uso interno', 'salida'),
+(11, 'REGISTRO INTERNO', 'registro_interno')
 ON CONFLICT (id_tipomovimiento) DO NOTHING;
 
 SELECT setval('public.tipo_movimiento_id_tipomovimiento_seq', COALESCE((SELECT MAX(id_tipomovimiento) FROM public.tipo_movimiento), 1));

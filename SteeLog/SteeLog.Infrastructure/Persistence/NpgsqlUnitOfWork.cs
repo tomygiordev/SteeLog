@@ -22,6 +22,8 @@ namespace SteeLog.Infrastructure.Persistence
             try { await connection.OpenAsync(cancellationToken).ConfigureAwait(false); cancellationToken.ThrowIfCancellationRequested(); transaction = connection.BeginTransaction(); }
             catch { connection.Dispose(); connection = null; throw; }
         }
+        internal Task<bool> TieneImpactoTipoAsync(CancellationToken token) => factory.TieneImpactoTipoAsync(Connection, Transaction, token);
+
         public Task CommitAsync(CancellationToken cancellationToken = default)
         {
             cancellationToken.ThrowIfCancellationRequested();

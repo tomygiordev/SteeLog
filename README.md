@@ -91,3 +91,26 @@ docker compose -p steelog -f .\docker-compose.yml stop
 ```
 
 Para volver a iniciarla sin abrir LazyDocker, ejecuta `.\docker\iniciar.ps1 -SinInterfaz`. El comando `stop` indicado conserva el volumen y los datos.
+
+## Migraciones F10 para una base existente
+
+La app sigue leyendo y escribiendo sin F10: si falta `tipo_movimiento.impacto` o es NULL,
+usa el clasificador histórico por nombre. Con F10 acepta `entrada`, `salida`, `sin_impacto`,
+`registro_interno` y `segun_destino`. Reiniciar la app después de migrar (la capacidad del
+esquema se detecta una sola vez por factory). No se migra automáticamente al arrancar.
+
+Con un respaldo verificado, detener las escrituras de la app y ejecutar con `psql`
+contra **la base elegida por el administrador**, primero F4 si todavía falta y luego
+**todos** los archivos `docker/migrations/F10_*.sql`, ordenados por nombre:
+
+```powershell
+psql --dbname=$env:STEELOG_MIGRATION_CONNECTION -v ON_ERROR_STOP=1 -f docker/migrations/F4_insumo_movimientos_snapshot.sql
+Get-ChildItem docker/migrations/F10_*.sql | Sort-Object Name | ForEach-Object {
+    psql --dbname=$env:STEELOG_MIGRATION_CONNECTION -v ON_ERROR_STOP=1 -f $_.FullName
+    if ($LASTEXITCODE -ne 0) { throw "Migracion fallida: $($_.Name)" }
+}
+```
+
+Cada archivo es transaccional e idempotente. Los conflictos de datos se informan sin
+borrar ni corregir filas silenciosamente. Init y demo ya incorporan las migraciones;
+no reinstalar sus esquemas sobre una base existente.

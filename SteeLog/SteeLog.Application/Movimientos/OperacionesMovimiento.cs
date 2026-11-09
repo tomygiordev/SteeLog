@@ -29,20 +29,20 @@ namespace SteeLog.Core.Application.Movimientos
             {
                 var previo = id.HasValue ? await repo.BloquearAsync(id.Value, token).ConfigureAwait(false) : null;
                 if (id.HasValue && previo == null) throw new InvalidOperationException("No se encontró el movimiento.");
-                if (previo != null) SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(previo.Cabecera.TipoMovimientoId, previo.TipoNombre);
+                if (previo != null) SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(previo.Cabecera.TipoMovimientoId, previo.TipoNombre, previo.TipoImpacto);
                 var anteriores = previo?.Lineas ?? new List<LineaMovimiento>();
                 var nuevas = solicitud?.Lineas ?? new List<LineaMovimiento>();
                 var insumosPrevios = previo?.Insumos ?? new List<TrasladoInsumo>();
                 var insumosNuevos = solicitud?.Insumos ?? new List<int>();
 
-                string nombreTipo = null;
+                TipoMovimiento tipo = null;
                 ImpactoStock impactoNuevo = ImpactoStock.SinImpacto;
                 decimal factorNuevo = 0m;
                 if (!eliminar && solicitud != null)
                 {
-                    nombreTipo = await repo.NombreTipoAsync(solicitud.Cabecera.TipoMovimientoId, token).ConfigureAwait(false);
-                    SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(solicitud.Cabecera.TipoMovimientoId, nombreTipo);
-                    impactoNuevo = ClasificadorMovimiento.Clasificar(nombreTipo, solicitud.Cabecera.TipoDestino, !id.HasValue);
+                    tipo = await repo.TipoAsync(solicitud.Cabecera.TipoMovimientoId, token).ConfigureAwait(false);
+                    SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(solicitud.Cabecera.TipoMovimientoId, tipo.Nombre, tipo.Impacto);
+                    impactoNuevo = ClasificadorMovimiento.Clasificar(tipo.Nombre, solicitud.Cabecera.TipoDestino, !id.HasValue, tipo.Impacto);
                     factorNuevo = impactoNuevo == ImpactoStock.Entrada ? 1m : impactoNuevo == ImpactoStock.Salida ? -1m : 0m;
                 }
 
@@ -81,7 +81,7 @@ namespace SteeLog.Core.Application.Movimientos
                             actual.ObraId != traslado.ObraDestinoId || actual.Consumido != traslado.ConsumidoDestino)
                             throw new InvalidOperationException("No se puede revertir el insumo: su historial es ambiguo o cambió después del movimiento.");
                     }
-                    var impacto = ClasificadorMovimiento.Clasificar(previo.TipoNombre, previo.Cabecera.TipoDestino);
+                    var impacto = ClasificadorMovimiento.Clasificar(previo.TipoNombre, previo.Cabecera.TipoDestino, impactoExplicito: previo.TipoImpacto);
                     foreach (var linea in anteriores.AsEnumerable().Reverse())
                         await CambiarSaldo(linea, ImpactoMovimiento.ParaReversion(linea.ImpactoReal, linea.Cantidad, impacto), materiales, recortes, token).ConfigureAwait(false);
                     foreach (var traslado in insumosPrevios)

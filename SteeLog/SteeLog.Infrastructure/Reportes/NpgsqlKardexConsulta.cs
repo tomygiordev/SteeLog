@@ -30,10 +30,11 @@ namespace SteeLog.Infrastructure.Reportes
         {
             var resultado = new List<KardexItem>();
             using (var c = factory.Create()) { await c.OpenAsync(token).ConfigureAwait(false);
+                var impactoTipo = await factory.TieneImpactoTipoAsync(c, null, token).ConfigureAwait(false) ? "tm.impacto" : "NULL::text";
                 string sql = @"SELECT m.fecha,tm.nombre,mm.cantidad,
                     CASE WHEN m.tipo_origen='OBRA' THEN (SELECT nombre FROM obras WHERE id=m.id_origen) WHEN m.tipo_origen='PROVEEDOR' THEN (SELECT nombre FROM proveedores WHERE id_proveedores=m.id_origen) WHEN m.tipo_origen='UBICACION' THEN (SELECT nombre FROM ubicacion WHERE id_ubicacion=m.id_origen) ELSE 'Desconocido' END,
                     CASE WHEN m.tipo_destino='OBRA' THEN (SELECT nombre FROM obras WHERE id=m.id_destino) WHEN m.tipo_destino='PROVEEDOR' THEN (SELECT nombre FROM proveedores WHERE id_proveedores=m.id_destino) WHEN m.tipo_destino='UBICACION' THEN (SELECT nombre FROM ubicacion WHERE id_ubicacion=m.id_destino) ELSE 'Desconocido' END,
-                    m.tipo_destino,mm.stock_actual,m.id_movimiento,mm.id_material,COALESCE(mat.nombre,mm.material_nombre_eventual)
+                    m.tipo_destino,mm.stock_actual,m.id_movimiento,mm.id_material,COALESCE(mat.nombre,mm.material_nombre_eventual)," + impactoTipo + @"
                     FROM public.movimientos m INNER JOIN public.movimientomaterial mm ON m.id_movimiento=mm.id_movimiento LEFT JOIN public.tipo_movimiento tm ON m.id_tipomovimiento=tm.id_tipomovimiento LEFT JOIN public.materiales mat ON mm.id_material=mat.id WHERE 1=1";
                 if (material.HasValue) sql += " AND mm.id_material=@material";
                 if (desde.HasValue) sql += " AND m.fecha>=@desde";
@@ -58,7 +59,7 @@ namespace SteeLog.Infrastructure.Reportes
                                 nombre_material = r.IsDBNull(9) ? "" : r.GetString(9),
                                 tipo_destino = tipoDestino
                             };
-                            var impacto = ClasificadorMovimiento.Clasificar(item.tipo_movimiento, tipoDestino);
+                            var impacto = ClasificadorMovimiento.Clasificar(item.tipo_movimiento, tipoDestino, impactoExplicito: r.IsDBNull(10) ? null : r.GetString(10));
                             item.impacto = impacto;
                             item.delta = TotalesKardex.Delta(impacto, item.cantidad);
 

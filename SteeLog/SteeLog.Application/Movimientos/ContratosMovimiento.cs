@@ -58,11 +58,17 @@ namespace SteeLog.Core.Application.Movimientos
         public string OrigenNombre { get; set; }
         public string DestinoNombre { get; set; }
     }
+    public sealed class TipoMovimiento
+    {
+        public string Nombre { get; set; }
+        public string Impacto { get; set; }
+    }
     public sealed class MovimientoPersistido
     {
         public int Id { get; set; }
         public CabeceraMovimiento Cabecera { get; set; }
         public string TipoNombre { get; set; }
+        public string TipoImpacto { get; set; }
         public List<LineaMovimiento> Lineas { get; set; } = new List<LineaMovimiento>();
         public List<TrasladoInsumo> Insumos { get; set; } = new List<TrasladoInsumo>();
     }
@@ -78,7 +84,7 @@ namespace SteeLog.Core.Application.Movimientos
     public interface IMovimientosEscritura
     {
         Task<MovimientoPersistido> BloquearAsync(int id, CancellationToken token = default);
-        Task<string> NombreTipoAsync(int id, CancellationToken token = default);
+        Task<TipoMovimiento> TipoAsync(int id, CancellationToken token = default);
         Task<IDictionary<int, int>> ObtenerMaterialesRecortesAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<IDictionary<int, decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<IDictionary<int, InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken token = default);

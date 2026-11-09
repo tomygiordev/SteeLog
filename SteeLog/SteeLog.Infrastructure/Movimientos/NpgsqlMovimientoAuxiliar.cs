@@ -30,7 +30,8 @@ namespace SteeLog.Infrastructure.Movimientos
                 if (x == null || x == DBNull.Value) throw new InvalidOperationException("Solo se puede modificar el precio de un detalle eventual.");
                 movimiento = Convert.ToInt32(x);
             }
-            using (var c = Cmd("SELECT m.id_tipomovimiento, t.nombre FROM public.movimientos m LEFT JOIN public.tipo_movimiento t ON t.id_tipomovimiento=m.id_tipomovimiento WHERE m.id_movimiento=@id FOR UPDATE OF m"))
+            var impacto = await uow.TieneImpactoTipoAsync(token).ConfigureAwait(false) ? "t.impacto" : "NULL::text";
+            using (var c = Cmd("SELECT m.id_tipomovimiento, t.nombre," + impacto + " FROM public.movimientos m LEFT JOIN public.tipo_movimiento t ON t.id_tipomovimiento=m.id_tipomovimiento WHERE m.id_movimiento=@id FOR UPDATE OF m"))
             {
                 c.Parameters.AddWithValue("id", movimiento);
                 using (var r = await c.ExecuteReaderAsync(token).ConfigureAwait(false))
@@ -39,7 +40,7 @@ namespace SteeLog.Infrastructure.Movimientos
                         throw new InvalidOperationException("El movimiento ya no existe.");
                     int tipoId = r.IsDBNull(0) ? 0 : r.GetInt32(0);
                     string nombreTipo = r.IsDBNull(1) ? null : r.GetString(1);
-                    SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(tipoId, nombreTipo);
+                    SteeLog.Domain.Movimientos.Movimiento.ExigirEditable(tipoId, nombreTipo, r.IsDBNull(2) ? null : r.GetString(2));
                 }
             }
             using (var c = Cmd("UPDATE public.movimientomaterial SET precio_unitario=@precio WHERE id_movimientomaterial=@id AND id_movimiento=@movimiento AND es_compra_eventual=true"))

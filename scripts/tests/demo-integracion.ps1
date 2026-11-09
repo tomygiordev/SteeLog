@@ -90,6 +90,15 @@ END `$check`$;
     (Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'docker/demo/01-schema.sql')) | Invoke-DockerExec $name psql -U postgres -d $db -v ON_ERROR_STOP=1 -q
     if ($LASTEXITCODE -ne 3) { throw 'El esquema debe rechazar una DB ya inicializada' }
     "PASS cierre $($tables.Count) tablas, seed coherente y rechazo de reinstalación"
+    $migrations = @(Get-ChildItem -Path (Join-Path $repo 'docker/migrations') -Filter 'F4*.sql' -File)
+    if ($migrations.Count -ne 1) { throw 'Se requiere exactamente una migración F4 explícita.' }
+    $migrations += @(Get-ChildItem -Path (Join-Path $repo 'docker/migrations') -Filter 'F10_*.sql' -File | Sort-Object Name)
+    foreach ($attempt in 1..2) {
+        foreach ($migration in $migrations) {
+            ($guard + "`n" + (Get-Content -Raw -Encoding UTF8 $migration.FullName)) | Invoke-DockerExec $name psql -U postgres -d $db -v ON_ERROR_STOP=1 -q
+            if ($LASTEXITCODE -ne 0) { throw "Migración $($migration.Name) falló en aplicación $attempt" }
+        }
+    }
     foreach ($project in @('SteeLog.Domain','SteeLog.Application','SteeLog.Infrastructure')) {
         $source = Join-Path $repo "SteeLog/$project"; $dest = Join-Path $base $project
         New-Item -ItemType Directory -Force $dest | Out-Null

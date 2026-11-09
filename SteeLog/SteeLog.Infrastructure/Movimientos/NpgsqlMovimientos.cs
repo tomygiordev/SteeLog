@@ -30,14 +30,15 @@ namespace SteeLog.Infrastructure.Movimientos
         public async Task<MovimientoPersistido> BloquearAsync(int id, CancellationToken token = default)
         {
             MovimientoPersistido m;
-            using (var c = Cmd(@"SELECT m.fecha,m.nroremito,m.id_origen,m.tipo_origen,m.id_destino,m.tipo_destino,m.id_tipomovimiento,m.id_obra,m.costoflete,m.id_flete,m.observaciones,m.precio_total,t.nombre
+            var impacto = await uow.TieneImpactoTipoAsync(token).ConfigureAwait(false) ? "t.impacto" : "NULL::text";
+            using (var c = Cmd(@"SELECT m.fecha,m.nroremito,m.id_origen,m.tipo_origen,m.id_destino,m.tipo_destino,m.id_tipomovimiento,m.id_obra,m.costoflete,m.id_flete,m.observaciones,m.precio_total,t.nombre," + impacto + @"
                 FROM public.movimientos m LEFT JOIN public.tipo_movimiento t ON t.id_tipomovimiento=m.id_tipomovimiento WHERE m.id_movimiento=@id FOR UPDATE OF m"))
             {
                 c.Parameters.AddWithValue("id", id);
                 using (var r = await c.ExecuteReaderAsync(token).ConfigureAwait(false))
                 {
                     if (!await r.ReadAsync(token).ConfigureAwait(false)) return null;
-                    m = new MovimientoPersistido { Id = id, TipoNombre = Str(r,12), Cabecera = new CabeceraMovimiento { Fecha=r.GetDateTime(0), Remito=Str(r,1), OrigenId=Int(r,2) ?? 0, TipoOrigen=Str(r,3), DestinoId=r.GetInt32(4), TipoDestino=Str(r,5), TipoMovimientoId=Int(r,6) ?? 0, ObraId=Int(r,7), CostoFlete=Dec(r,8) ?? 0, FleteId=Int(r,9), Observaciones=Str(r,10), PrecioTotal=Dec(r,11) ?? 0 } };
+                    m = new MovimientoPersistido { Id = id, TipoNombre = Str(r,12), TipoImpacto = Str(r,13), Cabecera = new CabeceraMovimiento { Fecha=r.GetDateTime(0), Remito=Str(r,1), OrigenId=Int(r,2) ?? 0, TipoOrigen=Str(r,3), DestinoId=r.GetInt32(4), TipoDestino=Str(r,5), TipoMovimientoId=Int(r,6) ?? 0, ObraId=Int(r,7), CostoFlete=Dec(r,8) ?? 0, FleteId=Int(r,9), Observaciones=Str(r,10), PrecioTotal=Dec(r,11) ?? 0 } };
                 }
             }
             using (var c = Cmd(@"SELECT id_material,id_recorte,medida_recorte,cantidad,material_nombre_eventual,es_compra_eventual,precio_unitario,impacto_stock_real,esrecorte FROM public.movimientomaterial WHERE id_movimiento=@id ORDER BY id_movimientomaterial"))
@@ -63,9 +64,18 @@ namespace SteeLog.Infrastructure.Movimientos
             }
             return m;
         }
-        public async Task<string> NombreTipoAsync(int id, CancellationToken token = default)
+        public async Task<TipoMovimiento> TipoAsync(int id, CancellationToken token = default)
         {
-            using (var c=Cmd("SELECT nombre FROM public.tipo_movimiento WHERE id_tipomovimiento=@id")) { c.Parameters.AddWithValue("id",id); var x=await c.ExecuteScalarAsync(token).ConfigureAwait(false); if (x==null || x==DBNull.Value) throw new InvalidOperationException("No se encontró el tipo de movimiento."); return Convert.ToString(x); }
+            var impacto = await uow.TieneImpactoTipoAsync(token).ConfigureAwait(false) ? "impacto" : "NULL::text";
+            using (var c = Cmd("SELECT nombre," + impacto + " FROM public.tipo_movimiento WHERE id_tipomovimiento=@id"))
+            {
+                c.Parameters.AddWithValue("id", id);
+                using (var r = await c.ExecuteReaderAsync(token).ConfigureAwait(false))
+                {
+                    if (!await r.ReadAsync(token).ConfigureAwait(false) || r.IsDBNull(0)) throw new InvalidOperationException("No se encontró el tipo de movimiento.");
+                    return new TipoMovimiento { Nombre = r.GetString(0), Impacto = Str(r,1) };
+                }
+            }
         }
         public async Task<IDictionary<int,int>> ObtenerMaterialesRecortesAsync(IReadOnlyList<int> ids, CancellationToken token = default)
         {

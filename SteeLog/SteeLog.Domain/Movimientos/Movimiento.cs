@@ -58,9 +58,11 @@ namespace SteeLog.Domain.Movimientos
             ObraId=obraId; CostoFlete=costoFlete; FleteId=fleteId; Observaciones=observaciones; PrecioTotal=precioTotal;
             Lineas=lista.AsReadOnly(); Insumos=activos.AsReadOnly(); OrigenNombre=origenNombre; DestinoNombre=destinoNombre;
         }
-        public static void ExigirEditable(int tipoId, string tipoNombre)
+        public const int TipoRegistroInternoId = 11;
+
+        public static void ExigirEditable(int tipoId, string tipoNombre, string impactoExplicito = null)
         {
-            if (tipoId == 11 || (tipoNombre ?? string.Empty).ToUpperInvariant().Contains("REGISTRO INTERNO"))
+            if (impactoExplicito == "registro_interno" || tipoId == TipoRegistroInternoId || (tipoNombre ?? string.Empty).ToUpperInvariant().Contains("REGISTRO INTERNO"))
                 throw new InvalidOperationException("El registro interno se gestiona desde materiales y no puede modificarse desde movimientos.");
         }
         private static bool TipoValido(string tipo) => tipo == "OBRA" || tipo == "PROVEEDOR" || tipo == "UBICACION";

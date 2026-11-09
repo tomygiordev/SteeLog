@@ -69,7 +69,7 @@ namespace SteeLog.Tests
             public Exception ErrorEnCrearCabecera; public int CabecerasEliminadas;
             public Task<MovimientoPersistido> BloquearAsync(int id, CancellationToken t = default)
                 => Task.FromResult(new MovimientoPersistido { Id = id, TipoNombre = "Ingreso", Cabecera = new CabeceraMovimiento { TipoMovimientoId = 1, TipoDestino = "UBICACION" } });
-            public Task<string> NombreTipoAsync(int id, CancellationToken t = default) => Task.FromResult("Ingreso");
+            public Task<TipoMovimiento> TipoAsync(int id, CancellationToken t = default) => Task.FromResult(new TipoMovimiento { Nombre = "Ingreso" });
             public Task<IDictionary<int, int>> ObtenerMaterialesRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => Task.FromResult<IDictionary<int, int>>(new Dictionary<int, int>());
             public Task<IDictionary<int, decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => Task.FromResult<IDictionary<int, decimal>>(new Dictionary<int, decimal>());
             public Task<IDictionary<int, InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => Task.FromResult<IDictionary<int, InsumoBloqueado>>(new Dictionary<int, InsumoBloqueado>());
