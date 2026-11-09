@@ -20,7 +20,7 @@ namespace SteeLog.Infrastructure.Inventario
             {
                 cmd.Parameters.AddWithValue("nombre", m.Nombre); cmd.Parameters.AddWithValue("categoria", m.CategoriaId);
                 cmd.Parameters.AddWithValue("stock", m.StockActual); cmd.Parameters.AddWithValue("minimo", m.StockMinimo);
-                return Convert.ToInt32(await cmd.ExecuteScalarAsync(token).ConfigureAwait(false));
+                return Convert.ToInt32(await SteeLog.Infrastructure.Catalogos.NpgsqlCatalogos.Unico(() => cmd.ExecuteScalarAsync(token), "un material").ConfigureAwait(false));
             }
         }
         public async Task ActualizarDatosAsync(int id, DatosMaterial datos, CancellationToken token = default)
@@ -29,7 +29,7 @@ namespace SteeLog.Infrastructure.Inventario
             {
                 cmd.Parameters.AddWithValue("nombre", datos.Nombre); cmd.Parameters.AddWithValue("categoria", datos.CategoriaId);
                 cmd.Parameters.AddWithValue("minimo", datos.StockMinimo); cmd.Parameters.AddWithValue("id", id);
-                if (await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false) != 1) throw new InvalidOperationException("No se encontró el material.");
+                if (await SteeLog.Infrastructure.Catalogos.NpgsqlCatalogos.Unico(() => cmd.ExecuteNonQueryAsync(token), "un material").ConfigureAwait(false) != 1) throw new InvalidOperationException("No se encontró el material.");
             }
         }
         public async Task GuardarProveedoresAsync(int id, IReadOnlyList<int> proveedores, CancellationToken token = default)

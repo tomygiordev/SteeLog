@@ -50,7 +50,11 @@ public sealed class CatalogosIntegrationTests
         await Assert.ThrowsAsync<ArgumentException>(()=>Run(x=>x.CrearProveedorAsync(" ")));
         await Assert.ThrowsAsync<ArgumentException>(()=>Run(x=>x.CrearFleteAsync(new string('x',51),true)));
         await Assert.ThrowsAsync<ArgumentException>(()=>Run(x=>x.CrearUbicacionAsync(new string('x',101))));
-        int id=await Run(x=>x.CrearCategoriaAsync(new string('a',50),true)); await Run(x=>x.EliminarCategoriaAsync(id));
+        int id=await Run(x=>x.CrearCategoriaAsync(new string('a',50),true));
+        // Recorrido F9: el duplicado se traduce desde la UNIQUE real (23505) a un mensaje de negocio, sin SQL crudo.
+        var dup=await Assert.ThrowsAsync<CatalogoDuplicadoException>(()=>Run(x=>x.CrearCategoriaAsync(new string('a',50),false)));
+        Assert.Equal("23505",Assert.IsType<PostgresException>(dup.InnerException).SqlState); Assert.DoesNotContain("duplicate key",dup.Message);
+        await Run(x=>x.EliminarCategoriaAsync(id));
     }
     [Fact] public async Task FkRealImpideEliminarCategoriaReferenciadaYConservaDatos()
     {

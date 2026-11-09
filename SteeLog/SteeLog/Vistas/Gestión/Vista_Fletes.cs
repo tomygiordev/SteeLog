@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Catalogos;
+using SteeLog.Domain.Catalogos;
 using SteeLog.Presentation;
 
 namespace SteeLog.Vistas
@@ -17,12 +18,15 @@ namespace SteeLog.Vistas
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private List<FleteCatalogo> _items = new List<FleteCatalogo>();
         private int idSeleccionado = -1, _versionCarga;
-        private bool _listo, _ocupado, _seleccionando;
+        private bool _listo, _ocupado, _seleccionando, _guardando;
+        internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
         internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
 
         public Vista_Fletes()
         {
             InitializeComponent();
+            txtFlete.MaxLength = Flete.MaxNombre;
             ActualizarEstado();
         }
         internal Vista_Fletes(CatalogosPresenter presenter) : this() { _presenter = presenter; }
@@ -44,7 +48,7 @@ namespace SteeLog.Vistas
         private bool Vigente => !_cierre.IsCancellationRequested && !IsDisposed;
         private void ActualizarEstado()
         {
-            bool habilitado = _listo && !_ocupado;
+            bool habilitado = _listo && !_ocupado && !_guardando;
             guna2Button1.Enabled = habilitado;
             eliminarFleteBoton.Enabled = habilitado && idSeleccionado >= 0;
             txtFlete.Enabled = habilitado;
@@ -107,11 +111,16 @@ namespace SteeLog.Vistas
         }
         private async void guna2Button1_Click(object sender, EventArgs e)
         {
-            if (!_listo || _ocupado) return;
+            if (!_listo || _ocupado || _guardando) return;
             string nombre = txtFlete.Text.Trim();
-            if (string.IsNullOrEmpty(nombre)) { ToastNotification.ShowWarning("Debes escribir un nombre."); return; }
+            var errorNombre = Flete.ValidarNombre(nombre);
+            if (errorNombre != null) { AvisarAdvertencia(errorNombre); return; }
             int? id = idSeleccionado < 0 ? (int?)null : idSeleccionado;
-            if (!Confirmar(id.HasValue ? "¿Actualizar este flete?" : "¿Crear este flete?", MessageBoxIcon.Question)) return;
+            _guardando = true; ActualizarEstado();
+            bool confirmado;
+            try { confirmado = Confirmar(id.HasValue ? "¿Actualizar este flete?" : "¿Crear este flete?", MessageBoxIcon.Question); }
+            catch { _guardando = false; ActualizarEstado(); throw; }
+            if (!confirmado) { _guardando = false; ActualizarEstado(); txtFlete.Focus(); return; }
             bool estado = chkActivo.Checked;
             _ocupado = true; ActualizarEstado();
             try
@@ -124,8 +133,8 @@ namespace SteeLog.Vistas
                 catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Guardado, pero no se pudo actualizar el listado: " + ex.Message); }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Error al guardar: " + ex.Message); }
-            finally { _ocupado = false; if (Vigente) ActualizarEstado(); }
+            catch (Exception ex) { if (Vigente) AvisarError(CatalogosPresenter.MensajeGuardado(ex)); }
+            finally { _ocupado = false; _guardando = false; if (Vigente) ActualizarEstado(); }
         }
         private async void eliminarFleteBoton_Click(object sender, EventArgs e)
         {

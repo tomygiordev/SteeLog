@@ -8,6 +8,11 @@ using SteeLog.Core.Application.Movimientos;
 using SteeLog.Domain.Catalogos;
 namespace SteeLog.Core.Application.Catalogos
 {
+    public sealed class CatalogoDuplicadoException : Exception
+    {
+        public CatalogoDuplicadoException(string entidadConArticulo, Exception causa = null)
+            : base("Ya existe " + entidadConArticulo + " con ese nombre.", causa) { }
+    }
     public sealed class CategoriaCatalogo { public int Id { get; set; } public string Nombre { get; set; } public bool Recortable { get; set; } }
     public sealed class ObraCatalogo { public int Id { get; set; } public string Nombre { get; set; } public bool Activa { get; set; } }
     public sealed class ProveedorCatalogo { public int Id { get; set; } public string Nombre { get; set; } }

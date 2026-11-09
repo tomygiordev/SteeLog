@@ -23,6 +23,9 @@ namespace SteeLog
         private readonly Panel _panelMaximizar;
         private readonly Action<Form> _openChildForm;
         private Guna.UI2.WinForms.Guna2TextBox _txtBusqueda;
+        // Fondo del panel de resultados y color del texto "sin resultados" (contraste >= 4.5:1).
+        internal static readonly Color ColorFondoPanel = Color.FromArgb(25, 30, 28);
+        internal static readonly Color ColorSinResultados = Color.FromArgb(200, 200, 200);
         private Panel _panelResultados;
         private Timer _timerDebounce;
         internal sealed class Snapshot
@@ -106,7 +109,7 @@ namespace SteeLog
             _panelResultados = new Panel
             {
                 Size = new Size(460, 0),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = ColorFondoPanel,
                 Visible = false,
                 AutoScroll = true
             };
@@ -651,7 +654,7 @@ namespace SteeLog
                 {
                     Text = $"No se encontraron resultados para \"{query}\"",
                     Font = new Font("Bahnschrift Light", 10f),
-                    ForeColor = Color.FromArgb(120, 120, 120),
+                    ForeColor = ColorSinResultados,
                     Size = new Size(440, 45),
                     TextAlign = ContentAlignment.MiddleCenter,
                     BackColor = Color.Transparent,

@@ -4,6 +4,7 @@ namespace SteeLog.Domain.Inventario
 {
     public sealed class Material
     {
+        public const int MaxNombre = 150;
         public int Id { get; }
         public string Nombre { get; private set; }
         public int CategoriaId { get; private set; }

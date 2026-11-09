@@ -11,7 +11,7 @@ namespace SteeLog.Infrastructure.Movimientos
         private readonly NpgsqlUnitOfWork uow;
         public NpgsqlFletes(NpgsqlUnitOfWork uow) { this.uow=uow; }
         public async Task<int> CrearAsync(string nombre,CancellationToken token=default)
-        { using(var c=new NpgsqlCommand("INSERT INTO public.fletes(nombre) VALUES(@nombre) RETURNING id_flete",uow.Connection,uow.Transaction)) { c.Parameters.AddWithValue("nombre",nombre); return Convert.ToInt32(await c.ExecuteScalarAsync(token).ConfigureAwait(false)); } }
+        { using(var c=new NpgsqlCommand("INSERT INTO public.fletes(nombre) VALUES(@nombre) RETURNING id_flete",uow.Connection,uow.Transaction)) { c.Parameters.AddWithValue("nombre",nombre); return Convert.ToInt32(await SteeLog.Infrastructure.Catalogos.NpgsqlCatalogos.Unico(() => c.ExecuteScalarAsync(token), "un flete").ConfigureAwait(false)); } }
         public async Task DesactivarAsync(int id,CancellationToken token=default)
         { using(var c=new NpgsqlCommand("UPDATE public.fletes SET activo=false WHERE id_flete=@id",uow.Connection,uow.Transaction)) { c.Parameters.AddWithValue("id",id); if(await c.ExecuteNonQueryAsync(token).ConfigureAwait(false)!=1) throw new InvalidOperationException("No se encontró el flete."); } }
     }

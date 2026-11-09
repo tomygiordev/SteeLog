@@ -8,6 +8,19 @@ namespace SteeLog.Presentation
 {
     public sealed class CatalogosPresenter
     {
+        /// <summary>Traduce un fallo de guardado de catálogo a un mensaje para el usuario (sin detalles técnicos).</summary>
+        public static string MensajeGuardado(Exception error)
+        {
+            while (error is AggregateException agregado && agregado.InnerExceptions.Count == 1) error = agregado.InnerException;
+            if (error is CatalogoDuplicadoException) return error.Message;
+            var argumento = error as ArgumentException;
+            if (argumento != null && !(error is ArgumentOutOfRangeException))
+            {
+                var linea = (argumento.Message ?? string.Empty).Split(new[] { (char)13, (char)10 }, StringSplitOptions.RemoveEmptyEntries);
+                if (linea.Length > 0) return linea[0];
+            }
+            return "Error al guardar: " + error.Message;
+        }
         private readonly IUseCaseExecutor executor;
         public CatalogosPresenter(IUseCaseExecutor executor) { this.executor = executor ?? throw new ArgumentNullException(nameof(executor)); }
         public Task<IReadOnlyList<CategoriaCatalogo>> CategoriasAsync(CancellationToken t) => executor.ExecuteAsync<ConsultarCatalogos, IReadOnlyList<CategoriaCatalogo>>(x => x.CategoriasAsync(t));

@@ -57,6 +57,7 @@ namespace SteeLog.Vistas
 
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             InitializeComponent();
+            nombreMaterial.MaxLength = SteeLog.Domain.Inventario.Material.MaxNombre;
 
             this.Load += Vista_Materiales_Load;
 
@@ -437,14 +438,18 @@ namespace SteeLog.Vistas
 
             }
 
+            if (nombre.Trim().Length > SteeLog.Domain.Inventario.Material.MaxNombre) { ToastNotification.ShowWarning("El nombre del material no puede superar los " + SteeLog.Domain.Inventario.Material.MaxNombre + " caracteres."); return; }
+            if (_guardando || _cargandoProveedores || !_proveedoresDisponibles) return;
             string _msg = idMaterialSeleccionado == -1 ? "¿Crear este material?" : "¿Actualizar este material?";
 
-            if (MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-
-
-
-            if (_guardando || _cargandoProveedores || !_proveedoresDisponibles) return;
             _guardando = true;
+            bool confirmado;
+            try { confirmado = MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes; }
+            catch { _guardando = false; throw; }
+            if (!confirmado) { _guardando = false; return; }
+
+
+
             dgvMateriales.Enabled = false; guna2Button1.Enabled = false; eliminarMaterialBoton.Enabled = false;
             try
             {
@@ -487,7 +492,7 @@ namespace SteeLog.Vistas
             }
 
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("No se pudo guardar el material: " + ex.Message); }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError(CatalogosPresenter.MensajeGuardado(ex)); }
             finally { _guardando = false; if (!IsDisposed) { dgvMateriales.Enabled = true; guna2Button1.Enabled = true; eliminarMaterialBoton.Enabled = idMaterialSeleccionado != -1; } }
         }
 
