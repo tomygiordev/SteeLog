@@ -49,6 +49,9 @@ namespace SteeLog.Vistas.Movimientos
             txtCantidad.KeyPress += TxtDimension_KeyPress;
             txtCantidad.Text = "1";
             dgvRecortesDisponibles.SelectionChanged += DgvRecortesDisponibles_SelectionChanged;
+            dgvRecortesDisponibles.CellFormatting += DgvRecortesDisponibles_CellFormatting;
+            dgvRecortesDisponibles.DataBindingComplete += (s, e) => ConfigurarColumnaCantidad();
+            btnSumarTodo.Visible = !servicios.Sesion.DebeOcultarCantidadesStockMateriales;
         }
 
         private void AplicarTema()
@@ -124,17 +127,32 @@ namespace SteeLog.Vistas.Movimientos
                 dgvRecortesDisponibles.Columns["medida"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                 dgvRecortesDisponibles.Columns["medida"].FillWeight = 20;
             }
-            if (dgvRecortesDisponibles.Columns["cantidad"] != null)
-            {
-                dgvRecortesDisponibles.Columns["cantidad"].FillWeight = 30;
-                dgvRecortesDisponibles.Columns["cantidad"].HeaderText = "Stock disponible";
-                dgvRecortesDisponibles.Columns["cantidad"].DefaultCellStyle.Format = "G29";
-                dgvRecortesDisponibles.Columns["cantidad"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
-            }
             if (dgvRecortesDisponibles.Columns["estado"] != null)
             {
                 dgvRecortesDisponibles.Columns["estado"].HeaderText = "Estado";
                 dgvRecortesDisponibles.Columns["estado"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+            }
+        }
+
+        private void ConfigurarColumnaCantidad()
+        {
+            var columna = dgvRecortesDisponibles.Columns["cantidad"];
+            if (columna == null) return;
+            columna.FillWeight = 30;
+            columna.HeaderText = servicios.Sesion.DebeOcultarCantidadesStockMateriales ? "Disponibilidad" : "Stock disponible";
+            columna.DefaultCellStyle.Format = "G29";
+            columna.AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+        }
+
+        private void DgvRecortesDisponibles_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                && e.RowIndex >= 0 && e.ColumnIndex >= 0
+                && dgvRecortesDisponibles.Columns[e.ColumnIndex].Name == "cantidad"
+                && dgvRecortesDisponibles.Rows[e.RowIndex].DataBoundItem is Recorte recorte)
+            {
+                e.Value = servicios.Sesion.ObtenerEstadoStockMaterial(recorte.cantidad);
+                e.FormattingApplied = true;
             }
         }
 
@@ -191,8 +209,7 @@ namespace SteeLog.Vistas.Movimientos
                 var recorte = (Recorte)dgvRecortesDisponibles.SelectedRows[0].DataBoundItem;
                 decimal stockDisponible = recorte.cantidad;
 
-                string inputCant = txtCantidad.Text.Replace(',', '.');
-                if (!decimal.TryParse(inputCant, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cant) || cant <= 0)
+                if (!NumeroDecimal.TryParse(txtCantidad.Text, out decimal cant) || cant <= 0)
                 {
                     ToastNotification.ShowWarning("La cantidad debe ser un número mayor a 0.");
                     return;
@@ -200,8 +217,15 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (cant > stockDisponible)
                 {
-                    ToastNotification.ShowWarning($"La cantidad ({cant.ToString("G29", CultureInfo.InvariantCulture)}) supera el stock disponible ({stockDisponible.ToString("G29", CultureInfo.InvariantCulture)}).");
-                    txtCantidad.Text = stockDisponible.ToString("G29", CultureInfo.InvariantCulture);
+                    if (servicios.Sesion.DebeOcultarCantidadesStockMateriales)
+                    {
+                        AdvertirCarrito("La cantidad supera el stock disponible del recorte.");
+                    }
+                    else
+                    {
+                        AdvertirCarrito($"La cantidad ({cant.ToString("G29", CultureInfo.InvariantCulture)}) supera el stock disponible ({stockDisponible.ToString("G29", CultureInfo.InvariantCulture)}).");
+                        txtCantidad.Text = stockDisponible.ToString("G29", CultureInfo.InvariantCulture);
+                    }
                     return;
                 }
 
@@ -265,8 +289,7 @@ namespace SteeLog.Vistas.Movimientos
             try
             {
                 var validado = new SteeLog.Domain.Inventario.Recorte(0, _idMaterial, ancho, altura, medida, 0m, null);
-                string inputCantCrear = txtCantidad.Text.Replace(',', '.');
-                decimal.TryParse(inputCantCrear, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantidadCrear);
+                NumeroDecimal.TryParse(txtCantidad.Text, out decimal cantidadCrear);
                 decimal cantidadElegida = cantidadCrear > 0 ? cantidadCrear : 1m;
 
                 // "Crear y usar" siempre es una pieza nueva (id 0): el motor la suma a la fila de esas medidas, exista o no.
