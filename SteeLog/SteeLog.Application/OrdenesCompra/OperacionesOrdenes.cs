@@ -54,25 +54,9 @@ namespace SteeLog.Core.Application.OrdenesCompra
             new OrdenCompra(0, cabecera, EstadoOrden.Pendiente, lista.Select(x => x == null ? null : new LineaOrden(0, x.MaterialId, x.Pedida, 0)));
             return lista;
         }
-        public static async Task<T> Transaccion<T>(IUnitOfWork uow, Func<Task<T>> trabajo, CancellationToken cancellationToken)
+        public static Task<T> Transaccion<T>(IUnitOfWork uow, Func<Task<T>> trabajo, CancellationToken cancellationToken)
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            await uow.BeginAsync(cancellationToken).ConfigureAwait(false);
-            bool inicioCommit = false;
-            try
-            {
-                var resultado = await trabajo().ConfigureAwait(false);
-                cancellationToken.ThrowIfCancellationRequested();
-                inicioCommit = true;
-                await uow.CommitAsync(cancellationToken).ConfigureAwait(false);
-                return resultado;
-            }
-            catch (Exception error)
-            {
-                try { await uow.RollbackAsync().ConfigureAwait(false); } catch { }
-                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
-                throw;
-            }
+            return Common.Transaccion.EjecutarAsync(uow, _ => trabajo(), cancellationToken);
         }
     }
 

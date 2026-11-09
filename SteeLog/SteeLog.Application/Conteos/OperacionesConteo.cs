@@ -35,12 +35,9 @@ namespace SteeLog.Core.Application.Conteos
                 || (string.Equals(almacenado, "galpon", StringComparison.OrdinalIgnoreCase) && string.Equals(actor, "galpon@tesis.local", StringComparison.OrdinalIgnoreCase));
             if (!coincide) throw new UnauthorizedAccessException("El conteo pertenece a otro usuario.");
         }
-        private async Task<T> Transaccion<T>(Func<Task<T>> trabajo, CancellationToken token)
+        private Task<T> Transaccion<T>(Func<Task<T>> trabajo, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested(); await uow.BeginAsync(token).ConfigureAwait(false);
-            bool inicioCommit = false;
-            try { var resultado = await trabajo().ConfigureAwait(false); token.ThrowIfCancellationRequested(); inicioCommit = true; await uow.CommitAsync(token).ConfigureAwait(false); return resultado; }
-            catch (Exception error) { try { await uow.RollbackAsync().ConfigureAwait(false); } catch { } if (inicioCommit) throw new ResultadoEscrituraInciertoException(error); throw; }
+            return Common.Transaccion.EjecutarAsync(uow, _ => trabajo(), token);
         }
         public Task<int> CrearAsync(CancellationToken token = default)
         { var actor = Actor(); return Transaccion(() => repo.CrearAsync(actor, token), token); }

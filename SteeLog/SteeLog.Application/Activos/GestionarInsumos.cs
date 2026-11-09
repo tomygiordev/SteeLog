@@ -19,17 +19,9 @@ namespace SteeLog.Core.Application.Activos
     {
         private readonly Session actor; private readonly IUnitOfWork uow; private readonly IInsumosEscritura repo;
         public GestionarInsumos(Session actor, IUnitOfWork uow, IInsumosEscritura repo) { this.actor=actor; this.uow=uow; this.repo=repo; }
-        private async Task<T> Transaccion<T>(Func<Task<T>> trabajo, CancellationToken token)
+        private Task<T> Transaccion<T>(Func<Task<T>> trabajo, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested(); await uow.BeginAsync(token).ConfigureAwait(false);
-            bool inicioCommit = false;
-            try { var r=await trabajo().ConfigureAwait(false); token.ThrowIfCancellationRequested(); inicioCommit=true; await uow.CommitAsync(token).ConfigureAwait(false); return r; }
-            catch (Exception error)
-            {
-                try { await uow.RollbackAsync().ConfigureAwait(false); } catch { }
-                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
-                throw;
-            }
+            return Common.Transaccion.EjecutarAsync(uow, _ => trabajo(), token);
         }
         public Task<int> CrearAsync(string nombre, int? obraId, string observaciones, CancellationToken token=default)
         {

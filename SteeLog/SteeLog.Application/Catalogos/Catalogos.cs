@@ -62,26 +62,9 @@ namespace SteeLog.Core.Application.Catalogos
         private readonly Session actor; private readonly IUnitOfWork uow; private readonly ICatalogosEscritura repo; private readonly IFletesEscritura fletes;
         public GestionarCatalogos(Session actor, IUnitOfWork uow, ICatalogosEscritura repo, IFletesEscritura fletes)
         { this.actor=actor ?? throw new ArgumentNullException(nameof(actor)); this.uow=uow ?? throw new ArgumentNullException(nameof(uow)); this.repo=repo ?? throw new ArgumentNullException(nameof(repo)); this.fletes=fletes ?? throw new ArgumentNullException(nameof(fletes)); }
-        private async Task<int> Transaccion(Func<Task<int>> accion, CancellationToken token)
+        private Task<int> Transaccion(Func<Task<int>> accion, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested();
-            await uow.BeginAsync(token).ConfigureAwait(false);
-            bool inicioCommit = false;
-            try
-            {
-                var resultado = await accion().ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                inicioCommit = true;
-                await uow.CommitAsync(token).ConfigureAwait(false);
-                return resultado;
-            }
-            catch (Exception error)
-            {
-                try { await uow.RollbackAsync().ConfigureAwait(false); }
-                catch { /* Conservar el fallo original, incluso si falla la limpieza. */ }
-                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
-                throw;
-            }
+            return Common.Transaccion.EjecutarAsync(uow, _ => accion(), token);
         }
         private void AutorizarId(int id) { actor.Require(Role.Galpon); if(id <= 0) throw new ArgumentOutOfRangeException(nameof(id)); }
         public Task<int> CrearCategoriaAsync(string nombre, bool recortable, CancellationToken token = default)

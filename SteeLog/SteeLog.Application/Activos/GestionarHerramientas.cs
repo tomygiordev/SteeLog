@@ -18,26 +18,9 @@ namespace SteeLog.Core.Application.Activos
     {
         private readonly Session actor; private readonly IUnitOfWork uow; private readonly IHerramientasEscritura repo;
         public GestionarHerramientas(Session actor, IUnitOfWork uow, IHerramientasEscritura repo) { this.actor=actor ?? throw new ArgumentNullException(nameof(actor)); this.uow=uow ?? throw new ArgumentNullException(nameof(uow)); this.repo=repo ?? throw new ArgumentNullException(nameof(repo)); }
-        private async Task<int> Transaccion(Func<Task<int>> trabajo, CancellationToken token)
+        private Task<int> Transaccion(Func<Task<int>> trabajo, CancellationToken token)
         {
-            token.ThrowIfCancellationRequested();
-            await uow.BeginAsync(token).ConfigureAwait(false);
-            bool inicioCommit = false;
-            try
-            {
-                var resultado = await trabajo().ConfigureAwait(false);
-                token.ThrowIfCancellationRequested();
-                inicioCommit = true;
-                await uow.CommitAsync(token).ConfigureAwait(false);
-                return resultado;
-            }
-            catch (Exception error)
-            {
-                try { await uow.RollbackAsync().ConfigureAwait(false); }
-                catch { /* Conservar el fallo original, incluso si falla la limpieza. */ }
-                if (inicioCommit) throw new ResultadoEscrituraInciertoException(error);
-                throw;
-            }
+            return Common.Transaccion.EjecutarAsync(uow, _ => trabajo(), token);
         }
         public Task<int> CrearAsync(string nombre,string estado,int? obra,string observaciones,CancellationToken token=default)
         {
