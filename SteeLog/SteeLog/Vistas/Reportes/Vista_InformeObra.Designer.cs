@@ -133,10 +133,10 @@ namespace SteeLog.Vistas.Reportes
             // btnDescargar
             // 
             this.btnDescargar.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
-            this.btnDescargar.DisabledState.BorderColor = System.Drawing.Color.DarkGray;
-            this.btnDescargar.DisabledState.CustomBorderColor = System.Drawing.Color.DarkGray;
-            this.btnDescargar.DisabledState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(169)))), ((int)(((byte)(169)))), ((int)(((byte)(169)))));
-            this.btnDescargar.DisabledState.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
+            this.btnDescargar.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnDescargar.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnDescargar.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnDescargar.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnDescargar.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(47)))), ((int)(((byte)(84)))), ((int)(((byte)(57)))));
             this.btnDescargar.Font = new System.Drawing.Font("Bahnschrift Light", 13.75F);
             this.btnDescargar.ForeColor = System.Drawing.Color.White;
@@ -242,6 +242,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabMovimientos
             // 
             this.btnTabMovimientos.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabMovimientos.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabMovimientos.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabMovimientos.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabMovimientos.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabMovimientos.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(25)))), ((int)(((byte)(135)))), ((int)(((byte)(84)))));
             this.btnTabMovimientos.Font = new System.Drawing.Font("Bahnschrift Light", 11F);
             this.btnTabMovimientos.ForeColor = System.Drawing.Color.White;
@@ -255,6 +259,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabHerramientas
             // 
             this.btnTabHerramientas.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabHerramientas.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabHerramientas.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabHerramientas.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabHerramientas.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabHerramientas.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(35)))), ((int)(((byte)(63)))), ((int)(((byte)(43)))));
             this.btnTabHerramientas.Font = new System.Drawing.Font("Bahnschrift Light", 11F);
             this.btnTabHerramientas.ForeColor = System.Drawing.Color.White;
@@ -268,6 +276,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabInsumos
             // 
             this.btnTabInsumos.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabInsumos.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabInsumos.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabInsumos.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabInsumos.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabInsumos.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(35)))), ((int)(((byte)(63)))), ((int)(((byte)(43)))));
             this.btnTabInsumos.Font = new System.Drawing.Font("Bahnschrift Light", 11F);
             this.btnTabInsumos.ForeColor = System.Drawing.Color.White;
@@ -281,6 +293,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabMateriales
             // 
             this.btnTabMateriales.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabMateriales.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabMateriales.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabMateriales.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabMateriales.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabMateriales.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(35)))), ((int)(((byte)(63)))), ((int)(((byte)(43)))));
             this.btnTabMateriales.Font = new System.Drawing.Font("Bahnschrift Light", 11F);
             this.btnTabMateriales.ForeColor = System.Drawing.Color.White;
@@ -294,6 +310,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabEventuales
             // 
             this.btnTabEventuales.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabEventuales.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabEventuales.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabEventuales.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabEventuales.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabEventuales.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(35)))), ((int)(((byte)(63)))), ((int)(((byte)(43)))));
             this.btnTabEventuales.Font = new System.Drawing.Font("Bahnschrift Light", 11F);
             this.btnTabEventuales.ForeColor = System.Drawing.Color.White;
@@ -307,6 +327,10 @@ namespace SteeLog.Vistas.Reportes
             // btnTabCanaletasPlegados
             // 
             this.btnTabCanaletasPlegados.Anchor = ((System.Windows.Forms.AnchorStyles)((System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right)));
+            this.btnTabCanaletasPlegados.DisabledState.BorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabCanaletasPlegados.DisabledState.CustomBorderColor = System.Drawing.Color.FromArgb(60, 75, 66);
+            this.btnTabCanaletasPlegados.DisabledState.FillColor = System.Drawing.Color.FromArgb(45, 58, 50);
+            this.btnTabCanaletasPlegados.DisabledState.ForeColor = System.Drawing.Color.FromArgb(170, 185, 175);
             this.btnTabCanaletasPlegados.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(35)))), ((int)(((byte)(63)))), ((int)(((byte)(43)))));
             this.btnTabCanaletasPlegados.Font = new System.Drawing.Font("Bahnschrift Light", 10F);
             this.btnTabCanaletasPlegados.ForeColor = System.Drawing.Color.White;

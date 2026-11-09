@@ -102,6 +102,8 @@ namespace SteeLog.Tests
                         Fijar(vista,"ConfirmarGuardado",new Func<DialogResult>(() => DialogResult.Yes));
                         Fijar(vista,"VersionBorrador",new Func<string>(() => null));
                         int borradoresRetirados=0;
+                        var persistidos=new List<MovimientoDraft>();
+                        Fijar(vista,"GuardarBorradorActual",new Action<MovimientoDraft>(d => persistidos.Add(d)));
                         Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(_ => borradoresRetirados++));
                         var avisos=new List<string>(); var notificaciones=new List<string>(); var errores=new List<string>();
                         Fijar(vista,"AdvertirResultadoIncierto",new Action<string>(m => avisos.Add(m)));
@@ -120,6 +122,7 @@ namespace SteeLog.Tests
                         click.Invoke(vista,new object[]{vista,EventArgs.Empty});
                         Esperar(() => avisos.Count>0 && !Campo<bool>(vista,"ocupada"));
                         Assert.Equal(1,executor.Guardados); Assert.Single(avisos); Assert.Contains("Resultado incierto",avisos[0]);
+                        Assert.Equal("123",Assert.Single(persistidos).ResultadoInciertoRemito); // marcador persistido una sola vez
                         Assert.False(boton.Enabled);
                         Assert.Single(carrito); Assert.Equal("123",Campo<Control>(vista,"nroRemitoTxt").Text); Assert.Equal(0,borradoresRetirados);
                         // Un segundo clic no vuelve a escribir.
@@ -143,6 +146,7 @@ namespace SteeLog.Tests
                         Esperar(() => notificaciones.Count>0); Assert.Single(notificaciones);
                         Assert.False(Campo<bool>(vista,"resultadoIncierto")); Assert.True(boton.Enabled);
                         Assert.Single(carrito); Assert.Single(avisos); Assert.Equal(new[]{"123"},preguntas);
+                        Assert.Single(persistidos); Assert.Null(((MovimientoDraft)Assert.Single(borradores)).ResultadoInciertoRemito); // con Sí se limpia el marcador
                     }
                 }
                 catch(Exception e) { error=e; }
@@ -165,6 +169,7 @@ namespace SteeLog.Tests
             Fijar(vista,"catalogosListos",true); Fijar(vista,"modeloListo",true);
             Fijar(vista,"VersionBorrador",new Func<string>(() => null));
             Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(_ => {}));
+            Fijar(vista,"GuardarBorradorActual",new Action<MovimientoDraft>(_ => {}));
             Fijar(vista,"AdvertirResultadoIncierto",new Action<string>(m => {}));
             Fijar(vista,"AdvertirGuardado",new Action<string>(m => {}));
             Fijar(vista,"NotificarGuardado",new Action<string>(m => {}));
@@ -236,6 +241,81 @@ namespace SteeLog.Tests
                     Esperar(() => notificaciones.Count>0);
                     Assert.Single(notificaciones); Assert.Equal(0,preguntas);
                     Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.Single(carrito);
+                }
+            });
+        }
+        private static Vista_Movimientos VistaNuevaConBorradorIncierto(MovimientoDraft draft,List<string> preguntas,bool respuesta,List<MovimientoDraft> escritos,List<string> retirados)
+        {
+            var vista=new Vista_Movimientos();
+            var handle=vista.Handle;
+            Fijar(vista,"presenter",new MovimientosPresenter(new EjecutorIncierto(),vista));
+            Fijar(vista,"catalogosListos",true); Fijar(vista,"modeloListo",true);
+            Campo<ComboBox>(vista,"cmbFlete").Items.Add("Sin flete"); // la restauración selecciona el índice 0
+            Fijar(vista,"LeerBorrador",new Func<MovimientoDraft>(() => draft));
+            Fijar(vista,"ConfirmarRecuperacion",new Func<MovimientoDraft,bool>(_ => true));
+            Fijar(vista,"VersionBorrador",new Func<string>(() => "v-marcado"));
+            Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(v => retirados.Add(v)));
+            Fijar(vista,"GuardarBorradorActual",new Action<MovimientoDraft>(d => escritos.Add(d)));
+            Fijar(vista,"AdvertirResultadoIncierto",new Action<string>(m => {}));
+            Fijar(vista,"AdvertirGuardado",new Action<string>(m => {}));
+            Fijar(vista,"NotificarGuardado",new Action<string>(m => {}));
+            Fijar(vista,"AdvertirErrorCarga",new Action<string>(m => {}));
+            Fijar(vista,"ConfirmarReenvioIncierto",new Func<string,bool>(r => { preguntas.Add(r); return respuesta; }));
+            ReiniciarIncierto(); // simula un proceso nuevo: no hay estado estático
+            return vista;
+        }
+        private static MovimientoDraft BorradorMarcado()
+        {
+            var draft=new MovimientoDraft { NroRemito="777",ResultadoInciertoRemito="777",NombreTipoMovimiento="Salida" };
+            draft.Materiales.Add(new MovimientoMaterialDraft { IdMaterial=1,NombreMaterial="Material",Cantidad=2 });
+            return draft;
+        }
+        [Fact]
+        public void BorradorConMarcadorEnVistaNuevaBloqueaGuardarYConSiLibera()
+        {
+            Sta(() => {
+                var preguntas=new List<string>(); var escritos=new List<MovimientoDraft>(); var retirados=new List<string>();
+                using(var vista=VistaNuevaConBorradorIncierto(BorradorMarcado(),preguntas,true,escritos,retirados))
+                {
+                    var boton=Campo<Control>(vista,"guna2Button2");
+                    Invocar(vista,"IntentarRecuperarBorrador");
+                    Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.False(boton.Enabled);
+                    Esperar(() => preguntas.Count>0);
+                    Assert.Equal(new[]{"777"},preguntas);
+                    Assert.False(Campo<bool>(vista,"resultadoIncierto")); Assert.True(boton.Enabled);
+                    Assert.Single(Campo<List<MovimientoMaterial>>(vista,"materialesLista"));
+                    Assert.Empty(retirados);
+                    Assert.Null(Assert.Single(escritos).ResultadoInciertoRemito); // marcador limpiado en disco
+                }
+            });
+        }
+        [Fact]
+        public void BorradorConMarcadorEnVistaNuevaConNoDescartaCarritoYBorrador()
+        {
+            Sta(() => {
+                var preguntas=new List<string>(); var escritos=new List<MovimientoDraft>(); var retirados=new List<string>();
+                using(var vista=VistaNuevaConBorradorIncierto(BorradorMarcado(),preguntas,false,escritos,retirados))
+                {
+                    Invocar(vista,"IntentarRecuperarBorrador");
+                    Assert.True(Campo<bool>(vista,"resultadoIncierto"));
+                    Esperar(() => preguntas.Count>0);
+                    Assert.Equal(new[]{"777"},preguntas);
+                    Assert.False(Campo<bool>(vista,"resultadoIncierto"));
+                    Assert.Empty(Campo<List<MovimientoMaterial>>(vista,"materialesLista"));
+                    Assert.Equal(new[]{"v-marcado"},retirados); Assert.Empty(escritos);
+                }
+            });
+        }
+        [Fact]
+        public void BorradorSinMarcadorNoPideConfirmacionDeIncierto()
+        {
+            Sta(() => {
+                var preguntas=new List<string>(); var draft=BorradorMarcado(); draft.ResultadoInciertoRemito=null;
+                using(var vista=VistaNuevaConBorradorIncierto(draft,preguntas,true,new List<MovimientoDraft>(),new List<string>()))
+                {
+                    Invocar(vista,"IntentarRecuperarBorrador");
+                    for(int i=0;i<20;i++) { Application.DoEvents(); Thread.Sleep(5); }
+                    Assert.False(Campo<bool>(vista,"resultadoIncierto")); Assert.Empty(preguntas);
                 }
             });
         }

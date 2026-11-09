@@ -76,6 +76,25 @@ namespace SteeLog.Tests
             Assert.Equal(42, draft.Materiales[1].IdInsumo);
         }
         [Fact]
+        public void MarcadorDeResultadoInciertoViajaIdaYVueltaYElLegacyNoLoTiene()
+        {
+            var store = new Memoria();
+            var servicio = new BorradorMovimiento(store, () => new DateTime(2026, 1, 2));
+            servicio.Guardar(new MovimientoDraft { NroRemito = "9", ResultadoInciertoRemito = "9" });
+            Assert.Contains("ResultadoInciertoRemito", Encoding.UTF8.GetString(store.Bytes));
+            var version = servicio.VersionActual();
+            Assert.Equal("9", servicio.Leer().ResultadoInciertoRemito);
+            servicio.EliminarSiCoincide(version);
+            Assert.Null(servicio.Leer());
+            servicio.Guardar(new MovimientoDraft { NroRemito = "10" });
+            Assert.DoesNotContain("ResultadoInciertoRemito", Encoding.UTF8.GetString(store.Bytes));
+            Assert.Null(servicio.Leer().ResultadoInciertoRemito);
+            const string legacy = @"{""FechaGuardado"":""\/Date(1767355200000)\/"",""IdTipoMovimiento"":7,""Materiales"":[],""NroRemito"":""L-1""}";
+            store.Bytes = Encoding.UTF8.GetBytes(legacy);
+            var leido = new BorradorMovimiento(store, () => new DateTime(2026, 1, 2, 13, 0, 0, DateTimeKind.Utc)).Leer();
+            Assert.NotNull(leido); Assert.Equal("L-1", leido.NroRemito); Assert.Null(leido.ResultadoInciertoRemito);
+        }
+        [Fact]
         public void JsonCorruptoSeDescarta()
         {
             var store = new Memoria { Bytes = Encoding.UTF8.GetBytes("{") };

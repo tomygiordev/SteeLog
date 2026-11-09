@@ -51,7 +51,7 @@ namespace SteeLog
             DateTime fecha, string nroRemito, int idTipoMov, string nombreTipoMov,
             int idOrigen, string tipoOrigen, int idDestino, string tipoDestino,
             int idObra, decimal costoFlete, int? idFlete, decimal precioTotal, string observaciones,
-            List<MovimientoMaterial> materiales)
+            List<MovimientoMaterial> materiales, string resultadoInciertoRemito = null)
         {
             var draft = new MovimientoDraft
             {
@@ -67,7 +67,8 @@ namespace SteeLog
                 CostoFlete = costoFlete,
                 IdFlete = idFlete,
                 PrecioTotal = precioTotal,
-                Observaciones = observaciones
+                Observaciones = observaciones,
+                ResultadoInciertoRemito = resultadoInciertoRemito
             };
 
             if (materiales != null)

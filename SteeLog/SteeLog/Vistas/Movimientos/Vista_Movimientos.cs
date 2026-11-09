@@ -44,6 +44,10 @@ namespace SteeLog.Vistas.Movimientos
         internal Func<string> VersionBorrador = () => MovimientoDraftService.VersionActual();
         internal Action<string> EliminarBorradorConfirmado = version => MovimientoDraftService.EliminarSiCoincide(version);
         internal Action<SteeLog.Core.Application.Borradores.MovimientoDraft> GuardarBorradorActual = draft => MovimientoDraftService.Guardar(draft);
+        internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft> LeerBorrador = () => MovimientoDraftService.Leer();
+        internal Action DescartarBorrador = () => MovimientoDraftService.Eliminar();
+        // Inyectable en tests: reemplaza el MessageBox "¿Desea recuperarlo?".
+        internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft, bool> ConfirmarRecuperacion;
         private int _idMovimientoAEditar = 0;
         private bool modeloListo = false;
         private bool catalogosListos;
@@ -88,6 +92,8 @@ namespace SteeLog.Vistas.Movimientos
             remitoIncierto = nroRemitoTxt?.Text?.Trim() ?? "";
             _hayInciertoSinResolver = true; _remitoInciertoSinResolver = remitoIncierto;
             resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos; SetOcupada(ocupada);
+            // Marcador persistido junto al borrador (una sola escritura): sobrevive al reinicio de la aplicación.
+            PersistirBorradorConMarcador(remitoIncierto);
             if (!IsDisposed && !cierre.IsCancellationRequested)
                 AdvertirResultadoIncierto("Resultado incierto: el movimiento pudo haberse guardado. Verifique el historial antes de reintentar. Pulse F5 para recargar.");
         }
@@ -110,7 +116,7 @@ namespace SteeLog.Vistas.Movimientos
                     LimpiarFormulario();
                     AdvertirGuardado("Se descartó el carrito del movimiento con resultado incierto.");
                 }
-                else SetOcupada(ocupada);
+                else { PersistirBorradorConMarcador(null); SetOcupada(ocupada); }
                 return true;
             }
             finally { preguntandoIncierto = false; }

@@ -602,13 +602,18 @@ namespace SteeLog.Vistas
             finally { if (version == _versionSeleccion) { _cargandoFotos = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); } }
         }
 
+        internal static string ResumenFotos(int agregadas, int rechazadas, string motivo)
+        {
+            return agregadas + " agregada(s), " + rechazadas + " rechazada(s)" + (string.IsNullOrWhiteSpace(motivo) ? "." : ": " + motivo.Trim().TrimEnd('.') + ".");
+        }
+
         private async void btnAgregarFoto_Click(object sender, EventArgs e)
         {
             if (_inicializando || _cargandoFotos || _guardando || _errorFotos) return;
             using (var dialogo = new OpenFileDialog { Title = "Seleccionar fotos", Filter = SteeLog.Core.Application.Canaletas.OperacionesCanaleta.FiltroDialogoFotos, Multiselect = true })
             {
                 if (dialogo.ShowDialog() != DialogResult.OK) return;
-                int version = _versionSeleccion, id = _idSeleccionado, agregadas = 0, rechazadas = 0;
+                int version = _versionSeleccion, id = _idSeleccionado, agregadas = 0, rechazadas = 0; string motivoRechazo = null;
                 _guardando = true; CambiarEstadoGuardado(true);
                 try
                 {
@@ -623,11 +628,11 @@ namespace SteeLog.Vistas
                             agregadas++;
                         }
                         catch (OperationCanceledException) { throw; }
-                        catch (Exception ex) { if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; rechazadas++; ToastNotification.ShowWarning("No se pudo agregar '" + Path.GetFileName(archivo) + "': " + ex.Message); }
+                        catch (Exception ex) { if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return; rechazadas++; if (motivoRechazo == null) motivoRechazo = ex.Message; ToastNotification.ShowWarning("No se pudo agregar '" + Path.GetFileName(archivo) + "': " + ex.Message); }
                     }
                     if (_cierre.IsCancellationRequested || IsDisposed || version != _versionSeleccion) return;
                     ActualizarContadorFotos(); if (agregadas > 0) lstFotos.SelectedIndex = lstFotos.Items.Count - 1;
-                    if (rechazadas > 0) ToastNotification.ShowWarning(agregadas + " agregada(s), " + rechazadas + " rechazada(s).");
+                    if (rechazadas > 0) ToastNotification.ShowWarning(ResumenFotos(agregadas, rechazadas, motivoRechazo));
                     if (agregadas > 0 && id >= 0) await AdjuntarPendientesAsync(id, version);
                 }
                 catch (OperationCanceledException) { }

@@ -40,6 +40,13 @@ namespace SteeLog.Vistas.Movimientos
                 // Si no hay nada cargado, no guardar un borrador vacío
                 if (cmbMovimientos.SelectedIndex < 0 && materialesLista.Count == 0) return;
 
+                GuardarBorradorActual(ConstruirDraft(null));
+            }
+            catch { /* silencioso */ }
+        }
+
+        private SteeLog.Core.Application.Borradores.MovimientoDraft ConstruirDraft(string marcadorIncierto)
+        {
                 var origen = cmbOrigen.SelectedItem as ItemCombo;
                 var destino = cmbDestino.SelectedItem as ItemCombo;
 
@@ -61,10 +68,23 @@ namespace SteeLog.Vistas.Movimientos
                     idFlete: (cmbFlete.SelectedValue != null && Convert.ToInt32(cmbFlete.SelectedValue) > 0) ? Convert.ToInt32(cmbFlete.SelectedValue) : (int?)null,
                     precioTotal: ptDraft,
                     observaciones: txtCategoria.Text,
-                    materiales: materialesLista
+                    materiales: materialesLista,
+                    resultadoInciertoRemito: marcadorIncierto
                 );
+            return draft;
+        }
 
-                GuardarBorradorActual(draft);
+        /// <summary>
+        /// Escritura explícita y acotada (no depende del autoguardado, que queda pausado con un incierto):
+        /// persiste el estado actual con el marcador de resultado incierto, o sin él (null) al resolverlo.
+        /// </summary>
+        private void PersistirBorradorConMarcador(string marcadorIncierto)
+        {
+            try
+            {
+                if (_idMovimientoAEditar > 0) return;
+                if (cmbMovimientos.SelectedIndex < 0 && materialesLista.Count == 0) return;
+                GuardarBorradorActual(ConstruirDraft(marcadorIncierto));
             }
             catch { /* silencioso */ }
         }
@@ -75,7 +95,7 @@ namespace SteeLog.Vistas.Movimientos
         /// </summary>
         private void IntentarRecuperarBorrador()
         {
-            var draft = MovimientoDraftService.Leer();
+            var draft = LeerBorrador();
             if (draft == null || (draft.Materiales.Count == 0 && draft.IdTipoMovimiento == 0)) { _hayInciertoSinResolver = false; return; }
 
             string hace = "";
@@ -85,7 +105,7 @@ namespace SteeLog.Vistas.Movimientos
             else
                 hace = $"hace {(int)edad.TotalHours}h";
 
-            var resultado = MessageBox.Show(
+            var resultado = ConfirmarRecuperacion != null ? (ConfirmarRecuperacion(draft) ? DialogResult.Yes : DialogResult.No) : MessageBox.Show(
                 this,
                 $"Se encontró un movimiento sin guardar ({hace}).\n\n" +
                 $"Tipo: {draft.NombreTipoMovimiento}\n" +
@@ -98,7 +118,7 @@ namespace SteeLog.Vistas.Movimientos
 
             if (resultado != DialogResult.Yes)
             {
-                MovimientoDraftService.Eliminar();
+                DescartarBorrador();
                 _hayInciertoSinResolver = false;
                 return;
             }
@@ -186,21 +206,24 @@ namespace SteeLog.Vistas.Movimientos
                     AgregarItemLista(item);
                 }
 
-                ToastNotification.ShowSuccess("Borrador recuperado correctamente.");
-                // Si quedó un guardado incierto sin resolver, el borrador no se puede reenviar sin la misma confirmación.
-                if (_hayInciertoSinResolver && !resultadoIncierto)
-                {
-                    resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos; remitoIncierto = _remitoInciertoSinResolver; SetOcupada(ocupada);
-                    BeginInvoke(new Action(() => { if (resultadoIncierto) ResolverResultadoIncierto(remitoIncierto, true); }));
-                }
+                NotificarGuardado("Borrador recuperado correctamente.");
             }
             catch
             {
-                ToastNotification.ShowError("No se pudo restaurar el borrador completamente.");
+                AdvertirErrorCarga("No se pudo restaurar el borrador completamente.");
             }
             finally
             {
                 isProgrammaticChange = false;
+            }
+            // Si el borrador trae el marcador persistido (o quedó un incierto sin resolver en este proceso), no se
+            // puede reenviar sin la misma confirmación, aunque la restauración haya sido parcial. El marcador
+            // persistido sobrevive al reinicio de la aplicación.
+            if ((draft.ResultadoInciertoRemito != null || _hayInciertoSinResolver) && !resultadoIncierto)
+            {
+                resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos;
+                remitoIncierto = draft.ResultadoInciertoRemito ?? _remitoInciertoSinResolver; _hayInciertoSinResolver = true; _remitoInciertoSinResolver = remitoIncierto; SetOcupada(ocupada);
+                BeginInvoke(new Action(() => { if (resultadoIncierto) ResolverResultadoIncierto(remitoIncierto, true); }));
             }
         }
 

@@ -27,6 +27,11 @@ namespace SteeLog.Core.Application.Borradores
     {
         [DataMember] public DateTime FechaGuardado { get; set; }
         [DataMember(EmitDefaultValue = false)] public string Version { get; set; }
+        /// <summary>
+        /// Remito del intento de guardado con resultado incierto (el movimiento pudo haberse persistido).
+        /// null = sin incierto. Los borradores anteriores sin este campo se leen como no inciertos.
+        /// </summary>
+        [DataMember(EmitDefaultValue = false)] public string ResultadoInciertoRemito { get; set; }
         [DataMember] public int IdTipoMovimiento { get; set; }
         [DataMember] public string NombreTipoMovimiento { get; set; }
         [DataMember] public string NroRemito { get; set; }

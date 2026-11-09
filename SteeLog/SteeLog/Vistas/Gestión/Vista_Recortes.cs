@@ -35,6 +35,7 @@ namespace SteeLog.Vistas
             txtAltura.KeyPress += TxtDimension_KeyPress;
             txtCantidad.KeyPress += TxtCantidad_KeyPress;
             txtBusquedaRecortes.TextChanged += TxtBusquedaRecortes_TextChanged;
+            dgvRecortes.SelectionChanged += (s, e) => ActualizarBotonEliminar();
         }
 
         private void CargarEstadosRecorte()
@@ -125,6 +126,13 @@ namespace SteeLog.Vistas
             dgvRecortes.DataSource = null;
             dgvRecortes.DataSource = recortesFiltrados;
             ConfigurarGrid();
+            dgvRecortes.ClearSelection();
+            ActualizarBotonEliminar();
+        }
+
+        private void ActualizarBotonEliminar()
+        {
+            btnEliminar.Enabled = !_guardando && dgvRecortes.SelectedRows.Count > 0;
         }
 
         private static bool CoincideBusquedaFlexible(string texto, string busquedaNormalizada)
@@ -214,18 +222,21 @@ namespace SteeLog.Vistas
                 dgvRecortes.Columns["ancho"].HeaderText = "Ancho (m)";
                 dgvRecortes.Columns["ancho"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                 dgvRecortes.Columns["ancho"].FillWeight = 10;
+                dgvRecortes.Columns["ancho"].DefaultCellStyle.Format = "N2";
             }
             if (dgvRecortes.Columns["altura"] != null)
             {
                 dgvRecortes.Columns["altura"].HeaderText = "Altura (m)";
                 dgvRecortes.Columns["altura"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                 dgvRecortes.Columns["altura"].FillWeight = 10;
+                dgvRecortes.Columns["altura"].DefaultCellStyle.Format = "N2";
             }
             if (dgvRecortes.Columns["medida"] != null)
             {
                 dgvRecortes.Columns["medida"].HeaderText = "Medida (m)";
                 dgvRecortes.Columns["medida"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                 dgvRecortes.Columns["medida"].FillWeight = 12;
+                dgvRecortes.Columns["medida"].DefaultCellStyle.Format = "N2";
             }
             if (dgvRecortes.Columns["cantidad"] != null)
             {
@@ -323,14 +334,14 @@ namespace SteeLog.Vistas
 
         private async void btnEliminar_Click(object sender, EventArgs e)
         {
-            if (dgvRecortes.SelectedRows.Count == 0) return;
+            if (_guardando || dgvRecortes.SelectedRows.Count == 0) return;
 
             var recorte = (Recorte)dgvRecortes.SelectedRows[0].DataBoundItem;
             int id = recorte.id;
             if (MessageBox.Show("¿Seguro que desea eliminar este recorte?", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes)
             {
                 if (_guardando) return;
-                _guardando = true;
+                _guardando = true; ActualizarBotonEliminar();
                 try
                 {
                     await _presenter.EliminarAsync(id, recorte.id_material, _cierre.Token);
@@ -338,7 +349,7 @@ namespace SteeLog.Vistas
                 }
                 catch (OperationCanceledException) { }
                 catch (Exception) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("No se puede eliminar el recorte (posiblemente esté en uso)."); }
-                finally { _guardando = false; }
+                finally { _guardando = false; ActualizarBotonEliminar(); }
             }
         }
 
