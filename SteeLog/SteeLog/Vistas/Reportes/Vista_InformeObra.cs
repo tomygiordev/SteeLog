@@ -81,6 +81,41 @@ namespace SteeLog.Vistas.Reportes
         private TarjetaKpi kpiRemitos, kpiMateriales, kpiHerramientas, kpiInsumos;
         private Label lblVacio;
 
+        private sealed class LabelVacio : Label
+        {
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var area = ClientRectangle;
+                if (area.Width <= 0 || area.Height <= 0) return;
+                var flags = TextFormatFlags.WordBreak;
+                if (!UseMnemonic) flags |= TextFormatFlags.NoPrefix;
+                switch (TextAlign)
+                {
+                    case ContentAlignment.TopCenter:
+                    case ContentAlignment.MiddleCenter:
+                    case ContentAlignment.BottomCenter: flags |= TextFormatFlags.HorizontalCenter; break;
+                    case ContentAlignment.TopRight:
+                    case ContentAlignment.MiddleRight:
+                    case ContentAlignment.BottomRight: flags |= TextFormatFlags.Right; break;
+                }
+                var texto = TextRenderer.MeasureText(e.Graphics, Text, Font, new Size(area.Width, int.MaxValue), flags);
+                int desplazamiento = 0;
+                switch (TextAlign)
+                {
+                    case ContentAlignment.MiddleLeft:
+                    case ContentAlignment.MiddleCenter:
+                    case ContentAlignment.MiddleRight: desplazamiento = Math.Max(0, (area.Height - texto.Height) / 2); break;
+                    case ContentAlignment.BottomLeft:
+                    case ContentAlignment.BottomCenter:
+                    case ContentAlignment.BottomRight: desplazamiento = Math.Max(0, area.Height - texto.Height); break;
+                }
+                area.Y += desplazamiento;
+                area.Height -= desplazamiento;
+                // Label deshabilitado ignora ForeColor; este mensaje debe conservarlo aunque la grilla esté bloqueada.
+                TextRenderer.DrawText(e.Graphics, Text, Font, area, ForeColor, BackColor, flags);
+            }
+        }
+
         private void ConfigurarResumenUI()
         {
             lblMateriales = CrearLabelResumen("Materiales: —");
@@ -204,7 +239,7 @@ namespace SteeLog.Vistas.Reportes
             Controls.Add(panelGrilla);
             panelGrilla.BringToFront();
 
-            lblVacio = new Label
+            lblVacio = new LabelVacio
             {
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -943,13 +978,13 @@ namespace SteeLog.Vistas.Reportes
             btnDescargar.Enabled = false;
             try
             {
-                lblEstado.ForeColor = Tema.TextoSecundario;
+                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
                 lblEstado.Text = "Generando...";
                 string ruta = Path.Combine(Path.GetTempPath(), $"InformeObra_{Guid.NewGuid():N}.pdf");
                 if (GenerarInforme != null) await GenerarInforme(ruta, idObra, nombreObra, desde, hasta, token);
                 else await new InformeObraPDF().GenerarAsync(ruta, idObra, nombreObra, desde, hasta, token);
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
-                lblEstado.ForeColor = Tema.TextoSecundario;
+                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
                 lblEstado.Text = "✓ PDF generado";
                 if (AbrirInforme != null) AbrirInforme(ruta);
                 else Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });

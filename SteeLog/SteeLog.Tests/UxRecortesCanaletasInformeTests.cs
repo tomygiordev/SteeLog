@@ -86,6 +86,54 @@ namespace SteeLog.Tests
             return (Math.Max(la, lb) + 0.05) / (Math.Min(la, lb) + 0.05);
         }
 
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void InformeObra_MensajeVacioConservaColorPintadoConGrillaDeshabilitada(bool otroColor)
+        {
+            EnSta(() => {
+                var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
+                using (var form = (Form)Activator.CreateInstance(tipo))
+                {
+                    var label = Campo<Label>(form, "lblVacio");
+                    var grilla = Campo<DataGridView>(form, "dgvDatos");
+                    Assert.Same(grilla, label.Parent);
+                    Assert.Contains("\n", label.Text);
+                    double contraste = Contraste(label.ForeColor, label.BackColor);
+                    if (otroColor) label.ForeColor = Color.LightSkyBlue;
+                    label.Size = new Size(640, 90);
+                    var habilitar = tipo.GetMethod("HabilitarAcciones", Flags);
+                    habilitar.Invoke(form, new object[] { true });
+                    using (var habilitado = new Bitmap(label.Width, label.Height))
+                    using (var deshabilitado = new Bitmap(label.Width, label.Height))
+                    {
+                        label.DrawToBitmap(habilitado, label.ClientRectangle);
+                        habilitar.Invoke(form, new object[] { false });
+                        Assert.False(grilla.Enabled);
+                        Assert.False(label.Enabled);
+                        label.DrawToBitmap(deshabilitado, label.ClientRectangle);
+                        int pixelesTextoArriba = 0, pixelesTextoAbajo = 0;
+                        for (int y = 0; y < label.Height; y++)
+                        for (int x = 0; x < label.Width; x++)
+                        {
+                            var pixel = deshabilitado.GetPixel(x, y);
+                            Assert.Equal(habilitado.GetPixel(x, y), pixel);
+                            if (Math.Abs(pixel.R - label.ForeColor.R) <= 12
+                                && Math.Abs(pixel.G - label.ForeColor.G) <= 12
+                                && Math.Abs(pixel.B - label.ForeColor.B) <= 12)
+                            {
+                                if (y < label.Height / 2) pixelesTextoArriba++;
+                                else pixelesTextoAbajo++;
+                            }
+                        }
+                        Assert.True(pixelesTextoArriba > 20, "La primera línea debe pintarse con ForeColor.");
+                        Assert.True(pixelesTextoAbajo > 20, "La segunda línea debe pintarse con ForeColor.");
+                    }
+                    Assert.True(contraste >= 4.5);
+                }
+            });
+        }
+
         [Fact]
         public void InformeObra_BotonesDeshabilitadosTienenContrasteLegible()
         {
