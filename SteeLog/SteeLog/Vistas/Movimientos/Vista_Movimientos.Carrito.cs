@@ -32,7 +32,7 @@ namespace SteeLog.Vistas.Movimientos
             int idMat = _materialSeleccionado.id;
             string nomMat = _materialSeleccionado.nombre;
 
-            using (var modal = new ModalRecortes(servicios, idMat, nomMat))
+            using (var modal = new ModalRecortes(servicios, idMat, nomMat, ValidarRecorteParaCarrito))
             {
                 if (modal.ShowDialog() == DialogResult.OK)
                 {
@@ -190,6 +190,127 @@ namespace SteeLog.Vistas.Movimientos
             return stockBase;
         }
 
+        private bool ConsumeStockActual()
+        {
+            string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
+            return ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
+        }
+
+        private string MensajeStockMaterialInsuficiente(decimal disponible)
+        {
+            return servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                ? "Stock insuficiente para agregar ese material."
+                : $"Stock insuficiente. Disponible: {disponible}";
+        }
+
+        private string MensajeStockRecorteInsuficiente(decimal disponible)
+        {
+            return servicios.Sesion.DebeOcultarCantidadesStockMateriales
+                ? "Stock de recorte insuficiente."
+                : $"Stock de recorte insuficiente. Disponible: {disponible.ToString("G29")}";
+        }
+
+        private static bool EsMismoRecorte(MovimientoMaterial m, Recorte recorte)
+        {
+            if (!m.EsRecorte || m.id_material != recorte.id_material) return false;
+            if (recorte.id > 0) return m.IdRecorte == recorte.id;
+            return (!m.IdRecorte.HasValue || m.IdRecorte == 0) &&
+                m.AnchoRecorte == recorte.ancho &&
+                m.AlturaRecorte == recorte.altura &&
+                m.MedidaRecorte == recorte.medida;
+        }
+
+        /// <summary>
+        /// Stock que queda disponible de un material descontando lo que ya hay de él en el carrito
+        /// (sin contar <paramref name="excluir"/>, el ítem que se está reemplazando). En modo edición
+        /// las cantidades cargadas se revierten al guardar, así que no se descuentan.
+        /// </summary>
+        private decimal DisponibleRestanteMaterial(int idMaterial, decimal stock, MovimientoMaterial excluir = null)
+        {
+            if (_idMovimientoAEditar > 0) return stock;
+            decimal enCarrito = materialesLista
+                .Where(m => !ReferenceEquals(m, excluir) && !m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual && m.id_material == idMaterial)
+                .Sum(m => m.cantidad);
+            return stock - enCarrito;
+        }
+
+        private decimal DisponibleRestanteRecorte(Recorte recorte, decimal stock, MovimientoMaterial excluir = null)
+        {
+            if (_idMovimientoAEditar > 0) return stock;
+            decimal enCarrito = materialesLista
+                .Where(m => !ReferenceEquals(m, excluir) && !m.EsInsumo && EsMismoRecorte(m, recorte))
+                .Sum(m => m.cantidad);
+            return stock - enCarrito;
+        }
+
+        /// <summary>
+        /// Valida, para movimientos que consumen stock, que sumar <paramref name="cantidad"/> del recorte
+        /// al carrito no supere lo disponible. Devuelve el aviso a mostrar o null si es válido.
+        /// Un recorte nuevo (id 0) nace con stock 0: el motor rechaza consumirlo ("Stock insuficiente").
+        /// </summary>
+        private string ValidarRecorteParaCarrito(Recorte recorte, decimal cantidad)
+        {
+            if (recorte == null || !ConsumeStockActual()) return null;
+            decimal disponible = DisponibleRestanteRecorte(recorte, recorte.id > 0 ? recorte.cantidad : 0m);
+            if (cantidad > disponible) return MensajeStockRecorteInsuficiente(Math.Max(0m, disponible));
+            return null;
+        }
+
+        /// <summary>
+        /// Detalle de los ítems del carrito que superan el stock conocido (solo movimientos que consumen stock).
+        /// Los ítems cuyo stock no se conoce, los eventuales y los insumos no se validan; en modo edición
+        /// tampoco, porque el stock real incluye lo que el movimiento original devuelve al guardar.
+        /// </summary>
+        private List<string> ItemsQueExcedenStock()
+        {
+            var excedidos = new List<string>();
+            if (_idMovimientoAEditar > 0 || !ConsumeStockActual()) return excedidos;
+            bool ocultar = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
+
+            foreach (var grupo in materialesLista
+                .Where(m => !m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual && m.id_material.HasValue)
+                .GroupBy(m => m.id_material.Value))
+            {
+                var material = materialesFull.FirstOrDefault(x => x.id == grupo.Key);
+                if (material == null) continue;
+                decimal cargado = grupo.Sum(m => m.cantidad);
+                if (cargado > material.stockActual)
+                    excedidos.Add(ocultar ? grupo.First().NombreMaterial : $"{grupo.First().NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {material.stockActual.ToString("G29")})");
+            }
+
+            foreach (var grupo in materialesLista
+                .Where(m => m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual)
+                .GroupBy(m => m.IdRecorte.HasValue && m.IdRecorte.Value > 0
+                    ? "R" + m.IdRecorte.Value
+                    : "N" + m.id_material + "|" + m.AnchoRecorte + "|" + m.AlturaRecorte + "|" + m.MedidaRecorte))
+            {
+                var primero = grupo.First();
+                decimal disponible;
+                if (primero.IdRecorte.HasValue && primero.IdRecorte.Value > 0)
+                {
+                    var recorte = recortesDisponibles.FirstOrDefault(x => x.id == primero.IdRecorte.Value);
+                    if (recorte == null) continue;
+                    disponible = recorte.cantidad;
+                }
+                else disponible = 0m;
+                decimal cargado = grupo.Sum(m => m.cantidad);
+                if (cargado > disponible)
+                    excedidos.Add(ocultar ? primero.NombreMaterial : $"{primero.NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {disponible.ToString("G29")})");
+            }
+            return excedidos;
+        }
+
+        /// <summary>Avisa (sin tocar el carrito) si algún ítem supera el stock. Devuelve true si hay excesos.</summary>
+        private bool AdvertirCarritoExcedeStock(string prefijo)
+        {
+            var excedidos = ItemsQueExcedenStock();
+            if (excedidos.Count == 0) return false;
+            string detalle = string.Join("; ", excedidos.Take(3));
+            if (excedidos.Count > 3) detalle += $" y {excedidos.Count - 3} más";
+            AdvertirGuardado($"{prefijo} Stock insuficiente en: {detalle}. Corregí las cantidades del carrito.");
+            return true;
+        }
+
         private void chkCompraEventual_CheckedChanged(object sender, EventArgs e)
         {
             if (chkCompraEventual.Checked)
@@ -312,10 +433,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 if (consumeStock && totalSolicitado > stockDisponible)
                 {
-                    string mensaje = servicios.Sesion.DebeOcultarCantidadesStockMateriales
-                        ? "Stock insuficiente para agregar ese material."
-                        : $"Stock insuficiente. Disponible: {stockDisponible}";
-                    ToastNotification.ShowWarning(mensaje);
+                    ToastNotification.ShowWarning(MensajeStockMaterialInsuficiente(stockDisponible));
                     return;
                 }
             }
@@ -337,18 +455,13 @@ namespace SteeLog.Vistas.Movimientos
                     decimal totalSolicitado = yaEnLista + cantidad;
                     if (consumeStock && totalSolicitado > stockDisponibleRec)
                     {
-                        string mensaje = servicios.Sesion.DebeOcultarCantidadesStockMateriales
-                            ? "Stock de recorte insuficiente."
-                            : $"Stock de recorte insuficiente. Disponible: {stockDisponibleRec.ToString("G29")}";
-                        ToastNotification.ShowWarning(mensaje);
+                        ToastNotification.ShowWarning(MensajeStockRecorteInsuficiente(stockDisponibleRec));
                         return;
                     }
                 }
                 else if (consumeStock)
                 {
-                    ToastNotification.ShowWarning(servicios.Sesion.DebeOcultarCantidadesStockMateriales
-                        ? "Stock de recorte insuficiente."
-                        : "Stock de recorte insuficiente. Disponible: 0");
+                    ToastNotification.ShowWarning(MensajeStockRecorteInsuficiente(0m));
                     return;
                 }
             }

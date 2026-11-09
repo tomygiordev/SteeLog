@@ -20,13 +20,16 @@ namespace SteeLog.Vistas.Movimientos
         private string _nombreMaterial;
         private readonly RecortesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
+        private readonly Func<Recorte, decimal, string> _validarCarrito;
+        internal Action<string> AdvertirCarrito = mensaje => ToastNotification.ShowWarning(mensaje);
         private int _versionCarga;
         private List<Recorte> _listaOriginal = new List<Recorte>();
         public Recorte RecorteSeleccionado { get; private set; }
         public decimal CantidadSeleccionada { get; private set; } = 1;
 
-        public ModalRecortes(IServiciosVista servicios, int idMaterial, string nombreMaterial)
+        public ModalRecortes(IServiciosVista servicios, int idMaterial, string nombreMaterial, Func<Recorte, decimal, string> validarCarrito = null)
         {
+            _validarCarrito = validarCarrito;
             this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             _presenter = new RecortesPresenter(servicios.Executor);
 
@@ -202,6 +205,13 @@ namespace SteeLog.Vistas.Movimientos
                     return;
                 }
 
+                string motivo = _validarCarrito?.Invoke(recorte, cant);
+                if (motivo != null)
+                {
+                    AdvertirCarrito(motivo);
+                    return;
+                }
+
                 RecorteSeleccionado = recorte;
                 CantidadSeleccionada = cant;
                 this.DialogResult = DialogResult.OK;
@@ -266,9 +276,9 @@ namespace SteeLog.Vistas.Movimientos
 
                 string inputCantCrear = txtCantidad.Text.Replace(',', '.');
                 decimal.TryParse(inputCantCrear, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantidadCrear);
-                CantidadSeleccionada = cantidadCrear > 0 ? cantidadCrear : 1m;
+                decimal cantidadElegida = cantidadCrear > 0 ? cantidadCrear : 1m;
 
-                RecorteSeleccionado = existente ?? new Recorte
+                var elegido = existente ?? new Recorte
                 {
                     id = 0,
                     id_material = _idMaterial,
@@ -279,6 +289,16 @@ namespace SteeLog.Vistas.Movimientos
                     cantidad = 0,
                     estado = null
                 };
+
+                string motivo = _validarCarrito?.Invoke(elegido, cantidadElegida);
+                if (motivo != null)
+                {
+                    AdvertirCarrito(motivo);
+                    return;
+                }
+
+                CantidadSeleccionada = cantidadElegida;
+                RecorteSeleccionado = elegido;
                 this.DialogResult = DialogResult.OK;
                 this.Close();
             }

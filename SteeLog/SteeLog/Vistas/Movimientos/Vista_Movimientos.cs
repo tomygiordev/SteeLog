@@ -966,6 +966,9 @@ namespace SteeLog.Vistas.Movimientos
                 isProgrammaticChange = false;
                 ActualizarVisibilidadPrecios();
             }
+
+            // El carrito no se modifica: solo se avisa si lo ya cargado excede el stock del nuevo tipo.
+            AdvertirCarritoExcedeStock("El tipo elegido consume stock.");
         }
 
         private void SeleccionarEnCombo(Guna.UI2.WinForms.Guna2ComboBox combo, string tipo, params string[] busquedas)
@@ -1048,6 +1051,8 @@ namespace SteeLog.Vistas.Movimientos
                 AdvertirGuardado("Completa todos los campos obligatorios.");
                 return;
             }
+
+            if (AdvertirCarritoExcedeStock("No se puede guardar.")) return;
 
             var confirmGuardar = ConfirmarGuardado();
             if (confirmGuardar != DialogResult.Yes) return;
@@ -1294,9 +1299,12 @@ namespace SteeLog.Vistas.Movimientos
             if (_materialSeleccionado == null) return valor;
 
             // En modo edición, el stockMax considera las cantidades ya cargadas (serán revertidas)
+            // y se descuenta lo que ya hay del mismo material/recorte en el carrito (salvo el ítem que se está reemplazando)
+            var itemEnEdicion = panelSeleccionado?.Tag as MovimientoMaterial;
             decimal stockMax = _recorteSeleccionado != null
-                ? StockDisponibleRecorte(_recorteSeleccionado.id)
-                : StockDisponibleMaterial(_materialSeleccionado.id);
+                ? DisponibleRestanteRecorte(_recorteSeleccionado, StockDisponibleRecorte(_recorteSeleccionado.id), itemEnEdicion)
+                : DisponibleRestanteMaterial(_materialSeleccionado.id, StockDisponibleMaterial(_materialSeleccionado.id), itemEnEdicion);
+            if (stockMax < 0) stockMax = 0;
 
             string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
             // Cambiar de material/recorte o de tipo de movimiento reinicia el aviso para que el siguiente exceso vuelva a avisar.
