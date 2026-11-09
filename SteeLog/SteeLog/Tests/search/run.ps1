@@ -2,8 +2,9 @@
 $dir=Join-Path $env:TEMP ('steelog-search-'+[Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $dir | Out-Null
 $root=Resolve-Path (Join-Path $PSScriptRoot '../..')
-$msbuild='C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
-$csc='C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+. (Join-Path $PSScriptRoot '..\..\..\..\scripts\vs-herramientas.ps1')
+$msbuild = Resolve-MSBuild
+$csc = Resolve-Csc $msbuild
 & $msbuild (Join-Path $root "..\SteeLog.sln") /t:Restore /p:RestorePackagesConfig=true /v:quiet /nologo
 if ($LASTEXITCODE -ne 0) { throw "Solution restore failed: $LASTEXITCODE" }
 & $msbuild (Join-Path $root 'SteeLog.csproj') /t:Rebuild /p:Configuration=Debug "/p:BaseIntermediateOutputPath=$dir\obj\" "/p:OutputPath=$dir\" /v:quiet /nologo

@@ -40,7 +40,13 @@ internal static class BrandingSmoke
             foreach (int size in new[] {16,24,32,48,64,128,256}) { int w = reader.ReadByte(), h = reader.ReadByte(); Check((w == 0 ? 256 : w) == size && (h == 0 ? 256 : h) == size, "ICO size " + size); reader.ReadBytes(14); }
         }
         var servicesType = asm.GetType("SteeLog.CompositionRoot.LocalServices", true);
-        var services = servicesType.GetMethod("Create", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+        // Raíz demo temporal: nunca se lee ni se escribe el perfil real del usuario.
+        string demoRoot = Path.Combine(Path.GetTempPath(), "steelog-demo-branding-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(demoRoot);
+        File.WriteAllText(Path.Combine(demoRoot, ".steelog-demo"), "steelog-demo-v1");
+        object services = null;
+        try {
+        services = servicesType.GetMethod("CreateForEnvironment", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { AppDomain.CurrentDomain.BaseDirectory, demoRoot });
         var serviciosVista = (SteeLog.Presentation.IServiciosVista)services;
         foreach (Form form in new Form[] { new Vista_Login(serviciosVista), new VistaGeneral(serviciosVista) })
         using (form)
@@ -211,6 +217,10 @@ internal static class BrandingSmoke
             Check(texto.Contains("Insumo demo") && texto.Contains("R-123"), "Remito sin datos esperados: " + texto);
         }
         Console.WriteLine("OK: headers, Kardex, conteo, remito y ordenes con datos, resources, icon and forms");
+        } finally {
+            var disposable = services as IDisposable; if (disposable != null) disposable.Dispose();
+            try { Directory.Delete(demoRoot, true); } catch { }
+        }
     }
     static void Fill(object target, params object[] pairs)
     {

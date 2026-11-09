@@ -3,8 +3,9 @@ $root = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
 $dir = Join-Path $env:TEMP ('steelog-config-' + [Guid]::NewGuid().ToString('N'))
 $build = Join-Path $dir 'build'
 New-Item -ItemType Directory -Path $build -Force | Out-Null
-$msbuild = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
-$csc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+. (Join-Path $PSScriptRoot '..\..\..\..\scripts\vs-herramientas.ps1')
+$msbuild = Resolve-MSBuild
+$csc = Resolve-Csc $msbuild
 & $msbuild (Join-Path $root "..\SteeLog.sln") /t:Restore /p:RestorePackagesConfig=true /v:quiet /nologo
 if ($LASTEXITCODE -ne 0) { throw "Solution restore failed: $LASTEXITCODE" }
 function CheckNative { if ($LASTEXITCODE -ne 0) { throw "Native command failed: $LASTEXITCODE" } }

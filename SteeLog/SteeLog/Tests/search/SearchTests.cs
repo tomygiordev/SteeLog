@@ -21,6 +21,7 @@ class SearchTests {
    var type=asm.GetType("SteeLog.BusquedaGlobal");
    var root=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"steelog-search-demo-"+Guid.NewGuid().ToString("N")); System.IO.Directory.CreateDirectory(root); System.IO.File.WriteAllText(System.IO.Path.Combine(root,".steelog-demo"),"steelog-demo-v1");
    var services=asm.GetType("SteeLog.CompositionRoot.LocalServices").GetMethod("CreateForEnvironment",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{AppDomain.CurrentDomain.BaseDirectory,root});
+   try {
    object search=Activator.CreateInstance(type,new object[]{services,parent,top,new Action<Form>(f=>f.Dispose())});
    var snap=Activator.CreateInstance(type.GetNestedType("Snapshot",BindingFlags.NonPublic),true);
    foreach(string part in new[]{"Materiales","Recortes","Herramientas","Insumos"}) {
@@ -53,8 +54,8 @@ class SearchTests {
    fixture=snap; ((IList)Get(snap,"Materiales")).Clear();
    var snapshotType=snap.GetType(); var funcType=typeof(Func<>).MakeGenericType(snapshotType);
    var loader=Expression.Lambda(funcType,Expression.Convert(Expression.Call(typeof(SearchTests).GetMethod("Load")),snapshotType)).Compile();
-   var ctor=type.GetConstructor(B,null,new[]{typeof(Form),typeof(Panel),typeof(Action<Form>),funcType},null);
-   var second=ctor.Invoke(new object[]{parent,top,new Action<Form>(f=>f.Dispose()),loader});
+   var ctor=type.GetConstructor(B,null,new[]{asm.GetType("SteeLog.Presentation.IServiciosVista",true),typeof(Form),typeof(Panel),typeof(Action<Form>),funcType},null);
+   var second=ctor.Invoke(new object[]{services,parent,top,new Action<Form>(f=>f.Dispose()),loader});
    var secondInput=(Control)Get(second,"_txtBusqueda"); var panel=(Panel)Get(second,"_panelResultados");
    fail=true;secondInput.Text="nada"; type.GetMethod("EjecutarBusqueda",B).Invoke(second,new object[]{"nada"});
    if(!ctx.Queue.TryTake(out continuation,10000))throw new Exception("error continuation missing");continuation();
@@ -72,6 +73,10 @@ class SearchTests {
    Console.WriteLine("OK expired cache reload is shared by concurrent workers");
    ((IDisposable)second).Dispose();
    Console.WriteLine("CHECKS=6");
+   } finally {
+    var disposable=services as IDisposable; if(disposable!=null) disposable.Dispose();
+    try{System.IO.Directory.Delete(root,true);}catch{}
+   }
 
   }
  }

@@ -1,8 +1,9 @@
 $ErrorActionPreference = 'Stop'
 $root = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 $out = Join-Path $env:TEMP ('steelog-login-usability-' + [guid]::NewGuid().ToString('N'))
-$msbuild = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\MSBuild.exe'
-$csc = 'C:\Program Files\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin\Roslyn\csc.exe'
+. (Join-Path $PSScriptRoot '..\..\..\..\scripts\vs-herramientas.ps1')
+$msbuild = Resolve-MSBuild
+$csc = Resolve-Csc $msbuild
 & $msbuild (Join-Path $root "..\SteeLog.sln") /t:Restore /p:RestorePackagesConfig=true /v:quiet /nologo
 if ($LASTEXITCODE -ne 0) { throw "Solution restore failed: $LASTEXITCODE" }
 foreach ($config in @('Debug','Release')) {

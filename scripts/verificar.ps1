@@ -2,11 +2,8 @@
 param([switch]$LegacyLocal)
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio\Installer\vswhere.exe'
-$msbuild = $null
-if (Test-Path $vswhere) { $msbuild = & $vswhere -latest -products * -requires Microsoft.Component.MSBuild -find 'MSBuild\**\Bin\MSBuild.exe' | Select-Object -First 1 }
-if (-not $msbuild) { $command = Get-Command MSBuild.exe -ErrorAction SilentlyContinue; if ($command) { $msbuild = $command.Source } }
-if (-not $msbuild) { throw 'No se encontró MSBuild de Visual Studio; instalar Build Tools o agregar MSBuild.exe al PATH.' }
+. (Join-Path $PSScriptRoot 'vs-herramientas.ps1')
+$msbuild = Resolve-MSBuild
 function Invoke-Checked([string]$File, [string[]]$Arguments) {
     & $File @Arguments
     if ($LASTEXITCODE -ne 0) { throw "$File terminó con código $LASTEXITCODE" }
