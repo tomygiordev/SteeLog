@@ -124,7 +124,6 @@
     <Reference Include="System.IO.Pipelines, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.IO.Pipelines.10.0.2\lib\net462\System.IO.Pipelines.dll</HintPath>
     </Reference>
-    <Reference Include="System.Management" />
     <Reference Include="System.Memory, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Memory.4.6.3\lib\net462\System.Memory.dll</HintPath>
     </Reference>
@@ -136,7 +135,6 @@
       <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
     </Reference>
     <Reference Include="System.Runtime.Serialization" />
-    <Reference Include="System.ServiceProcess" />
     <Reference Include="System.Text.Encodings.Web, Version=10.0.0.2, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Text.Encodings.Web.10.0.2\lib\net462\System.Text.Encodings.Web.dll</HintPath>
     </Reference>
@@ -152,15 +150,9 @@
     <Reference Include="System.ValueTuple, Version=4.0.3.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.ValueTuple.4.5.0\lib\net47\System.ValueTuple.dll</HintPath>
     </Reference>
-    <Reference Include="System.Web" />
-    <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
-    <Reference Include="Microsoft.CSharp" />
-    <Reference Include="Microsoft.VisualBasic" />
     <Reference Include="System.Data" />
-    <Reference Include="System.Deployment" />
     <Reference Include="System.Drawing" />
-    <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Security" />
     <Reference Include="System.Xml" />
@@ -352,7 +344,6 @@
     <Compile Include="Vistas\Reportes\Vista_ReporteStock.Designer.cs">
       <DependentUpon>Vista_ReporteStock.cs</DependentUpon>
     </Compile>
-    <Compile Include="Branding.cs" />
     <Compile Include="Reportes\InformeObraPDF.cs" />
     <Compile Include="Vistas\Reportes\ModalFechasInformeObra.cs">
       <SubType>Form</SubType>
@@ -384,18 +375,6 @@
     <EmbeddedResource Include="VistaGeneral.resx">
       <DependentUpon>VistaGeneral.cs</DependentUpon>
     </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\FiltroMaterial.resx">
-      <DependentUpon>FiltroMaterial.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Categorias.resx">
-      <DependentUpon>Vista_Categorias.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_CanaletasPlegados.resx">
-      <DependentUpon>Vista_CanaletasPlegados.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Fletes.resx">
-      <DependentUpon>Vista_Fletes.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="Vistas\Gestión\Vista_Materiales.resx">
       <DependentUpon>Vista_Materiales.cs</DependentUpon>
     </EmbeddedResource>
@@ -409,70 +388,16 @@
       <DependentUpon>Resources.resx</DependentUpon>
       <DesignTime>True</DesignTime>
     </Compile>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Obras.resx">
-      <DependentUpon>Vista_Obras.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Proveedores.resx">
-      <DependentUpon>Vista_Proveedores.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Recortes.resx">
-      <DependentUpon>Vista_Recortes.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Ubicaciones.resx">
-      <DependentUpon>Vista_Ubicaciones.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Herramientas.resx">
-      <DependentUpon>Vista_Herramientas.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Gestión\Vista_Insumos.resx">
-      <DependentUpon>Vista_Insumos.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Movimientos\Vista_Movimientos.resx">
-      <DependentUpon>Vista_Movimientos.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Movimientos\ModalInsumos.resx">
-      <DependentUpon>ModalInsumos.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Movimientos\Vista_HistorialMovimientos.resx">
-      <DependentUpon>Vista_HistorialMovimientos.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Reportes\Vista_Kardex.resx">
-      <DependentUpon>Vista_Kardex.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Reportes\Vista_ReporteStock.resx">
-      <DependentUpon>Vista_ReporteStock.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Reportes\Vista_InformeObra.resx">
-      <DependentUpon>Vista_InformeObra.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Inventario\Vista_Inventario.resx">
-      <DependentUpon>Vista_Inventario.cs</DependentUpon>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Vistas\Inventario\Vista_Conteo.resx">
-      <DependentUpon>Vista_Conteo.cs</DependentUpon>
-    </EmbeddedResource>
     <EmbeddedResource Include="appsettings.json">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
-    <None Include="appsettingscopia.json" />
     <None Include="packages.config" />
-    <None Include="Properties\Settings.settings">
-      <Generator>SettingsSingleFileGenerator</Generator>
-      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
-    </None>
-    <Compile Include="Properties\Settings.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DependentUpon>Settings.settings</DependentUpon>
-      <DesignTimeSharedInput>True</DesignTimeSharedInput>
-    </Compile>
-    <None Include="SteeLog_TemporaryKey.pfx" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\Branding\README.md" />
-    <None Include="Resources\app_icon.ico" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Resources\image.png" />
@@ -486,9 +411,7 @@
   <ItemGroup>
     <Content Include="Resources\072maximize1_99942 - Editado.png" />
     <Content Include="Resources\cancel_close_delete_exit_logout_remove_x_icon_123217 - Editado.png" />
-    <Content Include="Resources\cancel_remove_close_x_icon_255948.ico" />
     <Content Include="Resources\Diseño_sin_título__1_-removebg-preview.png" />
-    <Content Include="Resources\minimize_118918 - Editado.png" />
     <EmbeddedResource Include="Resources\Branding\steelog-logo-dark.png" />
     <EmbeddedResource Include="Resources\Branding\steelog-logo-light.png" />
     <EmbeddedResource Include="Resources\Branding\steelog-symbol.png" />
