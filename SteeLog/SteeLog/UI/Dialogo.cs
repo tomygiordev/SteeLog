@@ -369,6 +369,8 @@ namespace SteeLog.UI
                             b.HoverState.BorderColor = Tema.BordeFoco;
                         }
                     }
+                    var resultado = res[i];
+                    b.Click += (s, e) => DialogResult = resultado;
                     _resultados[b] = res[i];
                     Controls.Add(b);
                     x += anchos[i] + 8;
@@ -384,10 +386,14 @@ namespace SteeLog.UI
                     DialogResult = _escape;
                     return true;
                 }
-                if (keyData == Keys.Enter && _defecto != null && !(ActiveControl is Guna2Button))
+                if (keyData == Keys.Enter)
                 {
-                    _defecto.PerformClick();
-                    return true;
+                    var boton = (ActiveControl as Guna2Button) ?? _defecto;
+                    if (boton != null)
+                    {
+                        boton.PerformClick();
+                        return true;
+                    }
                 }
                 return base.ProcessCmdKey(ref msg, keyData);
             }
