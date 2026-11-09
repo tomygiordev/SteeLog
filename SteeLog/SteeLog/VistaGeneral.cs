@@ -531,6 +531,8 @@ namespace SteeLog
                     // Refrescar datos automáticamente al recuperar del caché
                     if (activeForm is IRefrescable refrescable)
                         refrescable.Refrescar();
+                    if (activeForm is IRecargaCatalogos recarga)
+                        recarga.RecargarCatalogos();
                 }
                 else
                 {

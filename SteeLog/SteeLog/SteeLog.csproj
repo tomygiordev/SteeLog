@@ -185,6 +185,7 @@
     <Compile Include="Modelos\HistorialMovimiento.cs" />
     <Compile Include="Modelos\ReporteOrdenPendienteItem.cs" />
     <Compile Include="IRefrescable.cs" />
+    <Compile Include="IRecargaCatalogos.cs" />
     <Compile Include="MovimientoDraftService.cs" />
     <Compile Include="ToastNotification.cs">
       <SubType>Form</SubType>

@@ -19,6 +19,7 @@ namespace SteeLog.Vistas
         private List<UbicacionCatalogo> _items = new List<UbicacionCatalogo>();
         private int idSeleccionado = -1, _versionCarga;
         private bool _listo, _ocupado, _seleccionando, _guardando;
+        private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
         internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
@@ -27,6 +28,9 @@ namespace SteeLog.Vistas
         {
             InitializeComponent();
             txtUbicacion.MaxLength = Ubicacion.MaxNombre;
+            dgvUbicaciones.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
+            dgvUbicaciones.SelectionChanged += dgvUbicaciones_SelectionChanged;
+            VisibleChanged += (s, e) => { if (Visible && _listo) { SincronizarResaltado(); ActualizarEstado(); } };
             ActualizarEstado();
         }
         internal Vista_Ubicaciones(CatalogosPresenter presenter) : this() { _presenter = presenter; }
@@ -70,6 +74,12 @@ namespace SteeLog.Vistas
         private void MostrarItems()
         {
             var datos = _items;
+            bool previoSeleccionando = _seleccionando; _seleccionando = true;
+            try { PintarGrilla(datos); SincronizarResaltado(); }
+            finally { _seleccionando = previoSeleccionando; }
+        }
+        private void PintarGrilla(List<UbicacionCatalogo> datos)
+        {
             dgvUbicaciones.DataSource = null;
             dgvUbicaciones.DataSource = datos;
             dgvUbicaciones.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -98,16 +108,42 @@ namespace SteeLog.Vistas
 
             ActualizarEstado();
         }
+        private void SeleccionarItem(UbicacionCatalogo item)
+        {
+            _seleccionando = true;
+            try { idSeleccionado = item.Id; txtUbicacion.Text = item.Nombre;  guna2Button1.Text = "Actualizar"; }
+            finally { _seleccionando = false; }
+            ActualizarEstado();
+        }
+        /// <summary>Deja resaltado en la grilla exactamente lo que está seleccionado lógicamente (o nada).</summary>
+        private void SincronizarResaltado()
+        {
+            bool previo = _seleccionando; _seleccionando = true;
+            try
+            {
+                dgvUbicaciones.ClearSelection();
+                try { dgvUbicaciones.CurrentCell = null; } catch (InvalidOperationException) { }
+                if (idSeleccionado >= 0)
+                    foreach (DataGridViewRow fila in dgvUbicaciones.Rows)
+                        if ((fila.DataBoundItem as UbicacionCatalogo)?.Id == idSeleccionado) { fila.Selected = true; break; }
+            }
+            finally { _seleccionando = previo; }
+        }
+        private void dgvUbicaciones_SelectionChanged(object sender, EventArgs e)
+        {
+            if (_seleccionando || !_listo || _ocupado || dgvUbicaciones.SelectedRows.Count == 0) return;
+            var item = dgvUbicaciones.SelectedRows[0].DataBoundItem as UbicacionCatalogo;
+            if (item != null && item.Id != idSeleccionado) SeleccionarItem(item);
+        }
         private void dgvUbicaciones_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (!_listo || _ocupado || e.RowIndex < 0) return;
             var item = dgvUbicaciones.Rows[e.RowIndex].DataBoundItem as UbicacionCatalogo;
             if (item == null) return;
-            if (idSeleccionado == item.Id) { LimpiarSeleccion(); return; }
-            _seleccionando = true;
-            try { idSeleccionado = item.Id; txtUbicacion.Text = item.Nombre;  guna2Button1.Text = "Actualizar"; }
-            finally { _seleccionando = false; }
-            ActualizarEstado();
+            int previo = _idAntesDelClic == int.MinValue ? idSeleccionado : _idAntesDelClic;
+            _idAntesDelClic = int.MinValue;
+            if (previo == item.Id) { LimpiarSeleccion(); return; }
+            if (idSeleccionado != item.Id) SeleccionarItem(item);
         }
         private async void guna2Button1_Click(object sender, EventArgs e)
         {
@@ -151,7 +187,7 @@ namespace SteeLog.Vistas
                 catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Eliminado, pero no se pudo actualizar el listado: " + ex.Message); }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo eliminar: " + ex.Message); }
+            catch (Exception ex) { if (Vigente) AvisarError(CatalogosPresenter.MensajeEliminacion(ex)); }
             finally { _ocupado = false; if (Vigente) ActualizarEstado(); }
         }
         private void txtUbicacion_KeyDown(object sender, KeyEventArgs e)

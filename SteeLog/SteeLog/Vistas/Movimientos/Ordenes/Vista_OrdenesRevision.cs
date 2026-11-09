@@ -30,6 +30,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
         private readonly BindingList<OrdenCompraDetalle> _detalles = new BindingList<OrdenCompraDetalle>();
+        // Último valor de "Recibida" aceptado por línea: el DataBinding escribe la propiedad antes de CellEndEdit,
+        // así que al rechazar una edición se revierte a este valor y no al ya modificado.
+        private readonly System.Collections.Generic.Dictionary<OrdenCompraDetalle, decimal> _recibidaValida = new System.Collections.Generic.Dictionary<OrdenCompraDetalle, decimal>();
         private int _idOrden;
 
         private Label lblTitulo;
@@ -47,6 +50,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private Guna2Button btnConfirmar;
         private KeyPressEventHandler _soloDecimalHandler;
         private int _indiceActual = -1;
+        internal Action<string> AdvertirEdicion = mensaje => ToastNotification.ShowWarning(mensaje);
         public Action<int> OnRecepcionConfirmada { get; set; }
         public Action OnCancelar { get; set; }
         public int CurrentOrderId => _idOrden;
@@ -310,8 +314,12 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 txtObservacionesRecepcion.Text = orden.observacion_revision ?? "";
                 _detalles.Clear();
+                _recibidaValida.Clear();
                 foreach (var detalle in orden.Detalles)
+                {
                     _detalles.Add(detalle);
+                    _recibidaValida[detalle] = detalle.cantidad_recibida;
+                }
 
                 bool puedeRevisar = (SessionManager.Role == UserRole.Galpon || SessionManager.Role == UserRole.Admin)
                     && EstadosOrden.PermiteRecepcion(orden.estado);
@@ -363,7 +371,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     {
                         // Valor no numérico: revertir al valor actual sin perder la edición
                         dgvDetalles.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = detalle.cantidad_recibida;
-                        ToastNotification.ShowWarning("La cantidad recibida debe ser un número.");
+                        AdvertirEdicion("La cantidad recibida debe ser un número.");
                     }
                     else
                     {
@@ -377,14 +385,16 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
             catch (Exception ex)
             {
-                ToastNotification.ShowWarning(ex.Message);
-                // Sincronizar la celda con el valor vigente del detalle (no fue modificado
-                // porque AplicarCantidadRecibida lanzó excepción antes de asignar)
+                AdvertirEdicion(ex.Message);
+                // El DataBinding ya escribió el valor rechazado en la propiedad: volver al último valor válido.
+                decimal valida;
+                detalle.cantidad_recibida = _recibidaValida.TryGetValue(detalle, out valida) ? valida : detalle.cantidad_recibida_anterior;
                 detalle.cantidad_faltante = detalle.cantidad_pedida - detalle.cantidad_recibida;
                 dgvDetalles.Rows[e.RowIndex].Cells["colRecibida"].Value = detalle.cantidad_recibida;
             }
 
             dgvDetalles.Refresh();
+            if (e.RowIndex == _indiceActual) SincronizarCargaRapida();
         }
 
         private void DgvDetalles_CellClick(object sender, DataGridViewCellEventArgs e)
@@ -754,6 +764,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             detalle.cantidad_recibida = recibida;
             detalle.cantidad_faltante = detalle.cantidad_pedida - detalle.cantidad_recibida;
+            _recibidaValida[detalle] = recibida;
         }
 
         private void AplicarCantidadRapida(bool avanzar)

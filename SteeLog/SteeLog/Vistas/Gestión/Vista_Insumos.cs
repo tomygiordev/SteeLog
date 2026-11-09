@@ -381,7 +381,7 @@ namespace SteeLog.Vistas
                 }
                 catch (Exception ex)
                 {
-                    ToastNotification.ShowError("No se puede eliminar el insumo: " + ex.Message);
+                    ToastNotification.ShowError(SteeLog.Presentation.CatalogosPresenter.MensajeEliminacion(ex));
                 }
             }
         }

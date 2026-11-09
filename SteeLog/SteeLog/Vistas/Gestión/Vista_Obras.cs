@@ -19,6 +19,7 @@ namespace SteeLog.Vistas
         private List<ObraCatalogo> _items = new List<ObraCatalogo>();
         private int idSeleccionado = -1, _versionCarga;
         private bool _listo, _ocupado, _seleccionando, _guardando;
+        private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
         internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
@@ -27,6 +28,9 @@ namespace SteeLog.Vistas
         {
             InitializeComponent();
             txtObra.MaxLength = Obra.MaxNombre;
+            dgvObras.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
+            dgvObras.SelectionChanged += dgvObras_SelectionChanged;
+            VisibleChanged += (s, e) => { if (Visible && _listo) { SincronizarResaltado(); ActualizarEstado(); } };
             ActualizarEstado();
         }
         internal Vista_Obras(CatalogosPresenter presenter) : this() { _presenter = presenter; }
@@ -70,7 +74,13 @@ namespace SteeLog.Vistas
         private void MostrarItems()
         {
             var datos = _items;
-            if (!_seleccionando && !string.IsNullOrWhiteSpace(txtObra.Text)) datos = _items.Where(x => x.Nombre.IndexOf(txtObra.Text.Trim(), StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            if (!_seleccionando && idSeleccionado < 0 && !string.IsNullOrWhiteSpace(txtObra.Text)) datos = _items.Where(x => x.Nombre.IndexOf(txtObra.Text.Trim(), StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+            bool previoSeleccionando = _seleccionando; _seleccionando = true;
+            try { PintarGrilla(datos); SincronizarResaltado(); }
+            finally { _seleccionando = previoSeleccionando; }
+        }
+        private void PintarGrilla(List<ObraCatalogo> datos)
+        {
             dgvObras.DataSource = null;
             dgvObras.DataSource = datos;
             dgvObras.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
@@ -99,16 +109,42 @@ namespace SteeLog.Vistas
             MostrarItems();
             ActualizarEstado();
         }
+        private void SeleccionarItem(ObraCatalogo item)
+        {
+            _seleccionando = true;
+            try { idSeleccionado = item.Id; txtObra.Text = item.Nombre; chkActiva.Checked = item.Activa; guna2Button1.Text = "Actualizar"; }
+            finally { _seleccionando = false; }
+            ActualizarEstado();
+        }
+        /// <summary>Deja resaltado en la grilla exactamente lo que está seleccionado lógicamente (o nada).</summary>
+        private void SincronizarResaltado()
+        {
+            bool previo = _seleccionando; _seleccionando = true;
+            try
+            {
+                dgvObras.ClearSelection();
+                try { dgvObras.CurrentCell = null; } catch (InvalidOperationException) { }
+                if (idSeleccionado >= 0)
+                    foreach (DataGridViewRow fila in dgvObras.Rows)
+                        if ((fila.DataBoundItem as ObraCatalogo)?.Id == idSeleccionado) { fila.Selected = true; break; }
+            }
+            finally { _seleccionando = previo; }
+        }
+        private void dgvObras_SelectionChanged(object sender, EventArgs e)
+        {
+            if (_seleccionando || !_listo || _ocupado || dgvObras.SelectedRows.Count == 0) return;
+            var item = dgvObras.SelectedRows[0].DataBoundItem as ObraCatalogo;
+            if (item != null && item.Id != idSeleccionado) SeleccionarItem(item);
+        }
         private void dgvObras_CellClick(object sender, DataGridViewCellEventArgs e)
         {
             if (!_listo || _ocupado || e.RowIndex < 0) return;
             var item = dgvObras.Rows[e.RowIndex].DataBoundItem as ObraCatalogo;
             if (item == null) return;
-            if (idSeleccionado == item.Id) { LimpiarSeleccion(); return; }
-            _seleccionando = true;
-            try { idSeleccionado = item.Id; txtObra.Text = item.Nombre; chkActiva.Checked = item.Activa; guna2Button1.Text = "Actualizar"; }
-            finally { _seleccionando = false; }
-            ActualizarEstado();
+            int previo = _idAntesDelClic == int.MinValue ? idSeleccionado : _idAntesDelClic;
+            _idAntesDelClic = int.MinValue;
+            if (previo == item.Id) { LimpiarSeleccion(); return; }
+            if (idSeleccionado != item.Id) SeleccionarItem(item);
         }
         private async void guna2Button1_Click(object sender, EventArgs e)
         {
@@ -153,7 +189,7 @@ namespace SteeLog.Vistas
                 catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Eliminado, pero no se pudo actualizar el listado: " + ex.Message); }
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo eliminar: " + ex.Message); }
+            catch (Exception ex) { if (Vigente) AvisarError(CatalogosPresenter.MensajeEliminacion(ex)); }
             finally { _ocupado = false; if (Vigente) ActualizarEstado(); }
         }
         private void txtObra_KeyDown(object sender, KeyEventArgs e)

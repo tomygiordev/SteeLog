@@ -3,11 +3,17 @@ namespace SteeLog.Domain.Catalogos
 {
     public static class NombreCatalogo
     {
+        /// <summary>Contrae "de el" en "del": "el proveedor" -> "del proveedor"; "la obra" -> "de la obra".</summary>
+        public static string ConDe(string entidadConArticulo)
+        {
+            var texto = (entidadConArticulo ?? string.Empty).Trim();
+            return texto.StartsWith("el ", StringComparison.OrdinalIgnoreCase) ? "del " + texto.Substring(3) : "de " + texto;
+        }
         /// <summary>Devuelve un mensaje amigable si el nombre no es válido; null si es válido.</summary>
         public static string Validar(string nombre, int maximo, string entidadConArticulo)
         {
             if (string.IsNullOrWhiteSpace(nombre)) return "Debes escribir un nombre.";
-            if (nombre.Trim().Length > maximo) return "El nombre de " + entidadConArticulo + " no puede superar los " + maximo + " caracteres.";
+            if (nombre.Trim().Length > maximo) return "El nombre " + ConDe(entidadConArticulo) + " no puede superar los " + maximo + " caracteres.";
             return null;
         }
     }

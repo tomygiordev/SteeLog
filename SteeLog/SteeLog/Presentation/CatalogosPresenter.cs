@@ -21,6 +21,21 @@ namespace SteeLog.Presentation
             }
             return "Error al guardar: " + error.Message;
         }
+        /// <summary>Traduce un fallo de eliminación a un mensaje para el usuario (sin SQL crudo).</summary>
+        public static string MensajeEliminacion(Exception error)
+        {
+            while (error is AggregateException agregado && agregado.InnerExceptions.Count == 1) error = agregado.InnerException;
+            if (error is CatalogoEnUsoException) return error.Message;
+            // Sin acoplar Presentation a Npgsql: una FK violada (23503) que no tradujo el repositorio no se muestra cruda.
+            if (CodigoSql(error) == "23503") return "No se puede eliminar porque está en uso por otros registros.";
+            return "No se pudo eliminar: " + error.Message;
+        }
+        private static string CodigoSql(Exception error)
+        {
+            for (var e = error; e != null; e = e.InnerException)
+                if (e.GetType().GetProperty("SqlState")?.GetValue(e) is string codigo) return codigo;
+            return null;
+        }
         private readonly IUseCaseExecutor executor;
         public CatalogosPresenter(IUseCaseExecutor executor) { this.executor = executor ?? throw new ArgumentNullException(nameof(executor)); }
         public Task<IReadOnlyList<CategoriaCatalogo>> CategoriasAsync(CancellationToken t) => executor.ExecuteAsync<ConsultarCatalogos, IReadOnlyList<CategoriaCatalogo>>(x => x.CategoriasAsync(t));

@@ -15,8 +15,9 @@ using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesAlta : Form, IOrdenesVista, IOrdenesResultadoIncierto
+    public class Vista_OrdenesAlta : Form, IOrdenesVista, IOrdenesResultadoIncierto, IRecargaCatalogos
     {
+        private bool _ocupada;
         private OrdenesPresenter _presenter;
         private readonly Action<string> _avisoExito;
         private readonly Action<string> _avisoError;
@@ -83,7 +84,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         }
         private void ActualizarDisponibilidad() { if (!IsDisposed && !Disposing && btnGuardar != null) btnGuardar.Enabled = _catalogosListos && _modelo.Listo && !_resultadoIncierto; }
         public void MarcarResultadoIncierto() { _resultadoIncierto = true; _versionIncierto = _versionCarga; if (IsDisposed || Disposing) return; ActualizarDisponibilidad(); AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Reabra la orden o pulse Limpiar para cargar una nueva."); }
-        public void SetOcupada(bool ocupada) { if (IsDisposed || Disposing) return; if (ocupada) btnGuardar.Enabled = false; else ActualizarDisponibilidad(); }
+        public void SetOcupada(bool ocupada) { _ocupada = ocupada; if (IsDisposed || Disposing) return; if (ocupada) btnGuardar.Enabled = false; else ActualizarDisponibilidad(); }
         public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
 
         public void PrepararNuevaOrden()
@@ -382,6 +383,27 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             tl.Controls.Add(pnl, col, row);
             tl.SetColumnSpan(pnl, colSpan);
+        }
+
+        // Al volver a mostrar el módulo desde la caché: recarga solo proveedor y materiales, sin avisos,
+        // conservando el proveedor elegido y sin tocar el estado de resultado incierto ni la orden en curso.
+        public async void RecargarCatalogos()
+        {
+            if (IsDisposed || Disposing || _presenter == null || !_catalogosListos || _ocupada) return;
+            try
+            {
+                var proveedores = await _presenter.ProveedoresAsync();
+                if (IsDisposed || Disposing || !proveedores.Exitoso) return;
+                var materiales = await _presenter.MaterialesAsync();
+                if (IsDisposed || Disposing || !materiales.Exitoso) return;
+                var seleccionado = cmbProveedor.SelectedValue;
+                cmbProveedor.DataSource = proveedores.Valor.Select(OrdenesMapeo.Proveedor).ToList();
+                cmbProveedor.DisplayMember = "nombre";
+                cmbProveedor.ValueMember = "id";
+                if (seleccionado != null) cmbProveedor.SelectedValue = seleccionado; else cmbProveedor.SelectedIndex = -1;
+                _materiales = materiales.Valor.Select(OrdenesMapeo.Material).ToList();
+            }
+            catch (Exception) { }
         }
 
         private async Task<bool> CargarCombos()
@@ -1029,12 +1051,14 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 Controls.Add(cmbMateriales);
 
                 btnCancelar = OrdenesUi.CrearBoton("Cancelar");
-                btnCancelar.Location = new Point(314, 110);
+                btnCancelar.Location = new Point(170, 110);
+                btnCancelar.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
                 btnCancelar.Click += (s, e) => DialogResult = DialogResult.Cancel;
                 Controls.Add(btnCancelar);
 
                 btnAceptar = OrdenesUi.CrearBoton("Aceptar", true);
-                btnAceptar.Location = new Point(440, 110);
+                btnAceptar.Location = new Point(362, 110); // 18 + 524 - 180: el borde derecho respeta el padding
+                btnAceptar.Anchor = AnchorStyles.Bottom | AnchorStyles.Right;
                 btnAceptar.Click += BtnAceptar_Click;
                 Controls.Add(btnAceptar);
 

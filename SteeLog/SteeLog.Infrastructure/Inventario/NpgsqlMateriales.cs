@@ -75,9 +75,9 @@ namespace SteeLog.Infrastructure.Inventario
             using (var cmd = Cmd("SELECT id FROM public.recortes WHERE id_material=@id ORDER BY id FOR UPDATE"))
             { cmd.Parameters.AddWithValue("id", id); using (var reader = await cmd.ExecuteReaderAsync(token).ConfigureAwait(false)) while (await reader.ReadAsync(token).ConfigureAwait(false)) { } }
             using (var cmd = Cmd("SELECT EXISTS(SELECT 1 FROM public.recortes r JOIN public.movimientomaterial mm ON mm.id_recorte=r.id WHERE r.id_material=@id)"))
-            { cmd.Parameters.AddWithValue("id", id); if ((bool)await cmd.ExecuteScalarAsync(token).ConfigureAwait(false)) throw new InvalidOperationException("El material tiene recortes referenciados por movimientos."); }
+            { cmd.Parameters.AddWithValue("id", id); if ((bool)await cmd.ExecuteScalarAsync(token).ConfigureAwait(false)) throw new SteeLog.Core.Application.Catalogos.CatalogoEnUsoException("el material", "recortes usados en movimientos"); }
             using (var cmd = Cmd("DELETE FROM public.materiales WHERE id=@id"))
-            { cmd.Parameters.AddWithValue("id", id); if (await cmd.ExecuteNonQueryAsync(token).ConfigureAwait(false) != 1) throw new InvalidOperationException("No se encontró el material."); }
+            { cmd.Parameters.AddWithValue("id", id); if (await SteeLog.Infrastructure.Catalogos.NpgsqlCatalogos.EnUso(() => cmd.ExecuteNonQueryAsync(token), "el material", "movimientos u órdenes de compra").ConfigureAwait(false) != 1) throw new InvalidOperationException("No se encontró el material."); }
         }
     }
 }

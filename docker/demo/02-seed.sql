@@ -113,7 +113,7 @@ INSERT INTO herramienta_movimientos(id_herramienta,obra_origen,obra_destino,fech
 VALUES(1,'Galpón','Obra Residencial - Torre Belgrano','2026-10-02','Taladro Demo');
 INSERT INTO insumos(id_insumo,nombre,id_ubicacion,consumido) VALUES(1,'Disco de corte Demo',2,false);
 INSERT INTO recortes(id,id_material,medida,cantidad,ancho,altura,estado)
-VALUES(1,3,1.2,3,1.2,1,'Buen estado');
+VALUES(1,3,0,3,1.2,1,'Buen estado');
 INSERT INTO ordenes_compra(id_orden_compra,fecha,nro_orden,id_proveedor,estado,usuario_creacion,id_destino,tipo_destino)
 VALUES(1,'2026-10-03','DEMO-OC-001',1,'Pendiente','admin@tesis.local',2,'UBICACION');
 INSERT INTO ordenes_compra_detalle(id_orden_compra,id_material,cantidad_pedida,cantidad_recibida,cantidad_faltante,stock_al_crear)

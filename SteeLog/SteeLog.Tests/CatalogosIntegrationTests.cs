@@ -60,9 +60,25 @@ public sealed class CatalogosIntegrationTests
     {
         int c=await Run(x=>x.CrearCategoriaAsync(Unique(),false));
         int m=Convert.ToInt32(Sql("INSERT INTO public.materiales(nombre,preciounitario,stockactual,stockminimo,id_categoria) VALUES (@n,0,0,0,@c) RETURNING id",P("n",Unique()),P("c",c)));
-        var error=await Assert.ThrowsAsync<PostgresException>(()=>Run(x=>x.EliminarCategoriaAsync(c))); Assert.Equal("23503",error.SqlState);
+        // La FK real (23503) se traduce a un mensaje de negocio, sin SQL crudo.
+        var error=await Assert.ThrowsAsync<CatalogoEnUsoException>(()=>Run(x=>x.EliminarCategoriaAsync(c))); Assert.Equal("23503",Assert.IsType<PostgresException>(error.InnerException).SqlState);
+        Assert.Equal("No se puede eliminar la categoría porque está en uso (materiales).",error.Message); Assert.DoesNotContain("violates",error.Message);
         Assert.Equal(1L,Convert.ToInt64(Sql("SELECT count(*) FROM public.categorias WHERE id_categoria=@id",P("id",c))));
         Sql("DELETE FROM public.materiales WHERE id=@id RETURNING id",P("id",m)); await Run(x=>x.EliminarCategoriaAsync(c));
+    }
+    [Fact] public async Task UbicacionUsadaEnMovimientoNoSePuedeEliminar()
+    {
+        int u=await Run(x=>x.CrearUbicacionAsync(Unique()));
+        int mov=Convert.ToInt32(Sql("INSERT INTO public.movimientos(fecha,nroremito,id_origen,tipo_origen,id_destino,tipo_destino,precio_total) VALUES (CURRENT_DATE,@r,@u,'UBICACION',@u,'UBICACION',0) RETURNING id_movimiento",P("r",Unique()),P("u",u)));
+        try
+        {
+            var error=await Assert.ThrowsAsync<CatalogoEnUsoException>(()=>Run(x=>x.EliminarUbicacionAsync(u)));
+            Assert.Equal("No se puede eliminar la ubicación porque está en uso (movimientos).",error.Message);
+            Assert.Equal(1L,Convert.ToInt64(Sql("SELECT count(*) FROM public.ubicacion WHERE id_ubicacion=@id",P("id",u))));
+        }
+        finally { Sql("DELETE FROM public.movimientos WHERE id_movimiento=@id RETURNING id_movimiento",P("id",mov)); }
+        await Run(x=>x.EliminarUbicacionAsync(u));
+        Assert.Equal(0L,Convert.ToInt64(Sql("SELECT count(*) FROM public.ubicacion WHERE id_ubicacion=@id",P("id",u))));
     }
     [Fact] public async Task AltaFleteInactivoPersisteAmbasOperaciones()
     {

@@ -13,6 +13,11 @@ namespace SteeLog.Core.Application.Catalogos
         public CatalogoDuplicadoException(string entidadConArticulo, Exception causa = null)
             : base("Ya existe " + entidadConArticulo + " con ese nombre.", causa) { }
     }
+    public sealed class CatalogoEnUsoException : Exception
+    {
+        public CatalogoEnUsoException(string entidadConArticulo, string referencia = null, Exception causa = null)
+            : base("No se puede eliminar " + entidadConArticulo + " porque está en uso" + (string.IsNullOrWhiteSpace(referencia) ? "" : " (" + referencia + ")") + ".", causa) { }
+    }
     public sealed class CategoriaCatalogo { public int Id { get; set; } public string Nombre { get; set; } public bool Recortable { get; set; } }
     public sealed class ObraCatalogo { public int Id { get; set; } public string Nombre { get; set; } public bool Activa { get; set; } }
     public sealed class ProveedorCatalogo { public int Id { get; set; } public string Nombre { get; set; } }

@@ -40,7 +40,11 @@ namespace SteeLog.Vistas
         private readonly MaterialesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionLista, _versionProveedores;
-        private bool _guardando, _cargandoProveedores, _proveedoresDisponibles = true;
+        private bool _guardando, _cargandoProveedores, _proveedoresDisponibles = true, _categoriasCargadas;
+        private int _versionCategorias;
+        internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
+        internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
+        internal Func<string, string, MessageBoxIcon, bool> Confirmar = (mensaje, titulo, icono) => MessageBox.Show(mensaje, titulo, MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
         int idMaterialSeleccionado = -1;
 
         private decimal stockOriginalSeleccionado = 0;
@@ -60,6 +64,7 @@ namespace SteeLog.Vistas
             nombreMaterial.MaxLength = SteeLog.Domain.Inventario.Material.MaxNombre;
 
             this.Load += Vista_Materiales_Load;
+            VisibleChanged += async (s, e) => { if (Visible && _categoriasCargadas) { try { await RecargarCategoriasAsync(); } catch (OperationCanceledException) { } catch (Exception) { } } };
 
             stAct.Text = "";
 
@@ -83,6 +88,7 @@ namespace SteeLog.Vistas
                 cmbCategoria.DataSource = categorias.ToList();
                 cmbCategoria.DisplayMember = "Nombre";
                 cmbCategoria.ValueMember = "Id";
+                _categoriasCargadas = true;
                 CargarMateriales();
             }
             catch (OperationCanceledException) { return; }
@@ -101,6 +107,28 @@ namespace SteeLog.Vistas
         }
 
 
+
+        /// <summary>Vuelve a leer las categorías (p. ej. al volver a mostrar la vista en caché) sin perder la selección ni lo que se está editando.</summary>
+        internal async Task RecargarCategoriasAsync()
+        {
+            int version = ++_versionCategorias;
+            var nuevas = (await _presenter.CategoriasAsync(_cierre.Token)).ToList();
+            if (_cierre.IsCancellationRequested || IsDisposed || version != _versionCategorias) return;
+            var actuales = cmbCategoria.DataSource as List<CategoriaMaterialLectura>;
+            if (actuales != null && actuales.Count == nuevas.Count && actuales.Zip(nuevas, (a, b) => a.Id == b.Id && a.Nombre == b.Nombre).All(igual => igual)) return;
+            object seleccion = cmbCategoria.SelectedValue;
+            cmbCategoria.DataSource = nuevas;
+            cmbCategoria.DisplayMember = "Nombre";
+            cmbCategoria.ValueMember = "Id";
+            if (seleccion != null && nuevas.Any(c => c.Id.Equals(seleccion))) cmbCategoria.SelectedValue = seleccion;
+            else cmbCategoria.SelectedIndex = -1;
+        }
+
+        /// <summary>Tras limpiar el formulario el combo conserva sus opciones y vuelve a la opción inicial.</summary>
+        private void RestablecerCategoria()
+        {
+            cmbCategoria.SelectedIndex = cmbCategoria.Items.Count > 0 ? 0 : -1;
+        }
 
         private void btnProveedores_Click(object sender, EventArgs e)
 
@@ -420,7 +448,7 @@ namespace SteeLog.Vistas
 
             {
 
-                ToastNotification.ShowWarning("Completa los campos obligatorios.");
+                AvisarAdvertencia("Completa los campos obligatorios.");
 
                 return;
 
@@ -432,19 +460,19 @@ namespace SteeLog.Vistas
 
             {
 
-                ToastNotification.ShowWarning("Selecciona una categoría válida.");
+                AvisarAdvertencia("Selecciona una categoría válida.");
 
                 return;
 
             }
 
-            if (nombre.Trim().Length > SteeLog.Domain.Inventario.Material.MaxNombre) { ToastNotification.ShowWarning("El nombre del material no puede superar los " + SteeLog.Domain.Inventario.Material.MaxNombre + " caracteres."); return; }
+            if (nombre.Trim().Length > SteeLog.Domain.Inventario.Material.MaxNombre) { AvisarAdvertencia("El nombre del material no puede superar los " + SteeLog.Domain.Inventario.Material.MaxNombre + " caracteres."); return; }
             if (_guardando || _cargandoProveedores || !_proveedoresDisponibles) return;
             string _msg = idMaterialSeleccionado == -1 ? "¿Crear este material?" : "¿Actualizar este material?";
 
             _guardando = true;
             bool confirmado;
-            try { confirmado = MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes; }
+            try { confirmado = Confirmar(_msg, "Confirmar", MessageBoxIcon.Question); }
             catch { _guardando = false; throw; }
             if (!confirmado) { _guardando = false; return; }
 
@@ -492,7 +520,7 @@ namespace SteeLog.Vistas
             }
 
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError(CatalogosPresenter.MensajeGuardado(ex)); }
+            catch (Exception ex) { if (!_cierre.IsCancellationRequested) AvisarError(CatalogosPresenter.MensajeGuardado(ex)); }
             finally { _guardando = false; if (!IsDisposed) { dgvMateriales.Enabled = true; guna2Button1.Enabled = true; eliminarMaterialBoton.Enabled = idMaterialSeleccionado != -1; } }
         }
 
@@ -589,7 +617,7 @@ namespace SteeLog.Vistas
 
                 stMin.Text = "";
 
-                cmbCategoria.Text = "";
+                RestablecerCategoria();
 
                 idsProveedoresSeleccionados.Clear();
 
@@ -672,7 +700,7 @@ namespace SteeLog.Vistas
 
             stockOriginalSeleccionado = 0;
 
-            cmbCategoria.SelectedIndex = -1;
+            RestablecerCategoria();
 
             eliminarMaterialBoton.Enabled = false;
 
@@ -718,23 +746,9 @@ namespace SteeLog.Vistas
 
         {
 
-            DialogResult resultado = MessageBox.Show(
+            bool resultado = Confirmar("¿Estás seguro de que deseas eliminar este material?", "Confirmar Eliminación", MessageBoxIcon.Warning);
 
-    "¿Estás seguro de que deseas eliminar este material?",
-
-    "Confirmar Eliminación",
-
-    MessageBoxButtons.YesNo,
-
-    MessageBoxIcon.Warning
-
-);
-
-
-
-
-
-            if (resultado == DialogResult.Yes)
+            if (resultado)
 
             {
 
@@ -753,7 +767,7 @@ namespace SteeLog.Vistas
                 }
 
                 catch (OperationCanceledException) { }
-                catch (Exception) { if (!_cierre.IsCancellationRequested) ToastNotification.ShowError("No se puede eliminar el material (está siendo usado en movimientos)."); }
+                catch (Exception ex) { if (!_cierre.IsCancellationRequested) AvisarError(CatalogosPresenter.MensajeEliminacion(ex)); }
                 finally { _guardando = false; if (!IsDisposed) { dgvMateriales.Enabled = true; guna2Button1.Enabled = true; eliminarMaterialBoton.Enabled = idMaterialSeleccionado != -1; } }
 
             }

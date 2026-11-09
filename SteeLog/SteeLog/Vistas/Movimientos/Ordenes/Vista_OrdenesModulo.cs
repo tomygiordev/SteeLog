@@ -6,7 +6,7 @@ using SteeLog.Servicios;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
-    public class Vista_OrdenesModulo : Form
+    public class Vista_OrdenesModulo : Form, IRecargaCatalogos
     {
         private readonly Color _tabActiveColor = Color.FromArgb(25, 135, 84);
         private readonly Color _tabInactiveColor = Color.FromArgb(47, 84, 57);
@@ -261,6 +261,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             _vistaRecepcion.Refrescar();
             _vistaHistorial.Refrescar();
         }
+
+        public void RecargarCatalogos() { _vistaAlta?.RecargarCatalogos(); }
 
         public void Refrescar()
         {

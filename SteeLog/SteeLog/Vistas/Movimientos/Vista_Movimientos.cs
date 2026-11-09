@@ -23,7 +23,7 @@ using System.IO;
 
 namespace SteeLog.Vistas.Movimientos
 {
-    public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista, IMovimientosResultadoIncierto
+    public partial class Vista_Movimientos : Form, IMessageFilter, IMovimientosVista, IMovimientosResultadoIncierto, IRecargaCatalogos
     {
         private List<MovimientoMaterial> materialesLista = new List<MovimientoMaterial>();
         private FlowLayoutPanel flpMateriales;
@@ -294,6 +294,15 @@ namespace SteeLog.Vistas.Movimientos
             if (resultadoIncierto && versionCatalogos > versionCatalogosAlMarcarIncierto) { ResolverResultadoIncierto(remitoIncierto, false); if (IsDisposed || cierre.IsCancellationRequested) return; }
             if (_idMovimientoAEditar > 0 && !modeloListo) CargarMovimientoParaEdicion();
             NotificarGuardado("Datos actualizados (F5)");
+        }
+
+        // Al volver a mostrar la vista desde la caché: recarga solo catálogos (sin aviso). No toca resultadoIncierto,
+        // envioPendiente ni ocupada; si hay un envío/ocupación o una edición cargándose, no recarga.
+        public void RecargarCatalogos()
+        {
+            if (IsDisposed || cierre.IsCancellationRequested || ocupada || envioPendiente) return;
+            if (_idMovimientoAEditar > 0 && !modeloListo) return;
+            var _ = CargarCatalogosAsync();
         }
 
         private async Task CargarCatalogosAsync()
@@ -1010,11 +1019,14 @@ namespace SteeLog.Vistas.Movimientos
                 cmbDestino.SelectedIndex = -1;
                 txtBuscadorMaterial.Text = "";
                 _materialSeleccionado = null;
+                chkCompraEventual.Checked = false;
+                if (txtPrecioMaterial != null) txtPrecioMaterial.Text = "";
             }
             finally
             {
                 isProgrammaticChange = false;
             }
+            ActualizarVisibilidadPrecios();
 
             nroRemitoTxt.Text = "";
             costoFleteTxt.Text = "";

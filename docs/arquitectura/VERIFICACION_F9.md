@@ -184,3 +184,28 @@ Conforme a la directiva de cierre automatizado por IA, se completaron y certific
 - Diseño documentado (F7), no bug: alta con historial inicial «Galpón → Galpón» y prefijo de ID en el nombre («2DEMO-…»). `id_ubicacion` de insumos es columna legacy que solo el seed rellena.
 - Filtro del diálogo de fotos de canaletas: de `*.*` a jpg/jpeg/png/webp (las extensiones que valida el contenido).
 - Evidencia root: `verificar.ps1 -LegacyLocal` **340/340 Debug y Release**, exit 0; `demo-integracion.ps1` **100/100** sobre PostgreSQL real con aserciones nuevas del snapshot de nombre en herramientas e insumos (`steelog-sql-snapshot-historial-2.log`).
+
+## Rondas de testeo GUI y correcciones 8–9/11/2026 (commits `c6adbec`, `a49f5d0`, `1175e2b` y siguiente)
+
+Método: instalaciones aisladas reconstruidas desde cada HEAD (`109c284`, `a49f5d0`, `1175e2b`), monitor secundario, UIA/MSAA/mensajes dirigidos sin cursor ni foco, verificación SQL READ ONLY de cada escritura. Root revisó cada diff, investigó causas raíz y corrió verificación local y suite SQL real antes de cada commit.
+
+**Recorrido GUI cubierto (Admin):** movimientos alta/edición (cantidad y material)/eliminación con reversión exacta de stock, con flete y con tipo Compra; órdenes alta, edición, cambio de material, recepción en dos tandas hasta «Recibida Completa», tope de exceso, eliminación de pendiente y rechazo de recibida; CRUD de Materiales, Categorías, Proveedores, Obras, Ubicaciones, Fletes, Herramientas, Insumos, Recortes y Canaletas con foto; Informe de obra PDF (total pendiente $61.500 contrastado con SQL), remito PDF, Excel de stock, buscador global, regresión de todas las correcciones. Base demo limpia al finalizar cada ronda.
+
+**Defectos reales encontrados y corregidos:**
+- Riesgo de duplicar movimientos: tras resultado incierto, F5 rehabilitaba Guardar sin prueba; ahora exige confirmación, pausa autoguardado y persiste el marcador en el borrador (sobrevive a reinicio; borradores legacy compatibles).
+- Órdenes: una lectura iniciada antes de la marca de incierto podía liberar el bloqueo (versión de carga).
+- La app se minimizaba con Enter: los botones de barra de ventana eran tabulables/focusables y actuaban como botón por defecto.
+- Toasts: modo centrado ignoraba el origen del monitor; apilado sin acotar; formularios embebidos usados como referencia.
+- Catálogos: doble Enter sin guarda de reentrada; largo validado tras confirmar y sin `MaxLength`; SQL crudo en duplicados (23505) y en eliminaciones de entidades en uso (23503); ubicaciones usadas en movimientos se podían borrar sin aviso (FK polimórfica); «de el» → «del».
+- Vistas en caché no refrescaban combos de catálogos (Movimientos, Órdenes Alta, Materiales); selección de grilla resaltada sin selección lógica tras recargar.
+- Recepción: una celda «Recibida real» excedida conservaba el valor inválido; resumen de cabecera desactualizado.
+- UX: Recortes con Eliminar activo sin selección y decimales mixtos; motivo del rechazo de fotos; contraste de botones deshabilitados (Informe de obra) y de «sin resultados» del buscador; color de selección en Historial; botón Eliminar vacío en OC no pendientes; botón Aceptar cortado en «Cambiar material»; Limpiar no desmarcaba «Eventual»; combo de categoría vacío tras guardar material.
+- Remito: copias rotuladas ORIGINAL/DUPLICADO/TRIPLICADO.
+- Seed demo alineado con las convenciones del código: `precio_unitario` solo en compras eventuales y `precio_total` de cabecera (antes $0); recorte de dos dimensiones con `medida = 0` según el invariante de dominio.
+- Pruebas: legacy del buscador dependía del reloj (caché de 10 s); fallas de foco de LoginUsability bajo carga concurrente identificadas como ambientales (pasan aisladas, sin cambiar timeouts).
+
+**Evidencia final root:** `verificar.ps1 -LegacyLocal` **415/415 Debug y Release**, exit 0, cuatro familias legacy (`steelog-verificar-ronda-final.log`); `demo-integracion.ps1` **101/101** sobre PostgreSQL real, incluidas aserciones nuevas de snapshot de nombre, duplicado y entidad en uso (`steelog-sql-ronda-final.log`).
+
+**Diseño confirmado, no defecto:** recepción de OC no genera movimiento Kardex (documentado); alta de herramienta/insumo con historial inicial «Galpón → Galpón» y prefijo de ID en herramientas (F7); Galpón puede eliminar movimientos y ver el reporte de stock enmascarado (Application). **Sin corregir (requiere esquema):** el historial de herramientas muestra el estado actual, no el histórico.
+
+**No probado por automatización:** PDF de pendientes de órdenes (abre el visor externo sin diálogo), «Buscar actualizaciones», resultado incierto real (requiere cortar la base). **F9 sigue ABIERTA:** Designer interactivo y recorrido sin Internet requieren al usuario.

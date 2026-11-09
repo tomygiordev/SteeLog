@@ -527,7 +527,7 @@ namespace SteeLog.Vistas
             catch (OperationCanceledException) { }
             catch (SteeLog.Core.Application.Canaletas.CanaletaResultadoInciertoException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { _errorFotos = true; ToastNotification.ShowWarning("Resultado incierto; verifique antes de reintentar. " + ex.Message); } }
             catch (SteeLog.Core.Application.Canaletas.CanaletaLimpiezaPendienteException ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) { LimpiarSeleccion(); ToastNotification.ShowWarning("Eliminación confirmada; queda limpieza pendiente. " + ex.Message); try { await CargarItemsAsync(); } catch (OperationCanceledException) { } catch (Exception error) { if (!IsDisposed && !_cierre.IsCancellationRequested) ToastNotification.ShowError("No se pudo actualizar la lista: " + error.Message); } } }
-            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError("Error al eliminar: " + ex.Message); }
+            catch (Exception ex) { if (!IsDisposed && !_cierre.IsCancellationRequested && version == _versionSeleccion) ToastNotification.ShowError(SteeLog.Presentation.CatalogosPresenter.MensajeEliminacion(ex)); }
             finally { _guardando = false; if (!IsDisposed && !_cierre.IsCancellationRequested) CambiarEstadoGuardado(false); }
         }
 

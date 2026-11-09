@@ -305,12 +305,35 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     continue;
 
                 row.Cells["colAbrir"].Value = EstadosOrden.PermiteRecepcion(orden.estado) ? "Revisar" : "Ver";
-                row.Cells["colEditar"].Value = EstadosOrden.PermiteEditarCabecera(orden.estado) ? "Editar" : "";
-                row.Cells["colEliminar"].Value = !_resultadoIncierto && EstadosOrden.EsEditable(orden.estado) ? "Eliminar" : "";
+                AplicarAccion(row, "colEditar", EstadosOrden.PermiteEditarCabecera(orden.estado) ? "Editar" : "");
+                AplicarAccion(row, "colEliminar", !_resultadoIncierto && EstadosOrden.EsEditable(orden.estado) ? "Eliminar" : "");
             }
 
             dgvOrdenes.Invalidate();
             dgvOrdenes.Refresh();
+        }
+
+        // Una acción no disponible no se dibuja como botón de color vacío: la celda pasa a ser un texto en blanco
+        // con el fondo neutro de la grilla (el valor sigue siendo "").
+        private void AplicarAccion(DataGridViewRow row, string columna, string texto)
+        {
+            int indice = dgvOrdenes.Columns[columna].Index;
+            var celda = row.Cells[indice];
+            if (string.IsNullOrEmpty(texto))
+            {
+                if (!(celda is DataGridViewButtonCell)) { celda.Value = ""; return; }
+                var vacia = new DataGridViewTextBoxCell { Value = "" };
+                vacia.Style.BackColor = dgvOrdenes.DefaultCellStyle.BackColor;
+                vacia.Style.SelectionBackColor = dgvOrdenes.DefaultCellStyle.SelectionBackColor;
+                row.Cells[indice] = vacia;
+                return;
+            }
+            if (!(celda is DataGridViewButtonCell))
+            {
+                celda = new DataGridViewButtonCell { FlatStyle = FlatStyle.Flat };
+                row.Cells[indice] = celda;
+            }
+            celda.Value = texto;
         }
 
         private void DgvOrdenes_SelectionChanged(object sender, EventArgs e)
