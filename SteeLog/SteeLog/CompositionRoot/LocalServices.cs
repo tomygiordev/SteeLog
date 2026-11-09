@@ -30,10 +30,17 @@ using SteeLog.Infrastructure.Catalogos;
 using SteeLog.Infrastructure.Reportes;
 namespace SteeLog.CompositionRoot
 {
-    internal sealed class LocalServices : IDisposable
+    internal sealed class LocalServices : IServiciosVista, IDisposable
     {
         private static readonly Lazy<LocalServices> instance = new Lazy<LocalServices>(Create);
-        internal static LocalServices Current => instance.Value;
+        private static LocalServices registered;
+        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
+        internal static LocalServices Current => ObtenerCompatible();
+        internal static LocalServices ObtenerCompatible() => registered ?? instance.Value;
+        internal static void Registrar(LocalServices services)
+        {
+            registered = services ?? throw new ArgumentNullException(nameof(services));
+        }
         internal IAuthentication Authentication { get; } = new DemoAuthService();
         internal Session Session { get; } = new Session();
         internal ICredentialStore Credentials { get; }
@@ -151,12 +158,38 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<PrepareDemoUpdate>();
             provider = registrations.BuildServiceProvider();
             Executor = new UseCaseExecutor(provider.GetRequiredService<IServiceScopeFactory>());
+            Sesion = new SteeLog.Servicios.SesionVista(Session);
+            Credenciales = new SteeLog.Servicios.CredencialesVista(Credentials);
+            Autenticacion = new SteeLog.Servicios.AutenticacionVista(Authentication);
+            Actualizaciones = new SteeLog.Servicios.ActualizacionesVista(Executor);
+            Borrador = new SteeLog.Servicios.BorradorMovimientoVista(BorradorMovimiento);
         }
         internal InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
         internal HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista) => new HerramientasPresenter(Executor, vista);
         internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;
+
+        IUseCaseExecutor IServiciosVista.Executor => Executor;
+        Session IServiciosVista.Session => Session;
+        ICredentialStore IServiciosVista.Credentials => Credentials;
+        IAuthentication IServiciosVista.Authentication => Authentication;
+        BorradorMovimiento IServiciosVista.BorradorMovimiento => BorradorMovimiento;
+        IInformeObraPdf IServiciosVista.InformeObraPdf => InformeObraPdf;
+        IKardexPdf IServiciosVista.KardexPdf => KardexPdf;
+        IReporteStockPdf IServiciosVista.ReporteStockPdf => ReporteStockPdf;
+        IConteoPdf IServiciosVista.ConteoPdf => ConteoPdf;
+        string IServiciosVista.ReportsDirectory => ReportsDirectory;
+        RutasVista IServiciosVista.Paths => new RutasVista(Paths.ExecutableDirectory, Paths.StorageDirectory);
+        public SteeLog.Servicios.SesionVista Sesion { get; }
+        public SteeLog.Servicios.CredencialesVista Credenciales { get; }
+        public SteeLog.Servicios.AutenticacionVista Autenticacion { get; }
+        public SteeLog.Servicios.ActualizacionesVista Actualizaciones { get; }
+        public SteeLog.Servicios.BorradorMovimientoVista Borrador { get; }
+        OrdenesPresenter IServiciosVista.CrearOrdenesPresenter(IOrdenesVista vista) => CrearOrdenesPresenter(vista);
+        MovimientosPresenter IServiciosVista.CrearMovimientosPresenter(IMovimientosVista vista) => CrearMovimientosPresenter(vista);
+        InsumosPresenter IServiciosVista.CrearInsumosPresenter(IInsumosVista vista) => CrearInsumosPresenter(vista);
+        HerramientasPresenter IServiciosVista.CrearHerramientasPresenter(IHerramientasVista vista) => CrearHerramientasPresenter(vista);
         public void Dispose() => provider.Dispose();
         internal static LocalServices Create() => CreateForEnvironment(AppDomain.CurrentDomain.BaseDirectory, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"));
         internal static LocalServices CreateForEnvironment(string executableDirectory, string demoRoot)

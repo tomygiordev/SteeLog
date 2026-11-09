@@ -10,7 +10,6 @@ using System.Text;
 using System.Windows.Forms;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Core.Application.Activos;
-using SteeLog.CompositionRoot;
 using SteeLog.Presentation;
 using SteeLog.Servicios;
 using System.Data;
@@ -19,6 +18,7 @@ namespace SteeLog
 {
     public class BusquedaGlobal : IDisposable
     {
+        private readonly IServiciosVista servicios;
         private readonly Form _parentForm;
         private readonly Panel _panelMaximizar;
         private readonly Action<Form> _openChildForm;
@@ -46,16 +46,21 @@ namespace SteeLog
         private bool _disposed;
         private int _searchVersion = 0;
 
+        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
         public BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
-            : this(parentForm, panelMaximizar, openChildForm, (Func<Task<Snapshot>>)null)
+            : this(CompositionRoot.ServiciosCompatibles.Obtener(), parentForm, panelMaximizar, openChildForm) { }
+
+        public BusquedaGlobal(IServiciosVista servicios, Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
+            : this(servicios, parentForm, panelMaximizar, openChildForm, null)
         {
         }
 
         internal BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Snapshot> loader)
-            : this(parentForm, panelMaximizar, openChildForm, loader == null ? null : (Func<Task<Snapshot>>)(() => Task.Run(loader))) { }
+            : this(CompositionRoot.ServiciosCompatibles.Obtener(), parentForm, panelMaximizar, openChildForm, loader == null ? null : (Func<Task<Snapshot>>)(() => Task.Run(loader))) { }
 
-        private BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Task<Snapshot>> loader)
+        private BusquedaGlobal(IServiciosVista servicios, Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Task<Snapshot>> loader)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             _tokenCierre = _cierre.Token;
             _loader = loader ?? CargarSnapshotAsync;
             _parentForm = parentForm;
@@ -266,7 +271,7 @@ namespace SteeLog
             if (string.IsNullOrWhiteSpace(query) || query.Length < 2) return;
 
             int currentVersion = ++_searchVersion;
-            bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+            bool ocultarCantidades = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
 
             List<ResultadoBusqueda> resultados;
             try
@@ -288,10 +293,10 @@ namespace SteeLog
                                 Nombre = m.Nombre,
                                 Tipo = "Material",
                                 Extra = ocultarCantidades
-                                    ? SessionManager.ObtenerEstadoStockMaterial(m.Stock)
+                                    ? servicios.Sesion.ObtenerEstadoStockMaterial(m.Stock)
                                     : $"Stock: {m.Stock:N0}",
                                 Detalles = ocultarCantidades
-                                    ? $"Categoría: {m.Categoria}\nDisponibilidad: {SessionManager.ObtenerEstadoStockMaterial(m.Stock)}"
+                                    ? $"Categoría: {m.Categoria}\nDisponibilidad: {servicios.Sesion.ObtenerEstadoStockMaterial(m.Stock)}"
                                     : $"Categoría: {m.Categoria}\nStock Actual: {m.Stock:N0}\nStock Mínimo: {m.Minimo:N0}",
                                 Icono = "📦",
                                 Color = Color.FromArgb(39, 174, 96)
@@ -403,7 +408,7 @@ namespace SteeLog
         {
             var token = _tokenCierre;
             token.ThrowIfCancellationRequested();
-            var executor = LocalServices.Current.Executor;
+            var executor = servicios.Executor;
             var materiales = executor.ExecuteAsync<ConsultarMateriales, IReadOnlyList<MaterialInventarioLectura>>(x => x.ListarAsync(null, token));
             var recortes = executor.ExecuteAsync<ConsultarRecortes, IReadOnlyList<RecorteLectura>>(x => x.ListarAsync(token: token));
             var herramientas = executor.ExecuteAsync<ConsultarHerramientas, IReadOnlyList<HerramientaLectura>>(x => x.HerramientasAsync(token));

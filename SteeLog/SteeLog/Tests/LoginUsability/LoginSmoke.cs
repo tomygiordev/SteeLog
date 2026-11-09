@@ -11,12 +11,14 @@ using SteeLog.Vistas;
 internal static class LoginSmoke
 {
     static int checks;
+    static object services;
+    static SesionVista session;
     static void Check(bool condition, string message) { checks++; if (!condition) throw new Exception(message); Console.WriteLine("PASS " + message); }
     static T Field<T>(object o, string name) { return (T)o.GetType().GetField(name, BindingFlags.NonPublic | BindingFlags.Instance).GetValue(o); }
     static object Prop(object o, string name) { return o.GetType().GetProperty(name).GetValue(o, null); }
     static Vista_Login Make(Func<string,string,Task<AuthResult>> auth)
     {
-        var form = (Vista_Login)Activator.CreateInstance(typeof(Vista_Login), BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { auth }, null);
+        var form = (Vista_Login)Activator.CreateInstance(typeof(Vista_Login), BindingFlags.NonPublic | BindingFlags.Instance, null, new object[] { services, auth }, null);
         form.ShowInTaskbar = false; form.StartPosition = FormStartPosition.Manual; form.Location = new Point(-20000, -20000); form.Show(); Application.DoEvents(); return form;
     }
     static void Pump(Func<bool> done)
@@ -33,8 +35,14 @@ internal static class LoginSmoke
     }
     [STAThread] static void Main(string[] args)
     {
-        Check(typeof(AutenticacionLocal).GetMethod("SignInAsync", new[] { typeof(string), typeof(string) }).ReturnType == typeof(Task<AuthResult>), "local authentication API");
-        string outDir=args[0]; Directory.CreateDirectory(outDir); int calls=0; string sentEmail=null, sentPassword=null;
+        Check(typeof(AutenticacionVista).GetMethod("SignInAsync", new[] { typeof(string), typeof(string) }).ReturnType == typeof(Task<AuthResult>), "local authentication API");
+        string outDir=args[0]; Directory.CreateDirectory(outDir);
+        string dataRoot=Path.Combine(outDir,"perfil-demo"); Directory.CreateDirectory(dataRoot);
+        File.WriteAllText(Path.Combine(dataRoot,".steelog-demo"),"steelog-demo-v1");
+        Environment.SetEnvironmentVariable("STEELOG_DEMO_ROOT",dataRoot);
+        var servicesType=typeof(Vista_Login).Assembly.GetType("SteeLog.CompositionRoot.LocalServices",true);
+        services=servicesType.GetMethod("Create",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,null);
+        session=(SesionVista)servicesType.GetProperty("Sesion").GetValue(services,null); int calls=0; string sentEmail=null, sentPassword=null;
         var tcs=new TaskCompletionSource<AuthResult>();
         Func<string,string,Task<AuthResult>> auth=(email,password)=> {calls++; sentEmail=email; sentPassword=password; return tcs.Task;};
         using(var form=Make(auth))
@@ -63,9 +71,10 @@ internal static class LoginSmoke
             Check(password.Focused && !form.IsDisposed, "failure returns focus to password");
             tcs=new TaskCompletionSource<AuthResult>(); email.Text="operador"; Check(Enter(form),"retry Enter handled"); Check(calls==2 && sentEmail=="galpon@tesis.local" && !form.IsDisposed,"Enter retry and alias without closing"); tcs.SetException(new InvalidOperationException("demo")); Pump(()=>login.Enabled); Check(error.Visible && error.Text.Contains("demo") && password.Focused && !form.IsDisposed,"exception restored, focus safe and shown");
         }
-        SessionManager.Clear(); var pending=new TaskCompletionSource<AuthResult>(); int disposedCalls=0;
+        session.Clear(); var pending=new TaskCompletionSource<AuthResult>(); int disposedCalls=0;
         var disposed=Make((u,p)=>{disposedCalls++;return pending.Task;}); Field<TextBox>(disposed,"txtEmail").Text="demo"; Field<TextBox>(disposed,"txtPassword").Text="demo"; ClickHandler(disposed); disposed.Close(); disposed.Dispose(); pending.SetResult(new AuthResult {Success=true,Email="unexpected@example.test"});
-        for(int i=0;i<30;i++){Application.DoEvents();Thread.Sleep(5);} Check(disposedCalls==1 && disposed.IsDisposed && !SessionManager.IsLoggedIn,"disposed success has no session side effects");
+        for(int i=0;i<30;i++){Application.DoEvents();Thread.Sleep(5);} Check(disposedCalls==1 && disposed.IsDisposed && !session.IsLoggedIn,"disposed success has no session side effects");
+        ((IDisposable)services).Dispose();
         Console.WriteLine("OK " + checks + " assertions");
     }
 }

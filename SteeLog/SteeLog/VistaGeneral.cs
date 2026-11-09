@@ -21,11 +21,21 @@ namespace SteeLog
 {
     public partial class VistaGeneral : Form
     {
-        public VistaGeneral() : this(null, null, null) { }
+        private readonly SteeLog.Presentation.IServiciosVista servicios;
+        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
+        public VistaGeneral() : this(CompositionRoot.ServiciosCompatibles.Obtener()) { }
+
+        public VistaGeneral(SteeLog.Presentation.IServiciosVista servicios) : this(servicios, null, null, null) { }
 
         internal VistaGeneral(Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
             Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock)
+            : this(CompositionRoot.ServiciosCompatibles.Obtener(), consultarStock, esperarStock, mostrarStock) { }
+
+        internal VistaGeneral(SteeLog.Presentation.IServiciosVista servicios,
+            Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
+            Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             _tokenCierreStock = _cierreStock.Token;
             _consultarStock = consultarStock ?? ConsultarStockAsync;
             _esperarStock = esperarStock ?? (token => Task.Delay(1000, token));
@@ -83,7 +93,7 @@ namespace SteeLog
             }
 
             // Inicializar búsqueda global en la barra superior
-            var busqueda = new BusquedaGlobal(this, panelMaximizar, (form) => openChildForm(form));
+            var busqueda = new BusquedaGlobal(servicios, this, panelMaximizar, (form) => openChildForm(form));
 
             // Botón cerrar sesión
             var btnLogout = new Button
@@ -102,8 +112,8 @@ namespace SteeLog
             btnLogout.FlatAppearance.MouseOverBackColor = Color.FromArgb(20, 24, 22);
             btnLogout.Click += (s, e) =>
             {
-                Servicios.CredentialStore.Clear();
-                Servicios.SessionManager.Clear();
+                servicios.Credenciales.Clear();
+                servicios.Sesion.Clear();
                 Application.Restart();
             };
             panelSideMenu.Controls.Add(btnLogout);
@@ -148,9 +158,9 @@ namespace SteeLog
         private readonly Func<CancellationToken, Task> _esperarStock;
         private readonly Action<int, Action> _mostrarStock;
 
-        private static Task<IReadOnlyList<MaterialInventarioLectura>> ConsultarStockAsync(CancellationToken token)
+        private Task<IReadOnlyList<MaterialInventarioLectura>> ConsultarStockAsync(CancellationToken token)
         {
-            var presenter = new SteeLog.Presentation.MaterialesPresenter(SteeLog.CompositionRoot.LocalServices.Current.Executor);
+            var presenter = new SteeLog.Presentation.MaterialesPresenter(servicios.Executor);
             return presenter.ListarAsync(new FiltroMaterialLectura { SoloStockBajo = true }, token);
         }
 
@@ -628,7 +638,7 @@ namespace SteeLog
 
         private void AplicarRol()
         {
-            if (SessionManager.Role != Servicios.UserRole.Admin)
+            if (servicios.Sesion.Role != Servicios.UserRole.Admin)
             {
                 btnMateriales.Visible = false;
                 btnCategorias.Visible = false;
@@ -774,7 +784,7 @@ namespace SteeLog
         private async void BtnUpdate_Click(object sender, EventArgs e)
         {
             var btn = sender as Button;
-            await VerificarActualizacionesAsync(btn, () => UpdaterService.CheckForUpdateAsync(throwOnError: true),
+            await VerificarActualizacionesAsync(btn, () => servicios.Actualizaciones.CheckForUpdateAsync(throwOnError: true),
                 update => { using (var modal = new ModalActualizacion(update)) modal.ShowDialog(this); },
                 mensaje => ToastNotification.ShowSuccess(mensaje), mensaje => ToastNotification.ShowError(mensaje));
         }

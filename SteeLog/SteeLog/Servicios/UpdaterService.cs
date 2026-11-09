@@ -1,19 +1,21 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using SteeLog.CompositionRoot;
+
 using SteeLog.Core.Application.Actualizaciones;
 
 namespace SteeLog.Servicios
 {
+    [System.Obsolete("Fase DI: recibir IServiciosVista por constructor")]
     public static class UpdaterService
     {
+        private static ActualizacionesVista Servicio => SteeLog.CompositionRoot.ServiciosCompatibles.Obtener().Actualizaciones;
         public static async Task<UpdateInfo> CheckForUpdateAsync(bool throwOnError = false)
         {
-            try { return await LocalServices.Current.Executor.ExecuteAsync<CheckDemoUpdate, UpdateInfo>(useCase => useCase.ExecuteAsync(AppVersion.Current, CancellationToken.None)); }
+            try { return await Servicio.CheckForUpdateAsync(throwOnError); }
             catch when (!throwOnError) { return null; }
         }
         public static Task<string> PrepareAsync(UpdateInfo update, IProgress<int> progress, CancellationToken cancellationToken)
-            => LocalServices.Current.Executor.ExecuteAsync<PrepareDemoUpdate, string>(useCase => useCase.ExecuteAsync(update, progress, cancellationToken));
+            => Servicio.PrepareAsync(update, progress, cancellationToken);
     }
 }

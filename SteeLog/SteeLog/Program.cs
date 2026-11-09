@@ -27,7 +27,8 @@ namespace SteeLog
                 registro.Registrar(e.Exception);
                 e.SetObserved();
             };
-            var services = LocalServices.Current;
+            var services = LocalServices.Create();
+            LocalServices.Registrar(services);
             try
             {
                 Application.EnableVisualStyles();
@@ -37,23 +38,23 @@ namespace SteeLog
                 System.Threading.Thread.CurrentThread.CurrentCulture = culture;
                 System.Threading.Thread.CurrentThread.CurrentUICulture = culture;
 
-                var saved = CredentialStore.Load();
+                var saved = services.Credenciales.Load();
                 bool loggedIn = false;
                 if (saved.email != null && saved.password != null)
                 {
-                    var result = AutenticacionLocal.SignInAsync(saved.email, saved.password).GetAwaiter().GetResult();
-                    if (result.Success) { SessionManager.SetSession(result.Email); loggedIn = true; }
-                    else CredentialStore.Clear();
+                    var result = services.Autenticacion.SignInAsync(saved.email, saved.password).GetAwaiter().GetResult();
+                    if (result.Success) { services.Sesion.SetSession(result.Email); loggedIn = true; }
+                    else services.Credenciales.Clear();
                 }
                 if (!loggedIn)
                 {
-                    using (var login = new SteeLog.Vistas.Vista_Login())
+                    using (var login = new SteeLog.Vistas.Vista_Login(services))
                     {
                         ConfigurarPantallaDemo(login, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"), Environment.GetEnvironmentVariable("STEELOG_DEMO_DISPLAY"));
                         if (login.ShowDialog() != DialogResult.OK) return;
                     }
                 }
-                using (var principal = new VistaGeneral())
+                using (var principal = new VistaGeneral(services))
                 {
                     ConfigurarPantallaDemo(principal, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"), Environment.GetEnvironmentVariable("STEELOG_DEMO_DISPLAY"));
                     Application.Run(principal);
@@ -85,7 +86,7 @@ namespace SteeLog.CompositionRoot
     {
         internal static RegistroErrores Crear()
         {
-            return new RegistroErrores(() => Path.GetDirectoryName(LocalServices.Current.Paths.StorageDirectory));
+            return new RegistroErrores(() => Path.GetDirectoryName(LocalServices.ObtenerCompatible().Paths.StorageDirectory));
         }
     }
 }

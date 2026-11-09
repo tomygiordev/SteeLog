@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using SteeLog.CompositionRoot;
 
 namespace SteeLog.Servicios
 {
@@ -11,14 +10,10 @@ namespace SteeLog.Servicios
         public string ErrorMessage { get; set; }
     }
 
+    [System.Obsolete("Fase DI: recibir IServiciosVista por constructor")]
     public static class AutenticacionLocal
     {
-        public static async Task<AuthResult> SignInAsync(string email, string password)
-        {
-            var identity = await LocalServices.Current.Authentication.AuthenticateAsync(email, password);
-            return identity == null
-                ? new AuthResult { ErrorMessage = "Usuario o contraseña incorrectos." }
-                : new AuthResult { Success = true, Email = identity.Email };
-        }
+        private static AutenticacionVista Servicio => SteeLog.CompositionRoot.ServiciosCompatibles.Obtener().Autenticacion;
+        public static async Task<AuthResult> SignInAsync(string email, string password) => await Servicio.SignInAsync(email, password);
     }
 }

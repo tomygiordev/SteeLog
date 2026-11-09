@@ -23,10 +23,19 @@ namespace SteeLog.Vistas
         private Label lblError;
         private Label lblVersion;
 
-        public Vista_Login() : this(AutenticacionLocal.SignInAsync) { }
+        private readonly SteeLog.Presentation.IServiciosVista servicios;
+        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
+        public Vista_Login() : this(CompositionRoot.ServiciosCompatibles.Obtener()) { }
+
+        public Vista_Login(SteeLog.Presentation.IServiciosVista servicios)
+            : this(servicios, servicios == null ? null : (Func<string, string, Task<AuthResult>>)servicios.Autenticacion.SignInAsync) { }
 
         internal Vista_Login(Func<string, string, Task<AuthResult>> authenticate)
+            : this(CompositionRoot.ServiciosCompatibles.Obtener(), authenticate) { }
+
+        internal Vista_Login(SteeLog.Presentation.IServiciosVista servicios, Func<string, string, Task<AuthResult>> authenticate)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             this.authenticate = authenticate ?? throw new ArgumentNullException(nameof(authenticate));
             InitUI();
         }
@@ -245,8 +254,8 @@ namespace SteeLog.Vistas
                 if (loginClosed || IsDisposed || Disposing) return;
                 if (result.Success)
                 {
-                    SessionManager.SetSession(result.Email);
-                    CredentialStore.Save(email, password);
+                    servicios.Sesion.SetSession(result.Email);
+                    servicios.Credenciales.Save(email, password);
                     DialogResult = DialogResult.OK;
                     Close();
                 }

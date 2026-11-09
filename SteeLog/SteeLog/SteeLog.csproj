@@ -256,6 +256,13 @@
     <Compile Include="Vistas\Gestión\ModalSeleccionProveedores.Designer.cs">
       <DependentUpon>ModalSeleccionProveedores.cs</DependentUpon>
     </Compile>
+    <Compile Include="Presentation\IServiciosVista.cs" />
+    <Compile Include="CompositionRoot\ServiciosCompatibles.cs" />
+    <Compile Include="Servicios\SesionVista.cs" />
+    <Compile Include="Servicios\CredencialesVista.cs" />
+    <Compile Include="Servicios\AutenticacionVista.cs" />
+    <Compile Include="Servicios\ActualizacionesVista.cs" />
+    <Compile Include="Servicios\BorradorMovimientoVista.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Servicios\RegistroErrores.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
