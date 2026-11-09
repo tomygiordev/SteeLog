@@ -158,36 +158,23 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
-        /// <summary>
-        /// Calcula el stock disponible real para agregar al movimiento actual.
-        /// En modo edición, se suman las cantidades ya cargadas en la lista porque
-        /// esas cantidades serán revertidas al guardar (el movimiento original se elimina primero).
-        /// </summary>
+        private decimal StockConReversion(decimal stock, int id, Dictionary<int, decimal> snapshot)
+        {
+            return _idMovimientoAEditar > 0 && snapshot.TryGetValue(id, out decimal devuelto)
+                ? stock + devuelto : stock;
+        }
+
         private decimal StockDisponibleMaterial(int idMaterial)
         {
-            decimal stockBase = _materialSeleccionado?.stockActual ?? 0;
-            if (_idMovimientoAEditar > 0)
-            {
-                // Las cantidades ya en la lista se van a revertir → las sumamos al disponible
-                decimal yaEnLista = materialesLista
-                    .Where(m => m.id_material == idMaterial && !m.EsRecorte)
-                    .Sum(m => m.cantidad);
-                stockBase += yaEnLista;
-            }
-            return stockBase;
+            return StockConReversion(_materialSeleccionado?.stockActual ?? 0, idMaterial, stockRevertidoMateriales);
         }
 
         private decimal StockDisponibleRecorte(int idRecorte)
         {
-            decimal stockBase = _recorteSeleccionado?.cantidad ?? 0;
-            if (_idMovimientoAEditar > 0)
-            {
-                decimal yaEnLista = materialesLista
-                    .Where(m => m.EsRecorte && m.IdRecorte == idRecorte)
-                    .Sum(m => m.cantidad);
-                stockBase += yaEnLista;
-            }
-            return stockBase;
+            decimal stock = _recorteSeleccionado?.cantidad ?? 0;
+            if (_recorteSeleccionado == null && _idMovimientoAEditar > 0)
+                stock = recortesDisponibles.FirstOrDefault(r => r.id == idRecorte)?.cantidad ?? 0;
+            return StockConReversion(stock, idRecorte, stockRevertidoRecortes);
         }
 
         private bool ConsumeStockActual()
@@ -212,25 +199,23 @@ namespace SteeLog.Vistas.Movimientos
 
         /// <summary>
         /// Stock que queda disponible de un material descontando lo que ya hay de él en el carrito
-        /// (sin contar <paramref name="excluir"/>, el ítem que se está reemplazando). En modo edición
-        /// las cantidades cargadas se revierten al guardar, así que no se descuentan.
+        /// (sin contar <paramref name="excluir"/>, el ítem que se está reemplazando).
+        /// En edición se suma la reversión del movimiento original, no la del carrito.
         /// </summary>
         private decimal DisponibleRestanteMaterial(int idMaterial, decimal stock, MovimientoMaterial excluir = null)
         {
-            if (_idMovimientoAEditar > 0) return stock;
             decimal enCarrito = materialesLista
                 .Where(m => !ReferenceEquals(m, excluir) && !m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual && m.id_material == idMaterial)
                 .Sum(m => m.cantidad);
-            return stock - enCarrito;
+            return StockConReversion(stock, idMaterial, stockRevertidoMateriales) - enCarrito;
         }
 
         private decimal DisponibleRestanteRecorte(Recorte recorte, decimal stock, MovimientoMaterial excluir = null)
         {
-            if (_idMovimientoAEditar > 0) return stock;
             decimal enCarrito = materialesLista
                 .Where(m => !ReferenceEquals(m, excluir) && !m.EsInsumo && m.EsRecorte && m.IdRecorte == recorte.id)
                 .Sum(m => m.cantidad);
-            return stock - enCarrito;
+            return StockConReversion(stock, recorte.id, stockRevertidoRecortes) - enCarrito;
         }
 
         /// <summary>
@@ -248,13 +233,13 @@ namespace SteeLog.Vistas.Movimientos
 
         /// <summary>
         /// Detalle de los ítems del carrito que superan el stock conocido (solo movimientos que consumen stock).
-        /// Los ítems cuyo stock no se conoce, los eventuales y los insumos no se validan; en modo edición
-        /// tampoco, porque el stock real incluye lo que el movimiento original devuelve al guardar.
+        /// Los ítems cuyo stock no se conoce, los eventuales y los insumos no se validan.
+        /// En edición el disponible incluye la reversión original.
         /// </summary>
         private List<string> ItemsQueExcedenStock()
         {
             var excedidos = new List<string>();
-            if (_idMovimientoAEditar > 0 || !ConsumeStockActual()) return excedidos;
+            if (!ConsumeStockActual()) return excedidos;
             bool ocultar = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
 
             foreach (var grupo in materialesLista
@@ -264,8 +249,9 @@ namespace SteeLog.Vistas.Movimientos
                 var material = materialesFull.FirstOrDefault(x => x.id == grupo.Key);
                 if (material == null) continue;
                 decimal cargado = grupo.Sum(m => m.cantidad);
-                if (cargado > material.stockActual)
-                    excedidos.Add(ocultar ? grupo.First().NombreMaterial : $"{grupo.First().NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {material.stockActual.ToString("G29")})");
+                decimal disponible = StockConReversion(material.stockActual, grupo.Key, stockRevertidoMateriales);
+                if (cargado > disponible)
+                    excedidos.Add(ocultar ? grupo.First().NombreMaterial : $"{grupo.First().NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {disponible.ToString("G29")})");
             }
 
             // Los recortes nuevos (sin id) no se validan: nacen con lo que se carga.
@@ -277,8 +263,9 @@ namespace SteeLog.Vistas.Movimientos
                 var recorte = recortesDisponibles.FirstOrDefault(x => x.id == grupo.Key);
                 if (recorte == null) continue;
                 decimal cargado = grupo.Sum(m => m.cantidad);
-                if (cargado > recorte.cantidad)
-                    excedidos.Add(ocultar ? primero.NombreMaterial : $"{primero.NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {recorte.cantidad.ToString("G29")})");
+                decimal disponible = StockConReversion(recorte.cantidad, grupo.Key, stockRevertidoRecortes);
+                if (cargado > disponible)
+                    excedidos.Add(ocultar ? primero.NombreMaterial : $"{primero.NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {disponible.ToString("G29")})");
             }
             return excedidos;
         }
@@ -399,7 +386,7 @@ namespace SteeLog.Vistas.Movimientos
 
             if (!tieneRecorteSel && materialInfo != null)
             {
-                // En modo edición el stock disponible incluye lo ya cargado (será revertido)
+                // En edición el disponible incluye solo la reversión original
                 decimal stockDisponible = idMaterial.HasValue ? StockDisponibleMaterial(idMaterial.Value) : 0;
                 decimal yaEnLista = materialesLista.Where(m => m.id_material == idMaterial && !m.EsRecorte).Sum(m => m.cantidad);
 

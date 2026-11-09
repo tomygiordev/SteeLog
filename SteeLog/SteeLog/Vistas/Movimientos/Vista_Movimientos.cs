@@ -50,6 +50,8 @@ namespace SteeLog.Vistas.Movimientos
         // Inyectable en tests: reemplaza el MessageBox "¿Desea recuperarlo?".
         internal Func<SteeLog.Core.Application.Borradores.MovimientoDraft, bool> ConfirmarRecuperacion;
         private int _idMovimientoAEditar = 0;
+        private readonly Dictionary<int, decimal> stockRevertidoMateriales = new Dictionary<int, decimal>();
+        private readonly Dictionary<int, decimal> stockRevertidoRecortes = new Dictionary<int, decimal>();
         private bool modeloListo = false;
         private bool catalogosListos;
         private CatalogosMovimiento catalogos = new CatalogosMovimiento();
@@ -442,6 +444,8 @@ namespace SteeLog.Vistas.Movimientos
                 }
                 txtCategoria.Text = mov.observaciones;
 
+                CapturarStockRevertido(edicion, cmbMovimientos.Text);
+
                 // Detalles
                 foreach (var item in edicion.Lineas)
                 {
@@ -459,6 +463,25 @@ namespace SteeLog.Vistas.Movimientos
             catch (Exception ex)
             {
                 if (!IsDisposed && version == versionCarga && _idMovimientoAEditar == id) ToastNotification.ShowError("Error al cargar para edición: " + ex.Message);
+            }
+        }
+
+        private void CapturarStockRevertido(MovimientoEdicion edicion, string tipoNombre)
+        {
+            stockRevertidoMateriales.Clear();
+            stockRevertidoRecortes.Clear();
+            // La consulta de edición no expone TipoNombre/TipoImpacto; se usa el tipo seleccionado al cargar.
+            var impactoOriginal = ClasificadorMovimiento.Clasificar(tipoNombre, edicion.Cabecera.TipoDestino);
+            foreach (var item in edicion.Lineas)
+            {
+                var linea = item.Linea;
+                if (item.InsumoId.HasValue || linea.EsInsumo || linea.CompraEventual) continue;
+                if (!linea.RecorteId.HasValue && !linea.MaterialId.HasValue) continue;
+                decimal devuelto = SteeLog.Domain.Inventario.ImpactoMovimiento.ParaReversion(linea.ImpactoReal, linea.Cantidad, impactoOriginal);
+                var snapshot = linea.RecorteId.HasValue ? stockRevertidoRecortes : stockRevertidoMateriales;
+                int id = linea.RecorteId ?? linea.MaterialId.Value;
+                snapshot.TryGetValue(id, out decimal acumulado);
+                snapshot[id] = acumulado + devuelto;
             }
         }
 
@@ -1195,6 +1218,8 @@ namespace SteeLog.Vistas.Movimientos
             flpMateriales.Controls.Clear();
             panelSeleccionado = null;
             _idMovimientoAEditar = 0;
+            stockRevertidoMateriales.Clear();
+            stockRevertidoRecortes.Clear();
             ActualizarModoEdicion();
 
 
@@ -1300,17 +1325,20 @@ namespace SteeLog.Vistas.Movimientos
             // Un recorte nuevo (sin id, cargado en el carrito) no tiene tope: nace con lo que se carga.
             if (_recorteSeleccionado == null && _idRecorteSeleccionado <= 0 && (_medidaRecorteSeleccionado > 0 || (_anchoRecorteSeleccionado > 0 && _alturaRecorteSeleccionado > 0))) return valor;
 
-            // En modo edición, el stockMax considera las cantidades ya cargadas (serán revertidas)
+            // En edición se suma solo la reversión original
             // y se descuenta lo que ya hay del mismo material/recorte en el carrito (salvo el ítem que se está reemplazando)
             var itemEnEdicion = panelSeleccionado?.Tag as MovimientoMaterial;
-            decimal stockMax = _recorteSeleccionado != null
-                ? DisponibleRestanteRecorte(_recorteSeleccionado, StockDisponibleRecorte(_recorteSeleccionado.id), itemEnEdicion)
-                : DisponibleRestanteMaterial(_materialSeleccionado.id, StockDisponibleMaterial(_materialSeleccionado.id), itemEnEdicion);
+            var recorteEnEdicion = _recorteSeleccionado;
+            if (recorteEnEdicion == null && _idMovimientoAEditar > 0 && _idRecorteSeleccionado > 0)
+                recorteEnEdicion = recortesDisponibles.FirstOrDefault(r => r.id == _idRecorteSeleccionado);
+            decimal stockMax = recorteEnEdicion != null
+                ? DisponibleRestanteRecorte(recorteEnEdicion, recorteEnEdicion.cantidad, itemEnEdicion)
+                : DisponibleRestanteMaterial(_materialSeleccionado.id, _materialSeleccionado.stockActual, itemEnEdicion);
             if (stockMax < 0) stockMax = 0;
 
             string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
             // Cambiar de material/recorte o de tipo de movimiento reinicia el aviso para que el siguiente exceso vuelva a avisar.
-            string claveAviso = _materialSeleccionado.id + "|" + (_recorteSeleccionado?.id ?? 0) + "|" + cmbMovimientos.Text;
+            string claveAviso = _materialSeleccionado.id + "|" + (recorteEnEdicion?.id ?? 0) + "|" + cmbMovimientos.Text;
             if (claveAviso != _claveAvisoStock) { _claveAvisoStock = claveAviso; _ultimoAvisoStockMax = null; }
             bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
 
