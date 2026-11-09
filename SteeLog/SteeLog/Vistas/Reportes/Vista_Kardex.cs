@@ -417,23 +417,6 @@ namespace SteeLog.Vistas
             if (_panelResultados != null) _panelResultados.Visible = false;
         }
 
-        /// <summary>Creates a full-height fill Panel that centers the given control vertically and horizontally.</summary>
-        private Panel CenterPanel(Control ctrl)
-        {
-            Panel p = new Panel();
-            p.Dock = DockStyle.Fill;
-            p.BackColor = Color.Transparent;
-            p.Padding = new Padding(0);
-            ctrl.Anchor = AnchorStyles.None;
-            p.Controls.Add(ctrl);
-            p.Resize += (s, e) =>
-            {
-                ctrl.Left = (p.ClientSize.Width - ctrl.Width) / 2;
-                ctrl.Top = (p.ClientSize.Height - ctrl.Height) / 2;
-            };
-            return p;
-        }
-
         // Limpiar ya no es necesario como método separado:
         // basta con destildar los toggles, que disparan CargarKardex automáticamente.
 

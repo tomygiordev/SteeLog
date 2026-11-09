@@ -250,15 +250,6 @@ namespace SteeLog.Vistas
             }
         }
 
-        private void FiltroMaterial_FormClosing(object sender, FormClosingEventArgs e)
-        {
-            if (e.CloseReason == CloseReason.UserClosing)
-            {
-                e.Cancel = true;
-                this.Hide();
-            }
-        }
-
         private void FiltroMaterial_Load(object sender, EventArgs e)
         {
             this.Focus();
@@ -275,15 +266,5 @@ namespace SteeLog.Vistas
         private void flCategoria_SelectedIndexChanged(object sender, EventArgs e)
         {
         }
-
-        private void label4_Click(object sender, EventArgs e)
-        {
-        }
-    }
-
-    public static class Guna2ControlHelper
-    {
-        [System.Runtime.InteropServices.DllImport("Gdi32.dll", EntryPoint = "CreateRoundRectRgn")]
-        public static extern IntPtr CreateRoundRectRgn(int nLeftRect, int nTopRect, int nRightRect, int nBottomRect, int nWidthEllipse, int nHeightEllipse);
     }
 }

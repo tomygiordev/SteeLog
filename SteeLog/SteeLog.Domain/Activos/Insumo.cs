@@ -13,6 +13,5 @@ namespace SteeLog.Domain.Activos
             if (id < 0 || string.IsNullOrWhiteSpace(nombre) || nombre.Trim().Length > 255 || (obraId.HasValue && obraId.Value <= 0)) throw new ArgumentException("Datos del insumo inválidos.");
             Id=id; Nombre=nombre.Trim(); ObraId=obraId; Consumido=consumido; Observaciones=observaciones;
         }
-        public Insumo Cambiar(string nombre, int? obraId, bool consumido, string observaciones) => new Insumo(Id,nombre,obraId,consumido,observaciones);
     }
 }

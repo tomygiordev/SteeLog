@@ -5,7 +5,6 @@ using System.ComponentModel;
 using System.Data;
 using System.Drawing;
 using System.Linq;
-using System.Runtime.InteropServices; 
 using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
@@ -266,14 +265,6 @@ namespace SteeLog
             hideSubMenu();
         }
 
-        private void button4_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
-            hideSubMenu();
-        }
-
         private void button5_Click(object sender, EventArgs e)
         {
             openChildForm(() => new Vista_Proveedores());
@@ -290,42 +281,6 @@ namespace SteeLog
         private void btnFletes_Click(object sender, EventArgs e)
         {
             openChildForm(() => new Vista_Fletes());
-            hideSubMenu();
-        }
-        #endregion
-
-        
-
-        #region PlayListManagemetSubMenu
-        private void button8_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
-            hideSubMenu();
-        }
-
-        private void button7_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
-            hideSubMenu();
-        }
-
-        private void button6_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
-            hideSubMenu();
-        }
-
-        private void button1_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
             hideSubMenu();
         }
         #endregion
@@ -352,25 +307,11 @@ namespace SteeLog
             openChildForm(() => new Vista_InformeObra());
             hideSubMenu();
         }
-
-        private void button9_Click(object sender, EventArgs e)
-        {
-            //..
-            //your codes
-            //..
-            hideSubMenu();
-        }
         #endregion
 
         private void btnEqualizer_Click(object sender, EventArgs e)
         {
             showSubMenu(panelInventario);
-        }
-
-        private void btnHelp_Click(object sender, EventArgs e)
-        {
-            openChildForm(() => new Vista_Inventario());
-            hideSubMenu();
         }
 
         private void btnInventarioGeneral_Click(object sender, EventArgs e)
@@ -644,41 +585,6 @@ namespace SteeLog
             base.WndProc(ref m);
         }
 
-        [StructLayout(LayoutKind.Sequential)]
-        struct POINT { public int X; public int Y; }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct MINMAXINFO
-        {
-            public POINT ptReserved;
-            public POINT ptMaxSize;
-            public POINT ptMaxPosition;
-            public POINT ptMinTrackSize;
-            public POINT ptMaxTrackSize;
-        }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct RECT { public int Left, Top, Right, Bottom; }
-
-        [StructLayout(LayoutKind.Sequential)]
-        struct MONITORINFO
-        {
-            public int cbSize;
-            public RECT rcMonitor;
-            public RECT rcWork;
-            public int dwFlags;
-        }
-
-        [DllImport("user32.dll")] static extern bool GetMonitorInfo(IntPtr hMonitor, ref MONITORINFO lpmi);
-        [DllImport("user32.dll")] static extern IntPtr MonitorFromWindow(IntPtr hwnd, int dwFlags);
-        const int MONITOR_DEFAULTTONEAREST = 2;
-
-
-        private void btnCargaInicialObras_Click(object sender, EventArgs e)
-        {
-
-        }
-
         private void btnMovimientos_Click(object sender, EventArgs e)
         {
             showSubMenu(panelMovimientos);
@@ -693,12 +599,6 @@ namespace SteeLog
         private void btnHistorial_Click(object sender, EventArgs e)
         {
             openChildForm(() => new Vista_HistorialMovimientos());
-            hideSubMenu();
-        }
-
-        private void Fletes_Click(object sender, EventArgs e)
-        {
-            openChildForm(() => new Vista_Fletes());
             hideSubMenu();
         }
 

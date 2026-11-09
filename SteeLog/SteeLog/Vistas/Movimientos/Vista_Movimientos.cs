@@ -1033,11 +1033,6 @@ namespace SteeLog.Vistas.Movimientos
         {
 
         }
-
-        private void panelAntiParpadeo5_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
         private async void GuardarMovimiento_Click(object sender, EventArgs e)
         {
             if (!modeloListo || !catalogosListos || ocupada || envioPendiente || resultadoIncierto) return;
@@ -1234,16 +1229,6 @@ namespace SteeLog.Vistas.Movimientos
         }
 
         private void panelAntiParpadeo3_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
-        private void guna2CheckBox1_CheckedChanged(object sender, EventArgs e)
-        {
-
-        }
-
-        private void guna2ImageCheckBox1_CheckedChanged(object sender, EventArgs e)
         {
 
         }

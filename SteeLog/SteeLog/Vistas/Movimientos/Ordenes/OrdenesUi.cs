@@ -9,12 +9,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
     {
         public static readonly Color FondoForm = SteeLog.UI.Tema.Fondo;
         public static readonly Color FondoPanel = SteeLog.UI.Tema.Superficie;
-        public static readonly Color FondoInput = SteeLog.UI.Tema.FondoInput;
-        public static readonly Color FondoBoton = SteeLog.UI.Tema.Secundario;
-        public static readonly Color Borde = SteeLog.UI.Tema.Borde;
-        public static readonly Color Texto = SteeLog.UI.Tema.Texto;
         public static readonly Color TextoMuted = SteeLog.UI.Tema.TextoSecundario;
-        public static readonly Color Hover = SteeLog.UI.Tema.SecundarioHover;
 
         public static void AplicarEstiloGrid(Guna2DataGridView grid)
         {
@@ -65,18 +60,6 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 Font = SteeLog.UI.Tema.FuenteTexto,
                 ForeColor = TextoMuted,
                 Margin = new Padding(3, 8, 3, 4)
-            };
-        }
-
-        public static Panel CrearCard()
-        {
-            return new Panel
-            {
-                Dock = DockStyle.Top,
-                Height = 180,
-                Padding = new Padding(18),
-                Margin = new Padding(18, 12, 18, 0),
-                BackColor = FondoPanel
             };
         }
     }

@@ -59,8 +59,6 @@ namespace SteeLog.Presentation
             => Ejecutar(() => executor.ExecuteAsync<ConsultarOrdenes, IReadOnlyList<MaterialLectura>>(x => x.MaterialesAsync(token)));
         public Task<ResultadoOrdenes<string>> DestinoAsync(CancellationToken token = default)
             => Ejecutar(() => executor.ExecuteAsync<ConsultarOrdenes, string>(x => x.DestinoAsync(token)));
-        public Task<ResultadoOrdenes<IReadOnlyList<PendienteLectura>>> PendientesAsync(CancellationToken token = default)
-            => Ejecutar(() => executor.ExecuteAsync<ConsultarOrdenes, IReadOnlyList<PendienteLectura>>(x => x.PendientesAsync(token)));
         public string SugerirNombrePdf() => (pdf ?? throw new InvalidOperationException("No se configuró el generador PDF.")).SugerirNombreArchivo();
         public Task<ResultadoOrdenes<bool>> ExportarPendientesAsync(string ruta, CancellationToken token = default)
             => Ejecutar(async () => {

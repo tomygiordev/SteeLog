@@ -110,8 +110,6 @@ namespace SteeLog.Vistas
             this.Close();
         }
 
-        private void btnConfirmar_Click(object sender, EventArgs e) => btnAceptar_Click(sender, e);
-
         private void btnCancelar_Click(object sender, EventArgs e)
         {
             this.DialogResult = DialogResult.Cancel;

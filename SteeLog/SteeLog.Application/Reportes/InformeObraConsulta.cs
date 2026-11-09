@@ -49,9 +49,6 @@ namespace SteeLog.Core.Application.Reportes
         private readonly ICanaletasConsulta canaletas;
         public ConsultarInformeObra(Session session, IInformeObraConsulta consulta, ICanaletasConsulta canaletas)
         { this.session = session ?? throw new ArgumentNullException(nameof(session)); this.consulta = consulta ?? throw new ArgumentNullException(nameof(consulta)); this.canaletas = canaletas ?? throw new ArgumentNullException(nameof(canaletas)); }
-        public Task<IReadOnlyList<InformeMovimientoDetallePdf>> MovimientosAsync(int id, CancellationToken t) { session.Require(Role.Galpon); return consulta.MovimientosAsync(id, t); }
-        public Task<IReadOnlyList<InformeHerramientaDetallePdf>> HerramientasAsync(int id, string nombre, CancellationToken t) { session.Require(Role.Galpon); return consulta.HerramientasAsync(id, nombre, t); }
-        public Task<IReadOnlyList<InformeInsumoDetallePdf>> InsumosAsync(int id, string nombre, CancellationToken t) { session.Require(Role.Galpon); return consulta.InsumosAsync(id, nombre, t); }
         public Task<DateTime?> PrimeraFechaRemitoAsync(int id, CancellationToken t) { session.Require(Role.Galpon); return consulta.PrimeraFechaRemitoAsync(id, t); }
         public bool MostrarValorizacion(string nombre) { session.Require(Role.Galpon); return session.Role == Role.Admin || (!string.IsNullOrEmpty(nombre) && nombre.IndexOf("galpon", StringComparison.OrdinalIgnoreCase) >= 0); }
         public async Task<InformeObraLecturas> LecturasAsync(int id, string nombre, CancellationToken t)

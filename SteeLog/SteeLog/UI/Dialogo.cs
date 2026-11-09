@@ -38,16 +38,6 @@ namespace SteeLog.UI
             return Ejecutar(owner, mensaje, titulo, MessageBoxButtons.YesNo, tipo, def, destructivo) == DialogResult.Yes;
         }
 
-        public static void Info(string mensaje, string titulo = null, IWin32Window owner = null)
-        {
-            Ejecutar(owner, mensaje, titulo ?? "Información", MessageBoxButtons.OK, TipoDialogo.Info, MessageBoxDefaultButton.Button1, false);
-        }
-
-        public static void Exito(string mensaje, string titulo = null, IWin32Window owner = null)
-        {
-            Ejecutar(owner, mensaje, titulo ?? "Listo", MessageBoxButtons.OK, TipoDialogo.Exito, MessageBoxDefaultButton.Button1, false);
-        }
-
         public static void Advertencia(string mensaje, string titulo = null, IWin32Window owner = null)
         {
             Ejecutar(owner, mensaje, titulo ?? "Atención", MessageBoxButtons.OK, TipoDialogo.Advertencia, MessageBoxDefaultButton.Button1, false);
