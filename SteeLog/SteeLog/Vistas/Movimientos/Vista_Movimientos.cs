@@ -470,8 +470,7 @@ namespace SteeLog.Vistas.Movimientos
         {
             stockRevertidoMateriales.Clear();
             stockRevertidoRecortes.Clear();
-            // La consulta de edición no expone TipoNombre/TipoImpacto; se usa el tipo seleccionado al cargar.
-            var impactoOriginal = ClasificadorMovimiento.Clasificar(tipoNombre, edicion.Cabecera.TipoDestino);
+            var impactoOriginal = ClasificadorMovimiento.Clasificar(edicion.TipoNombre ?? tipoNombre, edicion.Cabecera.TipoDestino, impactoExplicito: edicion.TipoImpacto);
             foreach (var item in edicion.Lineas)
             {
                 var linea = item.Linea;

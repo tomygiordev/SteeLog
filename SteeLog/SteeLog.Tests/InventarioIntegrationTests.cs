@@ -626,6 +626,8 @@ public sealed class InventarioIntegrationTests
         Assert.DoesNotContain(await historial.ListarAsync(new DateTime(2025,1,2),null,null),x=>x.IdMovimiento==movimiento);
         var editar=new ConsultarMovimientoEdicion(Actor(),new NpgsqlMovimientoEdicionConsulta(Factory())); var detalle=await editar.ObtenerAsync(movimiento);
         Assert.Equal(solicitud.Cabecera.Remito,detalle.Cabecera.Remito); Assert.Contains(detalle.Lineas,x=>x.Linea?.MaterialId==material && x.Linea.Cantidad==2m); Assert.Contains(detalle.Lineas,x=>x.InsumoId==insumo);
+        Assert.Equal(-2m,detalle.Lineas.Single(x=>x.Linea?.MaterialId==material).Linea.ImpactoReal);
+        Assert.Equal(Convert.ToString(Sql("SELECT nombre FROM public.tipo_movimiento WHERE id_tipomovimiento=@id",new NpgsqlParameter("id",solicitud.Cabecera.TipoMovimientoId))),detalle.TipoNombre);
         var insumos=new ConsultarInsumos(Actor(Role.Galpon),new NpgsqlInsumosConsulta(Factory())); Assert.Contains(await insumos.InsumosAsync(),x=>x.Id==insumo && x.ObraId==destino); Assert.Contains(await insumos.ObrasAsync(),x=>x.Id==destino);
         string nombre=Convert.ToString(Sql("SELECT nombre FROM public.insumos WHERE id_insumo=@id",new NpgsqlParameter("id",insumo))); Assert.Contains(await insumos.HistorialAsync(),x=>x.Insumo==nombre);
         int flete; using(var u=new NpgsqlUnitOfWork(Factory())) flete=await new GestionarFletes(Actor(Role.Galpon),u,new NpgsqlFletes(u)).CrearAsync("Flete "+Guid.NewGuid().ToString("N"));

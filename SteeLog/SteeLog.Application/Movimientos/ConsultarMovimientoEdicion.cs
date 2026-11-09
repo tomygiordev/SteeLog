@@ -12,6 +12,8 @@ namespace SteeLog.Core.Application.Movimientos
     }
     public sealed class MovimientoEdicion
     {
+        public string TipoNombre { get; set; }
+        public string TipoImpacto { get; set; }
         public CabeceraMovimiento Cabecera { get; set; }
         public List<LineaEdicion> Lineas { get; set; } = new List<LineaEdicion>();
     }

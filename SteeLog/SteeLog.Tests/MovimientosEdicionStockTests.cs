@@ -212,6 +212,65 @@ namespace SteeLog.Tests
         }
 
         [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public void ImpactoRealDistintoDeCantidadDefineElDisponibleYElGuardado(bool recorte)
+        {
+            Sta(() => {
+                var c = Preparar(new ServiciosVistaDePrueba(), "Envio a Obra", "Envio a Obra");
+                using (c.Vista)
+                {
+                    CargarStock(c, 2);
+                    var r = new Recorte { id = 7, id_material = 1, cantidad = 2 };
+                    Fijar(c.Vista, "recortesDisponibles", new List<Recorte> { r });
+                    Capturar(c, Original(recorte, -3m)); // Cantidad original 5, reversión real 3.
+                    Fijar(c.Vista, "_materialSeleccionado", Campo<List<Material>>(c.Vista, "materialesFull").Single());
+                    Fijar(c.Vista, "_recorteSeleccionado", r);
+                    string metodo = recorte ? "StockDisponibleRecorte" : "StockDisponibleMaterial";
+                    Assert.Equal(5m, (decimal)c.Vista.GetType().GetMethod(metodo, Flags).Invoke(c.Vista, new object[] { recorte ? 7 : 1 }));
+                    c.Carrito.Add(new MovimientoMaterial { id_material = 1, NombreMaterial = "Perfil", EsRecorte = recorte, IdRecorte = recorte ? (int?)7 : null, cantidad = 5 });
+                    c.Guardar();
+                    Assert.Empty(c.Avisos);
+                    Assert.Equal(1, c.Confirmaciones);
+                    c.Carrito.Single().cantidad = 6;
+                    c.Guardar();
+                    Assert.Single(c.Avisos);
+                    Assert.Equal(1, c.Confirmaciones);
+                    Assert.Equal(0, c.Ejecutor.Llamadas);
+                }
+            });
+        }
+
+        [Theory]
+        [InlineData("Compra renombrada", "salida", 7)]
+        [InlineData("Envio a Obra", "entrada", -3)]
+        [InlineData("Compra", null, -3)]
+        [InlineData(null, "sin_impacto", 2)]
+        public void SnapshotPriorizaDatosDelTipoOriginalSobreElCombo(string nombre, string impacto, int disponible)
+        {
+            Sta(() => {
+                var c = Preparar(new ServiciosVistaDePrueba(), "Envio a Obra", "Envio a Obra");
+                using (c.Vista)
+                {
+                    CargarStock(c, 2);
+                    Fijar(c.Vista, "_idMovimientoAEditar", 42);
+                    var edicion = new SteeLog.Core.Application.Movimientos.MovimientoEdicion
+                    {
+                        TipoNombre = nombre, TipoImpacto = impacto,
+                        Cabecera = new SteeLog.Core.Application.Movimientos.CabeceraMovimiento { TipoDestino = "UBICACION" },
+                        Lineas = new List<SteeLog.Core.Application.Movimientos.LineaEdicion> { Original(false, null), Original(true, null) }
+                    };
+                    c.Vista.GetType().GetMethod("CapturarStockRevertido", Flags).Invoke(c.Vista, new object[] { edicion, c.Tipo.Text });
+                    Fijar(c.Vista, "_materialSeleccionado", Campo<List<Material>>(c.Vista, "materialesFull").Single());
+                    var r = new Recorte { id = 7, id_material = 1, cantidad = 2 };
+                    Fijar(c.Vista, "_recorteSeleccionado", r);
+                    Assert.Equal((decimal)disponible, (decimal)c.Vista.GetType().GetMethod("StockDisponibleMaterial", Flags).Invoke(c.Vista, new object[] { 1 }));
+                    Assert.Equal((decimal)disponible, (decimal)c.Vista.GetType().GetMethod("StockDisponibleRecorte", Flags).Invoke(c.Vista, new object[] { 7 }));
+                }
+            });
+        }
+
+        [Theory]
         [InlineData(null, 5)]
         [InlineData(-3, 3)]
         [InlineData(0, 0)]
