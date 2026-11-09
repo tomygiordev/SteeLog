@@ -1297,6 +1297,8 @@ namespace SteeLog.Vistas.Movimientos
         private decimal LimitarCantidadAStock(decimal valor)
         {
             if (_materialSeleccionado == null) return valor;
+            // Un recorte nuevo (sin id, cargado en el carrito) no tiene tope: nace con lo que se carga.
+            if (_recorteSeleccionado == null && _idRecorteSeleccionado <= 0 && (_medidaRecorteSeleccionado > 0 || (_anchoRecorteSeleccionado > 0 && _alturaRecorteSeleccionado > 0))) return valor;
 
             // En modo edición, el stockMax considera las cantidades ya cargadas (serán revertidas)
             // y se descuenta lo que ya hay del mismo material/recorte en el carrito (salvo el ítem que se está reemplazando)

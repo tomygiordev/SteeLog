@@ -225,7 +225,7 @@ public sealed class InventarioIntegrationTests
         public Task<IDictionary<int,decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearRecortesAsync(ids,t);
         public Task<IDictionary<int,InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearInsumosAsync(ids,t);
         public Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken t = default) => inner.GuardarRecorteAsync(id,saldo,t);
-        public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken t = default) => inner.ResolverRecorteAsync(materialId, ancho, altura, medida, t);
+        public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, decimal cantidadInicial, CancellationToken t = default) => inner.ResolverRecorteAsync(materialId, ancho, altura, medida, cantidadInicial, t);
         public Task<int> CrearCabeceraAsync(CabeceraMovimiento c, CancellationToken t = default) => inner.CrearCabeceraAsync(c,t);
         public Task ActualizarCabeceraAsync(int id, CabeceraMovimiento c, CancellationToken t = default) => inner.ActualizarCabeceraAsync(id,c,t);
         public Task AgregarLineaAsync(int id, LineaMovimiento l, decimal saldo, CancellationToken t = default) => inner.AgregarLineaAsync(id,l,saldo,t);
@@ -823,7 +823,7 @@ public sealed class InventarioIntegrationTests
         var countRecorte3 = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=4.25", new NpgsqlParameter("id", material)));
         Assert.Equal(0L, countRecorte3);
 
-        // Caso 4 (Rechazo en salida):
+        // Caso 4 (Salida con recorte nuevo: nace con lo cargado, la línea lo consume y queda en 0; el material no se toca):
         var sol4 = Solicitud(material, 7);
         sol4.Lineas = new List<LineaMovimiento>
         {
@@ -838,10 +838,15 @@ public sealed class InventarioIntegrationTests
                 Cantidad = 1m
             }
         };
-        var exSalida = await Assert.ThrowsAsync<InvalidOperationException>(() => Crear(sol4));
-        Assert.Equal("Stock insuficiente.", exSalida.Message);
+        int idMov4 = await Crear(sol4);
+        Assert.True(idMov4 > 0);
         var countRecorte4 = Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material)));
-        Assert.Equal(0L, countRecorte4);
+        Assert.Equal(1L, countRecorte4);
+        var cantidadRecorte4 = Convert.ToDecimal(Sql("SELECT cantidad FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material)));
+        Assert.Equal(0m, cantidadRecorte4);
+        var impactoLinea4 = Convert.ToDecimal(Sql("SELECT impacto_stock_real FROM public.movimientomaterial WHERE id_movimiento=@id", new NpgsqlParameter("id", idMov4)));
+        Assert.Equal(-1m, impactoLinea4);
+        Assert.Equal(10m, Stock(material));
     }
     [Fact]
     public async Task HistorialInsumosIncluyeIdentidadDeHomónimos()

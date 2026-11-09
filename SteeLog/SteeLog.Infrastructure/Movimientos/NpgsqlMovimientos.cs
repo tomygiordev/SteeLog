@@ -104,7 +104,7 @@ namespace SteeLog.Infrastructure.Movimientos
         {
             using(var c=Cmd("UPDATE public.recortes SET cantidad=@saldo WHERE id=@id RETURNING cantidad")) { c.Parameters.AddWithValue("id",id); c.Parameters.AddWithValue("saldo",saldo); var x=await c.ExecuteScalarAsync(token).ConfigureAwait(false); if(x==null) throw new InvalidOperationException("No se encontró el recorte."); return Convert.ToDecimal(x); }
         }
-        public async Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken token = default)
+        public async Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, decimal cantidadInicial, CancellationToken token = default)
         {
             using (var c = Cmd("SELECT id FROM public.recortes WHERE id_material=@m AND COALESCE(ancho,0)=@a AND COALESCE(altura,0)=@h AND medida=@med ORDER BY id LIMIT 1 FOR UPDATE"))
             {
@@ -116,13 +116,14 @@ namespace SteeLog.Infrastructure.Movimientos
                 var id = await c.ExecuteScalarAsync(token).ConfigureAwait(false);
                 if (id != null && id != DBNull.Value) return Convert.ToInt32(id);
             }
-            using (var c = Cmd("INSERT INTO public.recortes (id_material, ancho, altura, medida, cantidad, estado) VALUES (@m, @a, @h, @med, 0, NULL) RETURNING id"))
+            using (var c = Cmd("INSERT INTO public.recortes (id_material, ancho, altura, medida, cantidad, estado) VALUES (@m, @a, @h, @med, @cant, NULL) RETURNING id"))
             {
                 c.CommandTimeout = 15;
                 c.Parameters.AddWithValue("m", materialId);
                 c.Parameters.AddWithValue("a", ancho > 0 ? (object)ancho : DBNull.Value);
                 c.Parameters.AddWithValue("h", altura > 0 ? (object)altura : DBNull.Value);
                 c.Parameters.AddWithValue("med", medida);
+                c.Parameters.AddWithValue("cant", cantidadInicial);
                 return Convert.ToInt32(await c.ExecuteScalarAsync(token).ConfigureAwait(false));
             }
         }

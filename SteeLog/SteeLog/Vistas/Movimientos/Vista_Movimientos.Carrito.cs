@@ -210,16 +210,6 @@ namespace SteeLog.Vistas.Movimientos
                 : $"Stock de recorte insuficiente. Disponible: {disponible.ToString("G29")}";
         }
 
-        private static bool EsMismoRecorte(MovimientoMaterial m, Recorte recorte)
-        {
-            if (!m.EsRecorte || m.id_material != recorte.id_material) return false;
-            if (recorte.id > 0) return m.IdRecorte == recorte.id;
-            return (!m.IdRecorte.HasValue || m.IdRecorte == 0) &&
-                m.AnchoRecorte == recorte.ancho &&
-                m.AlturaRecorte == recorte.altura &&
-                m.MedidaRecorte == recorte.medida;
-        }
-
         /// <summary>
         /// Stock que queda disponible de un material descontando lo que ya hay de él en el carrito
         /// (sin contar <paramref name="excluir"/>, el ítem que se está reemplazando). En modo edición
@@ -238,7 +228,7 @@ namespace SteeLog.Vistas.Movimientos
         {
             if (_idMovimientoAEditar > 0) return stock;
             decimal enCarrito = materialesLista
-                .Where(m => !ReferenceEquals(m, excluir) && !m.EsInsumo && EsMismoRecorte(m, recorte))
+                .Where(m => !ReferenceEquals(m, excluir) && !m.EsInsumo && m.EsRecorte && m.IdRecorte == recorte.id)
                 .Sum(m => m.cantidad);
             return stock - enCarrito;
         }
@@ -246,12 +236,12 @@ namespace SteeLog.Vistas.Movimientos
         /// <summary>
         /// Valida, para movimientos que consumen stock, que sumar <paramref name="cantidad"/> del recorte
         /// al carrito no supere lo disponible. Devuelve el aviso a mostrar o null si es válido.
-        /// Un recorte nuevo (id 0) nace con stock 0: el motor rechaza consumirlo ("Stock insuficiente").
+        /// Un recorte nuevo (id 0) no se valida: nace con lo que se carga y el motor lo consume.
         /// </summary>
         private string ValidarRecorteParaCarrito(Recorte recorte, decimal cantidad)
         {
-            if (recorte == null || !ConsumeStockActual()) return null;
-            decimal disponible = DisponibleRestanteRecorte(recorte, recorte.id > 0 ? recorte.cantidad : 0m);
+            if (recorte == null || recorte.id <= 0 || !ConsumeStockActual()) return null;
+            decimal disponible = DisponibleRestanteRecorte(recorte, recorte.cantidad);
             if (cantidad > disponible) return MensajeStockRecorteInsuficiente(Math.Max(0m, disponible));
             return null;
         }
@@ -278,24 +268,17 @@ namespace SteeLog.Vistas.Movimientos
                     excedidos.Add(ocultar ? grupo.First().NombreMaterial : $"{grupo.First().NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {material.stockActual.ToString("G29")})");
             }
 
+            // Los recortes nuevos (sin id) no se validan: nacen con lo que se carga.
             foreach (var grupo in materialesLista
-                .Where(m => m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual)
-                .GroupBy(m => m.IdRecorte.HasValue && m.IdRecorte.Value > 0
-                    ? "R" + m.IdRecorte.Value
-                    : "N" + m.id_material + "|" + m.AnchoRecorte + "|" + m.AlturaRecorte + "|" + m.MedidaRecorte))
+                .Where(m => m.EsRecorte && !m.EsInsumo && !m.EsCompraEventual && m.IdRecorte.HasValue && m.IdRecorte.Value > 0)
+                .GroupBy(m => m.IdRecorte.Value))
             {
                 var primero = grupo.First();
-                decimal disponible;
-                if (primero.IdRecorte.HasValue && primero.IdRecorte.Value > 0)
-                {
-                    var recorte = recortesDisponibles.FirstOrDefault(x => x.id == primero.IdRecorte.Value);
-                    if (recorte == null) continue;
-                    disponible = recorte.cantidad;
-                }
-                else disponible = 0m;
+                var recorte = recortesDisponibles.FirstOrDefault(x => x.id == grupo.Key);
+                if (recorte == null) continue;
                 decimal cargado = grupo.Sum(m => m.cantidad);
-                if (cargado > disponible)
-                    excedidos.Add(ocultar ? primero.NombreMaterial : $"{primero.NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {disponible.ToString("G29")})");
+                if (cargado > recorte.cantidad)
+                    excedidos.Add(ocultar ? primero.NombreMaterial : $"{primero.NombreMaterial} (cargado {cargado.ToString("G29")}, disponible {recorte.cantidad.ToString("G29")})");
             }
             return excedidos;
         }
@@ -458,11 +441,6 @@ namespace SteeLog.Vistas.Movimientos
                         ToastNotification.ShowWarning(MensajeStockRecorteInsuficiente(stockDisponibleRec));
                         return;
                     }
-                }
-                else if (consumeStock)
-                {
-                    ToastNotification.ShowWarning(MensajeStockRecorteInsuficiente(0m));
-                    return;
                 }
             }
 

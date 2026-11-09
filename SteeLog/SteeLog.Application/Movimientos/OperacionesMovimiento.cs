@@ -53,14 +53,20 @@ namespace SteeLog.Core.Application.Movimientos
                 var insumoIds = insumosPrevios.Select(x => x.InsumoId).Concat(insumosNuevos).Distinct().OrderBy(x => x).ToArray();
                 var materiales = await inventario.BloquearAsync(materialesIds, token).ConfigureAwait(false);
 
-                foreach (var linea in nuevas.Where(x => x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0)))
+                var lineasRecorteNuevo = nuevas.Where(x => x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0)).ToList();
+                foreach (var linea in lineasRecorteNuevo)
                 {
                     if (!linea.MaterialId.HasValue || !materiales.ContainsKey(linea.MaterialId.Value))
                         throw new InvalidOperationException("El material indicado no existe.");
-                    if (factorNuevo <= 0)
+                    if (factorNuevo == 0)
                         throw new InvalidOperationException("Stock insuficiente.");
                     var spec = new SteeLog.Domain.Inventario.Recorte(0, linea.MaterialId.Value, linea.AnchoRecorte ?? 0m, linea.AlturaRecorte ?? 0m, linea.MedidaRecorte ?? 0m, 0m, null);
-                    linea.RecorteId = await repo.ResolverRecorteAsync(spec.MaterialId, spec.Ancho, spec.Altura, spec.Medida, token).ConfigureAwait(false);
+                    // Un recorte que no existe y se consume nace con lo cargado (las líneas lo consumen por CambiarSaldo y queda en 0);
+                    // en una entrada nace en 0 y la entrada lo suma. Si ya existía, rige su stock real y el repositorio no le agrega nada.
+                    decimal inicial = factorNuevo < 0
+                        ? lineasRecorteNuevo.Where(x => x.MaterialId == linea.MaterialId && (x.AnchoRecorte ?? 0m) == spec.Ancho && (x.AlturaRecorte ?? 0m) == spec.Altura && (x.MedidaRecorte ?? 0m) == spec.Medida).Sum(x => x.Cantidad)
+                        : 0m;
+                    linea.RecorteId = await repo.ResolverRecorteAsync(spec.MaterialId, spec.Ancho, spec.Altura, spec.Medida, inicial, token).ConfigureAwait(false);
                 }
 
                 var recorteIds = anteriores.Concat(nuevas).Where(x => x.RecorteId.HasValue).Select(x => x.RecorteId.Value).Distinct().OrderBy(x => x).ToArray();

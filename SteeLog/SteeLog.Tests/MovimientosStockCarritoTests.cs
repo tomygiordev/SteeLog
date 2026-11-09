@@ -123,16 +123,61 @@ namespace SteeLog.Tests
         }
 
         [Fact]
-        public void RecorteNuevoConStockCeroNoSePuedeConsumirPeroSiIngresarEnUnaEntrada()
+        public void RecorteNuevoSeAceptaEnConsumoSinTopeYElExistenteSigueValidado()
         {
             Sta(() => {
                 var c = Preparar(new ServiciosVistaDePrueba(), "Envio a Obra", "Envio a Obra", "Compra");
                 using (c.Vista)
                 {
+                    // Un recorte nuevo nace con lo que se carga: no hay tope.
                     var nuevo = new Recorte { id = 0, id_material = 1, ancho = 2, altura = 3, medida = 0, cantidad = 0 };
-                    Assert.NotNull(ValidarRecorte(c, nuevo, 19));
+                    Assert.Null(ValidarRecorte(c, nuevo, 19));
                     c.Tipo.SelectedIndex = 1; // Compra: entra stock
                     Assert.Null(ValidarRecorte(c, nuevo, 19));
+                    c.Tipo.SelectedIndex = 0;
+                    // Uno que ya existe (mismas medidas) se valida contra su stock real.
+                    Assert.NotNull(ValidarRecorte(c, new Recorte { id = 9, id_material = 1, ancho = 2, altura = 3, cantidad = 5 }, 19));
+                }
+            });
+        }
+
+        [Fact]
+        public void RecorteNuevoEnElCarritoDeUnConsumoNoExcedeStockNiBloqueaElGuardado()
+        {
+            Sta(() => {
+                var c = Preparar(new ServiciosVistaDePrueba(), "Envio a Obra", "Envio a Obra", "Compra");
+                using (c.Vista)
+                {
+                    CargarStock(c, 5);
+                    c.Carrito.Add(new MovimientoMaterial { id_material = 1, NombreMaterial = "Perfil (R: 2x3)", EsRecorte = true, IdRecorte = null, AnchoRecorte = 2, AlturaRecorte = 3, MedidaRecorte = 0, cantidad = 19 });
+                    c.Carrito.Add(new MovimientoMaterial { id_material = 1, NombreMaterial = "Perfil (R: 2x3)", EsRecorte = true, IdRecorte = 0, AnchoRecorte = 2, AlturaRecorte = 3, MedidaRecorte = 0, cantidad = 4 });
+                    c.Guardar();
+                    Assert.Empty(c.Avisos);
+                    Assert.Equal(1, c.Confirmaciones);
+                }
+            });
+        }
+
+        [Fact]
+        public void AgregarRecorteNuevoAlCarritoEnConsumoNoTienePorQueTopearseNiRechazarse()
+        {
+            Sta(() => {
+                var c = Preparar(new ServiciosVistaDePrueba(), "Envio a Obra", "Envio a Obra", "Compra");
+                using (c.Vista)
+                {
+                    CargarStock(c, 5);
+                    var avisosTope = new List<string>();
+                    Fijar(c.Vista, "AvisarStockMaximo", new Action<string>(m => avisosTope.Add(m)));
+                    Fijar(c.Vista, "_materialSeleccionado", Campo<List<Material>>(c.Vista, "materialesFull").First());
+                    Fijar(c.Vista, "_anchoRecorteSeleccionado", 2m); Fijar(c.Vista, "_alturaRecorteSeleccionado", 3m);
+                    Campo<Control>(c.Vista, "cantMatMov").Text = "19";
+                    c.Vista.GetType().GetMethod("btnAgregarMaterial_Click", Flags).Invoke(c.Vista, new object[] { c.Vista, EventArgs.Empty });
+                    var item = c.Carrito.Single();
+                    Assert.True(item.EsRecorte);
+                    Assert.Equal(19, item.cantidad);
+                    Assert.Empty(avisosTope);
+                    Assert.Equal(7m, (decimal)c.Vista.GetType().GetMethod("LimitarCantidadAStock", Flags).Invoke(c.Vista, new object[] { 7m }));
+                    Assert.Empty(avisosTope);
                 }
             });
         }
@@ -216,6 +261,26 @@ namespace SteeLog.Tests
                     Assert.Null(modal.RecorteSeleccionado);
                     Assert.Equal(0, consultado.id);
                     Assert.Equal(0m, consultado.cantidad);
+                }
+            });
+        }
+
+        [Fact]
+        public void ModalCrearYUsarConMedidasDeUnRecorteExistenteLoValidaComoExistente()
+        {
+            Sta(() => {
+                Recorte consultado = null;
+                using (var modal = CrearModal((r, cant) => { consultado = r; return null; }))
+                {
+                    var t = typeof(ModalRecortes);
+                    CargarGrilla(modal, new Recorte { id = 9, id_material = 1, ancho = 2, altura = 3, medida = 0, cantidad = 5 });
+                    ((Control)t.GetField("txtAnchoBuscado", Flags).GetValue(modal)).Text = "2";
+                    ((Control)t.GetField("txtAlturaBuscada", Flags).GetValue(modal)).Text = "3";
+                    ((Control)t.GetField("txtCantidad", Flags).GetValue(modal)).Text = "4";
+                    t.GetMethod("btnCrearNuevo_Click", Flags).Invoke(modal, new object[] { modal, EventArgs.Empty });
+                    Assert.Equal(9, consultado.id);
+                    Assert.Equal(5m, consultado.cantidad);
+                    Assert.Equal(9, modal.RecorteSeleccionado.id);
                 }
             });
         }
