@@ -215,6 +215,61 @@ namespace SteeLog.Tests
                 }
             });
         }
+        private sealed class EjecutorLecturaControlada : IUseCaseExecutor
+        {
+            public readonly Queue<TaskCompletionSource<OrdenLectura>> Lecturas = new Queue<TaskCompletionSource<OrdenLectura>>();
+            public static OrdenLectura Orden() => new OrdenLectura { Id = 7, Numero = "OC-7", Estado = EstadosOrden.Pendiente, Fecha = DateTime.Today, Proveedor = "P", Destino = "D" };
+            public TaskCompletionSource<OrdenLectura> Encolar() { var t = new TaskCompletionSource<OrdenLectura>(); Lecturas.Enqueue(t); return t; }
+            public Task<TResult> ExecuteAsync<TUseCase, TResult>(Func<TUseCase, Task<TResult>> operation) where TUseCase : class
+            {
+                if (typeof(TResult) == typeof(OrdenLectura)) return (Task<TResult>)(object)Lecturas.Dequeue().Task;
+                throw new ResultadoEscrituraInciertoException(new Exception("respuesta perdida"));
+            }
+        }
+        private static Task Iniciar(object vista, string metodo, params object[] args) => (Task)vista.GetType().GetMethod(metodo, Flags).Invoke(vista, args);
+        [Fact]
+        public void AltaIncierta_CargaIniciadaAntesDeLaMarcaNoLiberaYLaPosteriorSi()
+        {
+            EnSta(() => {
+                var ejecutor = new EjecutorLecturaControlada();
+                using (var alta = new Vista_OrdenesAlta()) {
+                    Asignar(alta, "AdvertirResultadoIncierto", new Action<string>(m => { }));
+                    Asignar(alta, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
+                    alta.SetEditMode(7); Asignar(alta, "_presenter", new OrdenesPresenter(ejecutor, alta)); Asignar(alta, "_catalogosListos", true);
+                    var guardar = Campo<Control>(alta, "btnGuardar");
+                    var anterior = ejecutor.Encolar(); var tareaAnterior = Iniciar(alta, "CargarOrden", 7);
+                    alta.MarcarResultadoIncierto();
+                    anterior.SetResult(EjecutorLecturaControlada.Orden()); tareaAnterior.GetAwaiter().GetResult();
+                    Assert.True(Campo<bool>(alta, "_resultadoIncierto")); Assert.False(guardar.Enabled);
+                    var posterior = ejecutor.Encolar(); var tareaPosterior = Iniciar(alta, "CargarOrden", 7);
+                    posterior.SetResult(EjecutorLecturaControlada.Orden()); tareaPosterior.GetAwaiter().GetResult();
+                    Assert.False(Campo<bool>(alta, "_resultadoIncierto")); Assert.True(guardar.Enabled);
+                }
+            });
+        }
+        [Fact]
+        public void RevisionIncierta_CargaIniciadaAntesDeLaMarcaNoLiberaYLaPosteriorSi()
+        {
+            EnSta(() => {
+                SteeLog.Servicios.SessionManager.SetSession("admin@tesis.local");
+                try {
+                var ejecutor = new EjecutorLecturaControlada();
+                using (var revision = new Vista_OrdenesRevision()) {
+                    Asignar(revision, "AdvertirResultadoIncierto", new Action<string>(m => { }));
+                    Asignar(revision, "CrearLector", new Func<IOrdenesVista, OrdenesPresenter>(v => new OrdenesPresenter(ejecutor, v)));
+                    revision.SetOrder(7); Asignar(revision, "_presenter", new OrdenesPresenter(ejecutor, revision));
+                    var confirmar = Campo<Control>(revision, "btnConfirmar");
+                    var anterior = ejecutor.Encolar(); var tareaAnterior = Iniciar(revision, "CargarOrden");
+                    revision.MarcarResultadoIncierto();
+                    anterior.SetResult(EjecutorLecturaControlada.Orden()); tareaAnterior.GetAwaiter().GetResult();
+                    Assert.True(Campo<bool>(revision, "_resultadoIncierto")); Assert.False(confirmar.Enabled);
+                    var posterior = ejecutor.Encolar(); var tareaPosterior = Iniciar(revision, "CargarOrden");
+                    posterior.SetResult(EjecutorLecturaControlada.Orden()); tareaPosterior.GetAwaiter().GetResult();
+                    Assert.False(Campo<bool>(revision, "_resultadoIncierto")); Assert.True(confirmar.Enabled);
+                }
+                } finally { SteeLog.Servicios.SessionManager.Clear(); }
+            });
+        }
         [Fact]
         public void ListadoIncierto_BloqueaEliminarHastaRecargaExitosa()
         {

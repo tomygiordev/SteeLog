@@ -660,11 +660,11 @@ namespace SteeLog.Vistas.Movimientos
                 string tipo = e.Value.ToString().ToUpper();
                 if (tipo.Contains("ENTRADA") || tipo.Contains("INGRESO") || tipo.Contains("COMPRA") || tipo.Contains("AJUSTE POSITIVO") || tipo.Contains("APORTE"))
                 {
-                    e.CellStyle.ForeColor = Color.FromArgb(100, 200, 100);
+                    e.CellStyle.ForeColor = Color.FromArgb(100, 200, 100); e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
                 }
                 else if (tipo.Contains("SALIDA") || tipo.Contains("EGRESO") || tipo.Contains("ENVIO") || tipo.Contains("ENVÍO") || tipo.Contains("AJUSTE NEGATIVO") || tipo.Contains("RECORTE"))
                 {
-                    e.CellStyle.ForeColor = Color.FromArgb(200, 100, 100);
+                    e.CellStyle.ForeColor = Color.FromArgb(200, 100, 100); e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
                 }
             }
 

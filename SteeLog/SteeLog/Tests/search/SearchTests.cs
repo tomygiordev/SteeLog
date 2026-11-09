@@ -37,7 +37,7 @@ class SearchTests {
    if(after<=before || results.Controls.Count!=0 || (bool)typeof(Control).GetMethod("GetState",B).Invoke(results,new object[]{2})) throw new Exception("Stale result displayed");
    Console.WriteLine("OK clear invalidates held continuation");
    foreach(string mode in new[]{"short","escape"}) {
-    input.Text="perfil";type.GetMethod("EjecutarBusqueda",B).Invoke(search,new object[]{"perfil"});
+    Set(search,"_cacheTimestampUtc",DateTime.UtcNow);input.Text="perfil";type.GetMethod("EjecutarBusqueda",B).Invoke(search,new object[]{"perfil"}); // El caché vence a los 10 s: renovarlo evita depender del reloj bajo carga.
     if(!ctx.Queue.TryTake(out continuation,10000))throw new Exception("No continuation for "+mode);
     if(mode=="short") input.Text="p";
     else type.GetMethod("TxtBusqueda_KeyDown",B).Invoke(search,new object[]{input,new KeyEventArgs(Keys.Escape)});
@@ -45,7 +45,7 @@ class SearchTests {
     if(results.Controls.Count!=0 || (bool)typeof(Control).GetMethod("GetState",B).Invoke(results,new object[]{2})) throw new Exception("Stale result: "+mode);
     Console.WriteLine("OK "+mode+" invalidates held continuation");
    }
-   input.Text="perfil";type.GetMethod("EjecutarBusqueda",B).Invoke(search,new object[]{"perfil"});
+   Set(search,"_cacheTimestampUtc",DateTime.UtcNow);input.Text="perfil";type.GetMethod("EjecutarBusqueda",B).Invoke(search,new object[]{"perfil"}); // El caché vence a los 10 s: renovarlo evita depender del reloj bajo carga.
    if(!ctx.Queue.TryTake(out continuation,10000))throw new Exception("No continuation before dispose");
    ((IDisposable)search).Dispose();continuation();Console.WriteLine("OK dispose invalidates held continuation");
    fixture=snap; ((IList)Get(snap,"Materiales")).Clear();

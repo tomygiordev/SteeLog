@@ -65,20 +65,41 @@ namespace SteeLog
 
             var screen = ObtenerAreaTrabajoVentanaApp();
             
-            if (_isCenter)
+            int offsetY = _isCenter ? 0 : _activeToastCount * (_toastHeight + 10);
+            var destino = CalcularPosicionFinal(screen, new Size(_toastWidth, _toastHeight), offsetY, _isCenter);
+            _targetY = destino.Y;
+            _startY = _targetY + 40; // arranca 40px debajo del destino (desliza hacia arriba)
+            this.Location = new Point(destino.X, _startY);
+        }
+
+        /// <summary>
+        /// Posición final del toast dentro del área de trabajo (coordenadas de pantalla, válidas en cualquier
+        /// monitor). Centrado: centra en el área; si no, esquina inferior derecha menos el offset de apilado.
+        /// El resultado se acota para no salir del área. Pura, sin UI.
+        /// </summary>
+        internal static Point CalcularPosicionFinal(Rectangle area, Size toast, int offsetApilado, bool centrado)
+        {
+            int x, y;
+            if (centrado)
             {
-                _targetY = (screen.Height / 2) - (_toastHeight / 2);
-                _startY = _targetY + 40;
-                this.Location = new Point((screen.Width / 2) - (_toastWidth / 2), _startY);
+                x = area.Left + (area.Width - toast.Width) / 2;
+                y = area.Top + (area.Height - toast.Height) / 2;
             }
             else
             {
-                // Position: bottom-right of the screen where the app window is
-                int offsetY = _activeToastCount * (_toastHeight + 10);
-                _targetY = screen.Bottom - _toastHeight - MARGIN_BOTTOM - offsetY;
-                _startY = _targetY + 40; // start 40px below target (slide up)
-                this.Location = new Point(screen.Right - _toastWidth - MARGIN_RIGHT, _startY);
+                x = area.Right - toast.Width - MARGIN_RIGHT;
+                y = area.Bottom - toast.Height - MARGIN_BOTTOM - Math.Max(0, offsetApilado);
             }
+            // Máximo primero y mínimo después: si el toast no cabe, prevalece Left/Top.
+            x = Math.Max(area.Left, Math.Min(x, area.Right - toast.Width));
+            y = Math.Max(area.Top, Math.Min(y, area.Bottom - toast.Height));
+            return new Point(x, y);
+        }
+
+        /// <summary>Un form sirve para ubicar la pantalla si es de nivel superior, visible, no toast y no dispuesto.</summary>
+        internal static bool EsVentanaValidaParaArea(Form f)
+        {
+            return f != null && !(f is ToastNotification) && !f.IsDisposed && f.TopLevel && f.Visible;
         }
 
         /// <summary>
@@ -93,7 +114,7 @@ namespace SteeLog
                 ventana = null;
                 foreach (Form f in Application.OpenForms)
                 {
-                    if (f is ToastNotification || f.IsDisposed || !f.Visible) continue;
+                    if (!EsVentanaValidaParaArea(f)) continue;
                     ventana = f;
                     break;
                 }

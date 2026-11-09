@@ -97,12 +97,15 @@ SELECT setval('public.materiales_id_seq', COALESCE((SELECT MAX(id) FROM public.m
 INSERT INTO movimientos(id_movimiento,fecha,nroremito,id_origen,tipo_origen,id_destino,tipo_destino,id_tipomovimiento,observaciones)
 VALUES(1,'2026-10-01','DEMO-INICIAL',3,'UBICACION',2,'UBICACION',1,'Datos ficticios: apertura del inventario demo');
 INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual,precio_unitario,impacto_stock_real)
-SELECT 1,id,stockactual,stockactual,preciounitario,stockactual FROM materiales;
+SELECT 1,id,stockactual,stockactual,0,stockactual FROM materiales;
+-- Convención de la app: precio_unitario de línea solo para compra eventual; el total de cabecera se calcula con el precio de catálogo.
+UPDATE movimientos SET precio_total=(SELECT COALESCE(SUM(stockactual*preciounitario),0) FROM materiales) WHERE id_movimiento=1;
 INSERT INTO movimientos(id_movimiento,fecha,nroremito,id_origen,tipo_origen,id_destino,tipo_destino,id_tipomovimiento,id_obra,costoflete)
 VALUES(2,'2026-10-02','DEMO-ENVIO-001',2,'UBICACION',1,'OBRA',4,1,1500);
 UPDATE materiales SET stockactual=stockactual-10 WHERE id=1;
 INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual,precio_unitario,impacto_stock_real)
-VALUES(2,1,10,140,3500,-10);
+VALUES(2,1,10,140,0,-10);
+UPDATE movimientos SET precio_total=10*(SELECT preciounitario FROM materiales WHERE id=1) WHERE id_movimiento=2;
 INSERT INTO fletes(id_flete,nombre,activo) VALUES(1,'Transporte Demo',true);
 INSERT INTO herramientas(id_herramienta,nombre,estado,id_obra,observaciones)
 VALUES(1,'Taladro Demo','Óptima',1,'Herramienta ficticia de exposición');

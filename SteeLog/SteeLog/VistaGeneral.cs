@@ -181,9 +181,20 @@ namespace SteeLog
             }
         }
         
+        // Botones de la barra de ventana: sin foco ni tabulacion para que un Enter dirigido
+        // al contenido nunca los active (PerformClick via boton por defecto) y minimice la ventana.
+        private sealed class BotonBarraVentana : Guna.UI2.WinForms.Guna2Button
+        {
+            public BotonBarraVentana()
+            {
+                SetStyle(ControlStyles.Selectable, false);
+                TabStop = false;
+            }
+        }
+
         private Guna.UI2.WinForms.Guna2Button CrearBoton(string tooltip, Image icon, EventHandler onClick)
         {
-            var btn = new Guna.UI2.WinForms.Guna2Button();
+            var btn = new BotonBarraVentana();
 
             btn.Dock = DockStyle.Right;
             btn.Width = 40;

@@ -35,7 +35,8 @@ namespace SteeLog.Vistas.Movimientos
         {
             try
             {
-                if (!catalogosListos || !modeloListo || ocupada || envioPendiente) return;
+                // Con resultado incierto (de esta vista o pendiente en el proceso) no se autoguarda hasta resolver.
+                if (!catalogosListos || !modeloListo || ocupada || envioPendiente || resultadoIncierto || _hayInciertoSinResolver) return;
                 // Si no hay nada cargado, no guardar un borrador vacío
                 if (cmbMovimientos.SelectedIndex < 0 && materialesLista.Count == 0) return;
 
@@ -75,7 +76,7 @@ namespace SteeLog.Vistas.Movimientos
         private void IntentarRecuperarBorrador()
         {
             var draft = MovimientoDraftService.Leer();
-            if (draft == null || (draft.Materiales.Count == 0 && draft.IdTipoMovimiento == 0)) return;
+            if (draft == null || (draft.Materiales.Count == 0 && draft.IdTipoMovimiento == 0)) { _hayInciertoSinResolver = false; return; }
 
             string hace = "";
             var edad = DateTime.Now - draft.FechaGuardado;
@@ -98,6 +99,7 @@ namespace SteeLog.Vistas.Movimientos
             if (resultado != DialogResult.Yes)
             {
                 MovimientoDraftService.Eliminar();
+                _hayInciertoSinResolver = false;
                 return;
             }
 
@@ -185,6 +187,12 @@ namespace SteeLog.Vistas.Movimientos
                 }
 
                 ToastNotification.ShowSuccess("Borrador recuperado correctamente.");
+                // Si quedó un guardado incierto sin resolver, el borrador no se puede reenviar sin la misma confirmación.
+                if (_hayInciertoSinResolver && !resultadoIncierto)
+                {
+                    resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos; remitoIncierto = _remitoInciertoSinResolver; SetOcupada(ocupada);
+                    BeginInvoke(new Action(() => { if (resultadoIncierto) ResolverResultadoIncierto(remitoIncierto, true); }));
+                }
             }
             catch
             {

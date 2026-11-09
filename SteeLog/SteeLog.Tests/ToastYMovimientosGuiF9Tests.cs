@@ -41,6 +41,72 @@ namespace SteeLog.Tests
             Assert.Equal(primaria, elegir(new Rectangle(9000, 9000, 10, 10)));     // fuera de todo: principal
         }
 
+        private static Point Pos(Rectangle area, Size t, int off, bool centrado) => (Point)typeof(ToastNotification).GetMethod("CalcularPosicionFinal", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, new object[] { area, t, off, centrado });
+        private static void AssertDentro(Rectangle area, Point p, Size t) => Assert.True(area.Contains(new Rectangle(p, t)), $"{p} {t} fuera de {area}");
+
+        [Fact]
+        public void ToastCentradoEnAreaConXNegativaQuedaDentroYCentrado()
+        {
+            var area = new Rectangle(-1600, 0, 1600, 860); var t = new Size(500, 180);
+            var p = Pos(area, t, 0, true);
+            AssertDentro(area, p, t);
+            Assert.Equal(-1600 + (1600 - 500) / 2, p.X);
+            Assert.Equal((860 - 180) / 2, p.Y);
+        }
+
+        [Fact]
+        public void ToastBottomRightEnAreaConXNegativaQuedaDentro()
+        {
+            var area = new Rectangle(-1600, 0, 1600, 860); var t = new Size(380, 60);
+            var p = Pos(area, t, 0, false);
+            AssertDentro(area, p, t);
+            Assert.Equal(0 - 380 - 30, p.X);
+            Assert.Equal(860 - 60 - 30, p.Y);
+        }
+
+        [Fact]
+        public void ToastCentradoEnMonitorSecundarioADerechaQuedaCentradoAhi()
+        {
+            var area = new Rectangle(1920, 0, 1280, 984); var t = new Size(500, 180);
+            var p = Pos(area, t, 0, true);
+            AssertDentro(area, p, t);
+            Assert.Equal(1920 + (1280 - 500) / 2, p.X);
+            Assert.Equal((984 - 180) / 2, p.Y);
+        }
+
+        [Fact]
+        public void ApiladoEnormeQuedaAcotadoDentroDelArea()
+        {
+            foreach (var area in new[] { new Rectangle(-1600, 0, 1600, 860), new Rectangle(1920, 0, 1280, 984) })
+            {
+                var t = new Size(380, 60);
+                var p = Pos(area, t, 100000, false);
+                AssertDentro(area, p, t);
+                Assert.Equal(area.Top, p.Y);
+            }
+        }
+
+        [Fact]
+        public void SeleccionDeVentanaIgnoraFormsHijosEmbebidosYNoVisibles()
+        {
+            Sta(() =>
+            {
+                using (var hijo = new Form { TopLevel = false, Visible = true })
+                using (var noMostrado = new Form())
+                using (var toast = new ToastNotification("x", ToastType.Info))
+                {
+                    var m = typeof(ToastNotification).GetMethod("EsVentanaValidaParaArea", BindingFlags.Static | BindingFlags.NonPublic);
+                    Func<Form, bool> valido = f => (bool)m.Invoke(null, new object[] { f });
+                    Assert.False(valido(hijo));       // TopLevel=false
+                    Assert.False(valido(noMostrado)); // TopLevel pero no visible
+                    Assert.False(valido(toast));
+                    Assert.False(valido(null));
+                    var desechado = new Form(); desechado.Dispose();
+                    Assert.False(valido(desechado));
+                }
+            });
+        }
+
         [Fact]
         public void PanelDeResultadosQuedaOcultoTrasAgregarLineaYUnaLetraSigueAvisandoElMinimo()
         {

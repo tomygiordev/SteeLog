@@ -64,7 +64,7 @@ namespace SteeLog.Infrastructure.Pdf
                 for (int i = 0; i < 3; i++)
                 {
                     if (i > 0) doc.NewPage();
-                    AgregarEncabezado(doc, remito, marca);
+                    AgregarEncabezado(doc, remito, marca, RotulosCopia[i]);
                     AgregarBloqueInfo(doc, remito);
                     AgregarTablaMateriales(doc, remito.Lineas, remito.CostoFlete);
                     AgregarSeccionFirma(doc, remito);
@@ -88,7 +88,9 @@ namespace SteeLog.Infrastructure.Pdf
             return new string(valor.Select(c => invalidos.Contains(c) || c == '/' || c == '\\' ? '_' : c).ToArray());
         }
 
-        private void AgregarEncabezado(Document doc, RemitoLectura mov, MarcaPdf marca)
+        private static readonly string[] RotulosCopia = { "ORIGINAL", "DUPLICADO", "TRIPLICADO" };
+
+        private void AgregarEncabezado(Document doc, RemitoLectura mov, MarcaPdf marca, string rotuloCopia)
         {
             PdfPTable headerTable = new PdfPTable(2);
             headerTable.WidthPercentage = 100;
@@ -126,6 +128,8 @@ namespace SteeLog.Infrastructure.Pdf
             // ======= DERECHA: DATOS DE REMITO =======
             // Alineamos al tope quitando el PaddingTop para que coincida con el borde superior del logo
             PdfPCell cellDer = new PdfPCell() { Border = Rectangle.NO_BORDER, VerticalAlignment = Element.ALIGN_TOP, HorizontalAlignment = Element.ALIGN_RIGHT, PaddingTop = 0f };
+
+            cellDer.AddElement(new Paragraph(rotuloCopia, fntEtiqueta) { Alignment = Element.ALIGN_RIGHT, SpacingBefore = 0, SpacingAfter = 2 });
 
             string tituloRemito = "REMITO DE " + mov.TipoMovimiento.ToUpper();
             // Le saco el SpacingBefore extra que podría empujarlo

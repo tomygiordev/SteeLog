@@ -63,13 +63,57 @@ namespace SteeLog.Vistas.Movimientos
         private MovimientosPresenter presenter;
         private MovimientosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearMovimientosPresenter(this));
         public void SetOcupada(bool valor) { ocupada = valor; if (!IsDisposed && guna2Button2 != null) guna2Button2.Enabled = !valor && modeloListo && catalogosListos && !resultadoIncierto; }
+        // Remito del intento incierto: se conserva para el texto de confirmación. El estado estático sobrevive
+        // al cierre y reapertura de la vista dentro del mismo proceso (no entre reinicios de la aplicación).
+        private string remitoIncierto = "";
+        private bool preguntandoIncierto;
+        private static bool _hayInciertoSinResolver;
+        private static string _remitoInciertoSinResolver = "";
+        internal static void ReiniciarEstadoIncierto() { _hayInciertoSinResolver = false; _remitoInciertoSinResolver = ""; }
+        // Inyectable en tests. Por defecto: MessageBox Sí/No con la vista como owner.
+        internal Func<string, bool> ConfirmarReenvioIncierto;
+        private bool PreguntarReenvioIncierto(string remito)
+        {
+            if (ConfirmarReenvioIncierto != null) return ConfirmarReenvioIncierto(remito);
+            return MessageBox.Show(this,
+                "El movimiento anterior (remito " + remito + ") pudo haberse guardado.\n\n" +
+                "¿Verificó en Historial que NO está registrado?\n\n" +
+                "Sí: habilitar el reenvío.\nNo: descartar el carrito.",
+                "Resultado incierto", MessageBoxButtons.YesNo, MessageBoxIcon.Warning, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        }
         public void MarcarResultadoIncierto()
         {
-            // El movimiento pudo haberse persistido: se bloquean los reenvíos hasta recargar (F5) con éxito.
-            // Carrito y borrador se conservan para que el usuario pueda verificar el historial.
+            // El movimiento pudo haberse persistido: se bloquean los reenvíos hasta recargar (F5) con éxito
+            // y confirmar explícitamente. Carrito y borrador se conservan para poder verificar el historial.
+            remitoIncierto = nroRemitoTxt?.Text?.Trim() ?? "";
+            _hayInciertoSinResolver = true; _remitoInciertoSinResolver = remitoIncierto;
             resultadoIncierto = true; versionCatalogosAlMarcarIncierto = versionCatalogos; SetOcupada(ocupada);
             if (!IsDisposed && !cierre.IsCancellationRequested)
                 AdvertirResultadoIncierto("Resultado incierto: el movimiento pudo haberse guardado. Verifique el historial antes de reintentar. Pulse F5 para recargar.");
+        }
+        // Devuelve true si la vista sigue viva tras la pregunta.
+        private bool ResolverResultadoIncierto(string remito, bool desdeBorrador)
+        {
+            if (preguntandoIncierto) return false;
+            preguntandoIncierto = true;
+            try
+            {
+                bool habilitar = PreguntarReenvioIncierto(remito);
+                if (IsDisposed || cierre.IsCancellationRequested) return false;
+                resultadoIncierto = false; _hayInciertoSinResolver = false; _remitoInciertoSinResolver = "";
+                if (!habilitar)
+                {
+                    string version = null;
+                    try { version = VersionBorrador(); } catch { }
+                    try { EliminarBorradorConfirmado(version); }
+                    catch (Exception ex) { System.Diagnostics.Debug.WriteLine("No se pudo retirar el borrador descartado: " + ex.Message); }
+                    LimpiarFormulario();
+                    AdvertirGuardado("Se descartó el carrito del movimiento con resultado incierto.");
+                }
+                else SetOcupada(ocupada);
+                return true;
+            }
+            finally { preguntandoIncierto = false; }
         }
         private bool BloquearPorResultadoIncierto()
         {
@@ -240,7 +284,8 @@ namespace SteeLog.Vistas.Movimientos
             await CargarCatalogosAsync();
             if (IsDisposed || cierre.IsCancellationRequested || !catalogosListos) return;
             // Solo una recarga completada con éxito y posterior a la marca levanta el bloqueo.
-            if (resultadoIncierto && versionCatalogos > versionCatalogosAlMarcarIncierto) { resultadoIncierto = false; SetOcupada(ocupada); }
+            // Una recarga de catálogos no prueba que el movimiento se haya persistido: se exige confirmación del usuario.
+            if (resultadoIncierto && versionCatalogos > versionCatalogosAlMarcarIncierto) { ResolverResultadoIncierto(remitoIncierto, false); if (IsDisposed || cierre.IsCancellationRequested) return; }
             if (_idMovimientoAEditar > 0 && !modeloListo) CargarMovimientoParaEdicion();
             NotificarGuardado("Datos actualizados (F5)");
         }
@@ -1088,6 +1133,7 @@ namespace SteeLog.Vistas.Movimientos
         // Aviso de stock máximo: inyectable en tests; no se repite para el mismo tope hasta que la cantidad vuelva a ser válida.
         private Action<string> AvisarStockMaximo = mensaje => ToastNotification.ShowWarning(mensaje);
         private decimal? _ultimoAvisoStockMax;
+        private string _claveAvisoStock;
 
         /// <summary>
         /// Aplica el tope de stock disponible (solo movimientos que consumen stock) y avisa una vez por tope.
@@ -1102,6 +1148,9 @@ namespace SteeLog.Vistas.Movimientos
                 : StockDisponibleMaterial(_materialSeleccionado.id);
 
             string tipoDestino = (cmbDestino.SelectedItem as ItemCombo)?.Tipo;
+            // Cambiar de material/recorte o de tipo de movimiento reinicia el aviso para que el siguiente exceso vuelva a avisar.
+            string claveAviso = _materialSeleccionado.id + "|" + (_recorteSeleccionado?.id ?? 0) + "|" + cmbMovimientos.Text;
+            if (claveAviso != _claveAvisoStock) { _claveAvisoStock = claveAviso; _ultimoAvisoStockMax = null; }
             bool consumeStock = ClasificadorMovimiento.Clasificar(cmbMovimientos.Text, tipoDestino) == ImpactoStock.Salida;
 
             if (consumeStock && valor > stockMax)

@@ -129,23 +129,136 @@ namespace SteeLog.Tests
                         var borradores=new List<object>();
                         Fijar(vista,"GuardarBorradorActual",new Action<MovimientoDraft>(d => borradores.Add(d)));
                         vista.GetType().GetMethod("GuardarBorrador",Flags).Invoke(vista,null);
-                        Assert.Single(borradores);
+                        Assert.Empty(borradores); // con resultado incierto no se autoguarda hasta resolver
                         // Una recarga fallida no libera.
                         executor.FallaCatalogos=true;
                         vista.GetType().GetMethod("RefrescarDatos",Flags).Invoke(vista,null);
                         Esperar(() => errores.Count>0); Assert.Single(errores);
                         Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.False(boton.Enabled);
-                        // Una recarga exitosa explícita sí.
+                        // Una recarga exitosa explícita pregunta y, con Sí, libera conservando el carrito.
+                        var preguntas=new List<string>();
+                        Fijar(vista,"ConfirmarReenvioIncierto",new Func<string,bool>(r => { preguntas.Add(r); return true; }));
                         executor.FallaCatalogos=false;
                         vista.GetType().GetMethod("RefrescarDatos",Flags).Invoke(vista,null);
                         Esperar(() => notificaciones.Count>0); Assert.Single(notificaciones);
                         Assert.False(Campo<bool>(vista,"resultadoIncierto")); Assert.True(boton.Enabled);
-                        Assert.Single(carrito); Assert.Single(avisos);
+                        Assert.Single(carrito); Assert.Single(avisos); Assert.Equal(new[]{"123"},preguntas);
                     }
                 }
                 catch(Exception e) { error=e; }
+                finally { ReiniciarIncierto(); }
             });
             hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(20))); Assert.Null(error);
+        }
+        private static void Sta(Action accion)
+        {
+            Exception error=null;
+            var hilo=new Thread(() => { try { accion(); } catch(Exception e) { error=e; } finally { ReiniciarIncierto(); } });
+            hilo.SetApartmentState(ApartmentState.STA); hilo.Start(); Assert.True(hilo.Join(TimeSpan.FromSeconds(20))); Assert.Null(error);
+        }
+        private static void ReiniciarIncierto() => typeof(Vista_Movimientos).GetMethod("ReiniciarEstadoIncierto",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,null);
+        private static void Invocar(object vista,string metodo,params object[] args) => vista.GetType().GetMethod(metodo,Flags).Invoke(vista,args);
+        private static List<MovimientoMaterial> PrepararIncierto(Vista_Movimientos vista,IUseCaseExecutor executor)
+        {
+            var handle=vista.Handle;
+            Fijar(vista,"presenter",new MovimientosPresenter(executor,vista));
+            Fijar(vista,"catalogosListos",true); Fijar(vista,"modeloListo",true);
+            Fijar(vista,"VersionBorrador",new Func<string>(() => null));
+            Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(_ => {}));
+            Fijar(vista,"AdvertirResultadoIncierto",new Action<string>(m => {}));
+            Fijar(vista,"AdvertirGuardado",new Action<string>(m => {}));
+            Fijar(vista,"NotificarGuardado",new Action<string>(m => {}));
+            Fijar(vista,"AdvertirErrorCarga",new Action<string>(m => {}));
+            Campo<Control>(vista,"nroRemitoTxt").Text="123";
+            var carrito=Campo<List<MovimientoMaterial>>(vista,"materialesLista");
+            carrito.Add(new MovimientoMaterial { id_material=1,NombreMaterial="Material",cantidad=1 });
+            ReiniciarIncierto();
+            vista.MarcarResultadoIncierto();
+            return carrito;
+        }
+        [Fact]
+        public void RecargaExitosaConNoLiberaYDescartaCarritoYBorrador()
+        {
+            Sta(() => {
+                using(var vista=new Vista_Movimientos())
+                {
+                    var carrito=PrepararIncierto(vista,new EjecutorIncierto());
+                    var preguntas=new List<string>(); var avisos=new List<string>(); var borradores=new List<string>();
+                    Fijar(vista,"ConfirmarReenvioIncierto",new Func<string,bool>(r => { preguntas.Add(r); return false; }));
+                    Fijar(vista,"AdvertirGuardado",new Action<string>(m => avisos.Add(m)));
+                    Fijar(vista,"EliminarBorradorConfirmado",new Action<string>(v => borradores.Add(v)));
+                    Invocar(vista,"RefrescarDatos");
+                    Esperar(() => avisos.Count>0);
+                    Assert.Equal(new[]{"123"},preguntas);
+                    Assert.False(Campo<bool>(vista,"resultadoIncierto"));
+                    Assert.Empty(carrito); Assert.Equal("",Campo<Control>(vista,"nroRemitoTxt").Text);
+                    Assert.Single(borradores); Assert.Single(avisos);
+                }
+            });
+        }
+        [Fact]
+        public void RecargaFallidaNoPreguntaYMantieneBloqueo()
+        {
+            Sta(() => {
+                using(var vista=new Vista_Movimientos())
+                {
+                    var executor=new EjecutorIncierto { FallaCatalogos=true };
+                    var carrito=PrepararIncierto(vista,executor);
+                    int preguntas=0; var errores=new List<string>();
+                    Fijar(vista,"ConfirmarReenvioIncierto",new Func<string,bool>(r => { preguntas++; return true; }));
+                    Fijar(vista,"AdvertirErrorCarga",new Action<string>(m => errores.Add(m)));
+                    Invocar(vista,"RefrescarDatos");
+                    Esperar(() => errores.Count>0);
+                    Assert.Single(errores); Assert.Equal(0,preguntas);
+                    Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.Single(carrito);
+                }
+            });
+        }
+        [Fact]
+        public void RecargaIniciadaAntesDeLaMarcaNoPregunta()
+        {
+            Sta(() => {
+                using(var vista=new Vista_Movimientos())
+                {
+                    var executor=new EjecutorRefresco();
+                    var carrito=PrepararIncierto(vista,new EjecutorIncierto());
+                    Fijar(vista,"presenter",new MovimientosPresenter(executor,vista));
+                    Fijar(vista,"resultadoIncierto",false);
+                    int preguntas=0; var notificaciones=new List<string>();
+                    Fijar(vista,"ConfirmarReenvioIncierto",new Func<string,bool>(r => { preguntas++; return true; }));
+                    Fijar(vista,"NotificarGuardado",new Action<string>(m => notificaciones.Add(m)));
+                    Invocar(vista,"RefrescarDatos"); // recarga en curso
+                    vista.MarcarResultadoIncierto(); // marca posterior al inicio de la recarga
+                    executor.Catalogos.SetResult(new CatalogosMovimiento());
+                    executor.Materiales.SetResult(new List<MaterialInventarioLectura>());
+                    executor.Categorias.SetResult(new List<CategoriaMaterialLectura>());
+                    executor.Recortes.SetResult(new List<RecorteLectura>());
+                    Esperar(() => notificaciones.Count>0);
+                    Assert.Single(notificaciones); Assert.Equal(0,preguntas);
+                    Assert.True(Campo<bool>(vista,"resultadoIncierto")); Assert.Single(carrito);
+                }
+            });
+        }
+        [Fact]
+        public void AvisoDeStockMaximoVuelveAAvisarTrasCambiarDeMaterial()
+        {
+            Sta(() => {
+                using(var vista=new Vista_Movimientos())
+                {
+                    var handle=vista.Handle;
+                    var avisos=new List<string>();
+                    Fijar(vista,"AvisarStockMaximo",new Action<string>(m => avisos.Add(m)));
+                    var tipos=new DataTable(); tipos.Columns.Add("id_tipomovimiento",typeof(int)); tipos.Columns.Add("nombre",typeof(string)); tipos.Rows.Add(4,"Salida");
+                    var tipo=Campo<ComboBox>(vista,"cmbMovimientos"); tipo.DataSource=tipos; tipo.DisplayMember="nombre"; tipo.ValueMember="id_tipomovimiento"; tipo.SelectedIndex=0;
+                    var destino=Campo<ComboBox>(vista,"cmbDestino"); destino.DataSource=null; destino.Items.Add(new Vista_Movimientos.ItemCombo { IdReal=2,Tipo="UBICACION",TextoDisplay="Depósito" }); destino.SelectedIndex=0;
+                    Fijar(vista,"_materialSeleccionado",new Material { id=1,nombre="M",stockActual=5 });
+                    var cant=Campo<Control>(vista,"cantMatMov");
+                    cant.Text="9"; Assert.Single(avisos);
+                    cant.Text="9"; Assert.Single(avisos); // mismo material y tope: sin repetir
+                    Fijar(vista,"_materialSeleccionado",new Material { id=2,nombre="N",stockActual=5 });
+                    cant.Text="8"; Assert.Equal(2,avisos.Count); // otro material con el mismo tope vuelve a avisar
+                }
+            });
         }
         private static T Campo<T>(object target,string nombre) => (T)target.GetType().GetField(nombre,Flags).GetValue(target);
         private static void Fijar(object target,string nombre,object value) => target.GetType().GetField(nombre,Flags).SetValue(target,value);

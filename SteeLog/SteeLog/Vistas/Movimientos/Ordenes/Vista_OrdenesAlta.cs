@@ -24,6 +24,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private readonly EstadoModeloOrden _modelo = new EstadoModeloOrden();
         private bool _catalogosListos;
         private bool _resultadoIncierto;
+        private long _versionCarga;
+        private long _versionIncierto;
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Func<IOrdenesVista, OrdenesPresenter> CrearLector = v => LocalServices.Current.CrearOrdenesPresenter(v);
         private string _destino = "";
@@ -80,7 +82,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             else { txtDestino.Text = _destino; ActualizarDisponibilidad(); }
         }
         private void ActualizarDisponibilidad() { if (!IsDisposed && !Disposing && btnGuardar != null) btnGuardar.Enabled = _catalogosListos && _modelo.Listo && !_resultadoIncierto; }
-        public void MarcarResultadoIncierto() { _resultadoIncierto = true; if (IsDisposed || Disposing) return; ActualizarDisponibilidad(); AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Reabra la orden o pulse Limpiar para cargar una nueva."); }
+        public void MarcarResultadoIncierto() { _resultadoIncierto = true; _versionIncierto = _versionCarga; if (IsDisposed || Disposing) return; ActualizarDisponibilidad(); AdvertirResultadoIncierto("Resultado incierto: verifique el listado de órdenes antes de reintentar. Reabra la orden o pulse Limpiar para cargar una nueva."); }
         public void SetOcupada(bool ocupada) { if (IsDisposed || Disposing) return; if (ocupada) btnGuardar.Enabled = false; else ActualizarDisponibilidad(); }
         public void MostrarError(Exception error) { if (IsDisposed || Disposing) return; ToastNotification.ShowError("No se pudo completar la operación: " + error.Message); }
 
@@ -616,6 +618,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         {
             try
             {
+                var versionInicio = ++_versionCarga;
                 using (var carga = _cargas.Iniciar(this, () => IsDisposed || Disposing)) {
                 var lector = CrearLector(carga);
                 var resultado = await lector.ObtenerAsync(idOrden, carga.Token);
@@ -651,7 +654,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 AplicarModoDetalleEditable(detalleEditable);
                 _modelo.Aplicar(idOrden);
-                _resultadoIncierto = false;
+                // Solo libera si esta lectura empezó después de la marca: una anterior puede traer datos previos al commit.
+                if (versionInicio > _versionIncierto) _resultadoIncierto = false;
                 ActualizarDisponibilidad();
                 }
             }

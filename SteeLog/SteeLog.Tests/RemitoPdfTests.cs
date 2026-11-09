@@ -84,6 +84,31 @@ namespace SteeLog.Tests
             finally { if (File.Exists(archivo)) File.Delete(archivo); }
         }
         [Fact]
+        public void CadaCopiaLlevaSuRotuloYConservaElContenido()
+        {
+            var dto = new RemitoLectura { Fecha = new DateTime(2026, 1, 1), FechaArchivo = new DateTime(2026, 1, 2), NroRemito = "77", TipoMovimiento = "Salida", Origen = "Galpon", Destino = "Obra" };
+            dto.Lineas.Add(new RemitoLinea { Material = "Perfil", Cantidad = 2 });
+            var archivo = Path.Combine(Path.GetTempPath(), Guid.NewGuid() + ".pdf");
+            try
+            {
+                new MovimientoPDF(new Recursos()).Generar(archivo, dto);
+                using (var reader = new PdfReader(archivo))
+                {
+                    Assert.Equal(3, reader.NumberOfPages);
+                    var rotulos = new[] { "ORIGINAL", "DUPLICADO", "TRIPLICADO" };
+                    for (int i = 1; i <= 3; i++)
+                    {
+                        var texto = PdfTextExtractor.GetTextFromPage(reader, i);
+                        Assert.Contains(rotulos[i - 1], texto);
+                        foreach (var otro in rotulos) if (otro != rotulos[i - 1]) Assert.DoesNotContain(otro, texto);
+                        Assert.Contains("00000077", texto);
+                        Assert.Contains("Perfil", texto);
+                    }
+                }
+            }
+            finally { if (File.Exists(archivo)) File.Delete(archivo); }
+        }
+        [Fact]
         public void GeneraMixtoConCantidadesTiposYFlete()
         {
             var dto = new RemitoLectura { Fecha = new DateTime(2026, 1, 1), FechaArchivo = new DateTime(2026, 1, 2), NroRemito = "55", TipoMovimiento = "Salida", Origen = "Galpon", Destino = "Obra", Observaciones = "Control", CostoFlete = 1250.50m, PrecioTotal = 9000m };
