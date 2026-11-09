@@ -41,7 +41,7 @@ namespace SteeLog
                 bool loggedIn = false;
                 if (saved.email != null && saved.password != null)
                 {
-                    var result = SupabaseAuthService.SignInAsync(saved.email, saved.password).GetAwaiter().GetResult();
+                    var result = AutenticacionLocal.SignInAsync(saved.email, saved.password).GetAwaiter().GetResult();
                     if (result.Success) { SessionManager.SetSession(result.Email); loggedIn = true; }
                     else CredentialStore.Clear();
                 }

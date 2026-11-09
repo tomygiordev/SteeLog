@@ -202,8 +202,7 @@
     </Compile>
     <Compile Include="AppVersion.cs" />
     <Compile Include="Servicios\UpdaterService.cs" />
-    <Compile Include="Servicios\SupabaseAuthService.cs" />
-    <Compile Include="Servicios\SupabaseStorageService.cs" />
+    <Compile Include="Servicios\AutenticacionLocal.cs" />
     <Compile Include="Servicios\SessionManager.cs" />
     <Compile Include="Servicios\CredentialStore.cs" />
     <Compile Include="Vistas\Vista_Login.cs">

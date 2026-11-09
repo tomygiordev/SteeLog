@@ -11,7 +11,7 @@ namespace SteeLog.Servicios
         public string ErrorMessage { get; set; }
     }
 
-    public static class SupabaseAuthService
+    public static class AutenticacionLocal
     {
         public static async Task<AuthResult> SignInAsync(string email, string password)
         {

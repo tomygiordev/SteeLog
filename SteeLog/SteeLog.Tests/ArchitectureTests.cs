@@ -195,8 +195,7 @@ public class ArchitectureTests
             Assert.Contains(guarded, t => t.FullName == "SteeLog.Presentation.CanaletasPresenter");
             var offenders = guarded.SelectMany(t => References(t).Select(r => new { owner = Owner(t), dependency = r }))
                 .Where(x => Forbidden(x.dependency)
-                    || x.dependency.FullName == "SteeLog.Servicios.SupabaseStorageService"
-                    || x.dependency.FullName == "SteeLog.Servicios.SupabaseAuthService")
+                    || x.dependency.FullName == "SteeLog.Servicios.AutenticacionLocal")
                 .Select(x => x.owner + " -> " + x.dependency.FullName).Distinct().ToArray();
             Assert.Empty(offenders);
 
@@ -204,8 +203,7 @@ public class ArchitectureTests
                 Owner(t) == "SteeLog.Vistas.Reportes.Vista_InformeObra"
                 || Owner(t) == "SteeLog.Reportes.InformeObraPDF");
             Assert.DoesNotContain(reports.SelectMany(References), t =>
-                t.FullName == "SteeLog.Servicios.SupabaseStorageService"
-                || t.FullName == "SteeLog.Servicios.SupabaseAuthService"
+                t.FullName == "SteeLog.Servicios.AutenticacionLocal"
                 || t.FullName == "SteeLog.Datos.CanaletaPlegadoDatos"
                 || t.FullName == "SteeLog.Datos.CanaletaPlegadoFotoDatos");
         }
@@ -245,7 +243,7 @@ public class ArchitectureTests
     public void Demo_bridges_have_no_http_or_process_launch_dependencies()
     {
         var guarded = new HashSet<string> {
-            "SteeLog.Servicios.SupabaseAuthService", "SteeLog.Servicios.SupabaseStorageService",
+            "SteeLog.Servicios.AutenticacionLocal",
             "SteeLog.Servicios.UpdaterService", "SteeLog.CompositionRoot.LocalServices"
         };
         using (var host = Read(HostPath))

@@ -23,7 +23,7 @@ namespace SteeLog.Vistas
         private Label lblError;
         private Label lblVersion;
 
-        public Vista_Login() : this(SupabaseAuthService.SignInAsync) { }
+        public Vista_Login() : this(AutenticacionLocal.SignInAsync) { }
 
         internal Vista_Login(Func<string, string, Task<AuthResult>> authenticate)
         {

@@ -33,6 +33,7 @@ internal static class LoginSmoke
     }
     [STAThread] static void Main(string[] args)
     {
+        Check(typeof(AutenticacionLocal).GetMethod("SignInAsync", new[] { typeof(string), typeof(string) }).ReturnType == typeof(Task<AuthResult>), "local authentication API");
         string outDir=args[0]; Directory.CreateDirectory(outDir); int calls=0; string sentEmail=null, sentPassword=null;
         var tcs=new TaskCompletionSource<AuthResult>();
         Func<string,string,Task<AuthResult>> auth=(email,password)=> {calls++; sentEmail=email; sentPassword=password; return tcs.Task;};
