@@ -265,20 +265,12 @@ namespace SteeLog.Vistas.Movimientos
             try
             {
                 var validado = new SteeLog.Domain.Inventario.Recorte(0, _idMaterial, ancho, altura, medida, 0m, null);
-                var listaParaBuscar = (_listaOriginal != null && _listaOriginal.Count > 0)
-                    ? _listaOriginal
-                    : (dgvRecortesDisponibles.DataSource as List<Recorte>);
-
-                var existente = listaParaBuscar?.FirstOrDefault(r =>
-                    r.ancho == validado.Ancho &&
-                    r.altura == validado.Altura &&
-                    r.medida == validado.Medida);
-
                 string inputCantCrear = txtCantidad.Text.Replace(',', '.');
                 decimal.TryParse(inputCantCrear, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal cantidadCrear);
                 decimal cantidadElegida = cantidadCrear > 0 ? cantidadCrear : 1m;
 
-                var elegido = existente ?? new Recorte
+                // "Crear y usar" siempre es una pieza nueva (id 0): el motor la suma a la fila de esas medidas, exista o no.
+                var elegido = new Recorte
                 {
                     id = 0,
                     id_material = _idMaterial,

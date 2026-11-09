@@ -74,7 +74,7 @@ namespace SteeLog.Tests
             public Task<IDictionary<int, decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => Task.FromResult<IDictionary<int, decimal>>(new Dictionary<int, decimal>());
             public Task<IDictionary<int, InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => Task.FromResult<IDictionary<int, InsumoBloqueado>>(new Dictionary<int, InsumoBloqueado>());
             public Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken t = default) => throw new NotSupportedException();
-            public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, decimal cantidadInicial, CancellationToken t = default) => throw new NotSupportedException();
+            public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken t = default) => throw new NotSupportedException();
             public Task<int> CrearCabeceraAsync(CabeceraMovimiento c, CancellationToken t = default) { if (ErrorEnCrearCabecera != null) throw ErrorEnCrearCabecera; return Task.FromResult(7); }
             public Task ActualizarCabeceraAsync(int id, CabeceraMovimiento c, CancellationToken t = default) => Task.CompletedTask;
             public Task AgregarLineaAsync(int movimientoId, LineaMovimiento l, decimal saldo, CancellationToken t = default) => Task.CompletedTask;

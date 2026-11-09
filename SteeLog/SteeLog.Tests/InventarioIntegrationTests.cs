@@ -225,7 +225,7 @@ public sealed class InventarioIntegrationTests
         public Task<IDictionary<int,decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearRecortesAsync(ids,t);
         public Task<IDictionary<int,InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken t = default) => inner.BloquearInsumosAsync(ids,t);
         public Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken t = default) => inner.GuardarRecorteAsync(id,saldo,t);
-        public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, decimal cantidadInicial, CancellationToken t = default) => inner.ResolverRecorteAsync(materialId, ancho, altura, medida, cantidadInicial, t);
+        public Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken t = default) => inner.ResolverRecorteAsync(materialId, ancho, altura, medida, t);
         public Task<int> CrearCabeceraAsync(CabeceraMovimiento c, CancellationToken t = default) => inner.CrearCabeceraAsync(c,t);
         public Task ActualizarCabeceraAsync(int id, CabeceraMovimiento c, CancellationToken t = default) => inner.ActualizarCabeceraAsync(id,c,t);
         public Task AgregarLineaAsync(int id, LineaMovimiento l, decimal saldo, CancellationToken t = default) => inner.AgregarLineaAsync(id,l,saldo,t);
@@ -749,7 +749,7 @@ public sealed class InventarioIntegrationTests
         } finally { Sql("DROP INDEX IF EXISTS public."+index+"; SELECT 1"); }
     }
     [Fact]
-    public async Task MovimientoIngresoConRecorteNuevoLoCreaEnTransaccionYRollbackNoDejaHuerfanoStockCero()
+    public async Task MovimientoConRecorteNuevoLoCreaEnIngresoYEnSalidaYRollbackNoDejaHuerfano()
     {
         // Caso 1 (Éxito en ingreso/devolución a almacén, tipo = 2 o Origen = OBRA, Destino = UBICACION):
         int material = Material(10m);
@@ -846,6 +846,18 @@ public sealed class InventarioIntegrationTests
         Assert.Equal(0m, cantidadRecorte4);
         var impactoLinea4 = Convert.ToDecimal(Sql("SELECT impacto_stock_real FROM public.movimientomaterial WHERE id_movimiento=@id", new NpgsqlParameter("id", idMov4)));
         Assert.Equal(-1m, impactoLinea4);
+        Assert.Equal(10m, Stock(material));
+
+        // Caso 5 ("Crear y usar" de nuevo con las mismas medidas, ya con fila en 0): se guarda y la fila sigue en 0.
+        var sol5 = Solicitud(material, 7);
+        sol5.Lineas = new List<LineaMovimiento>
+        {
+            new LineaMovimiento { MaterialId = material, EsRecorte = true, RecorteId = null, AnchoRecorte = 0m, AlturaRecorte = 0m, MedidaRecorte = 1.75m, Cantidad = 2m }
+        };
+        int idMov5 = await Crear(sol5);
+        Assert.True(idMov5 > 0);
+        Assert.Equal(1L, Convert.ToInt64(Sql("SELECT count(*) FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material))));
+        Assert.Equal(0m, Convert.ToDecimal(Sql("SELECT cantidad FROM public.recortes WHERE id_material=@id AND medida=1.75", new NpgsqlParameter("id", material))));
         Assert.Equal(10m, Stock(material));
     }
     [Fact]

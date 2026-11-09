@@ -89,8 +89,8 @@ namespace SteeLog.Core.Application.Movimientos
         Task<IDictionary<int, decimal>> BloquearRecortesAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<IDictionary<int, InsumoBloqueado>> BloquearInsumosAsync(IReadOnlyList<int> ids, CancellationToken token = default);
         Task<decimal> GuardarRecorteAsync(int id, decimal saldo, CancellationToken token = default);
-        /// <summary>Devuelve el recorte con ese material y medidas (bloqueado) o, si no existe, lo crea con <paramref name="cantidadInicial"/>. Uno existente no se toca.</summary>
-        Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, decimal cantidadInicial, CancellationToken token = default);
+        /// <summary>Devuelve el id del recorte con ese material y medidas (bloqueado con FOR UPDATE) o, si no existe, lo crea con cantidad 0. Nunca modifica la cantidad de uno existente.</summary>
+        Task<int> ResolverRecorteAsync(int materialId, decimal ancho, decimal altura, decimal medida, CancellationToken token = default);
         Task<int> CrearCabeceraAsync(CabeceraMovimiento cabecera, CancellationToken token = default);
         Task ActualizarCabeceraAsync(int id, CabeceraMovimiento cabecera, CancellationToken token = default);
         Task AgregarLineaAsync(int movimientoId, LineaMovimiento linea, decimal saldo, CancellationToken token = default);

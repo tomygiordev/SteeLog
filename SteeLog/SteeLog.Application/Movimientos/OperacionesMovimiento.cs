@@ -53,20 +53,25 @@ namespace SteeLog.Core.Application.Movimientos
                 var insumoIds = insumosPrevios.Select(x => x.InsumoId).Concat(insumosNuevos).Distinct().OrderBy(x => x).ToArray();
                 var materiales = await inventario.BloquearAsync(materialesIds, token).ConfigureAwait(false);
 
-                var lineasRecorteNuevo = nuevas.Where(x => x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0)).ToList();
-                foreach (var linea in lineasRecorteNuevo)
+                // Una línea de recorte sin id es una pieza creada en este movimiento: se resuelve su fila una sola vez por recorte distinto.
+                var recortePorMedidas = new Dictionary<string, int>();
+                var altaPorRecorte = new Dictionary<int, decimal>();
+                foreach (var linea in nuevas.Where(x => x.EsRecorte && (!x.RecorteId.HasValue || x.RecorteId.Value <= 0)))
                 {
                     if (!linea.MaterialId.HasValue || !materiales.ContainsKey(linea.MaterialId.Value))
                         throw new InvalidOperationException("El material indicado no existe.");
                     if (factorNuevo == 0)
                         throw new InvalidOperationException("Stock insuficiente.");
                     var spec = new SteeLog.Domain.Inventario.Recorte(0, linea.MaterialId.Value, linea.AnchoRecorte ?? 0m, linea.AlturaRecorte ?? 0m, linea.MedidaRecorte ?? 0m, 0m, null);
-                    // Un recorte que no existe y se consume nace con lo cargado (las líneas lo consumen por CambiarSaldo y queda en 0);
-                    // en una entrada nace en 0 y la entrada lo suma. Si ya existía, rige su stock real y el repositorio no le agrega nada.
-                    decimal inicial = factorNuevo < 0
-                        ? lineasRecorteNuevo.Where(x => x.MaterialId == linea.MaterialId && (x.AnchoRecorte ?? 0m) == spec.Ancho && (x.AlturaRecorte ?? 0m) == spec.Altura && (x.MedidaRecorte ?? 0m) == spec.Medida).Sum(x => x.Cantidad)
-                        : 0m;
-                    linea.RecorteId = await repo.ResolverRecorteAsync(spec.MaterialId, spec.Ancho, spec.Altura, spec.Medida, inicial, token).ConfigureAwait(false);
+                    var clave = spec.MaterialId + "|" + spec.Ancho + "|" + spec.Altura + "|" + spec.Medida;
+                    if (!recortePorMedidas.TryGetValue(clave, out var recorteId))
+                    {
+                        recorteId = await repo.ResolverRecorteAsync(spec.MaterialId, spec.Ancho, spec.Altura, spec.Medida, token).ConfigureAwait(false);
+                        recortePorMedidas[clave] = recorteId;
+                    }
+                    linea.RecorteId = recorteId;
+                    // En una salida la pieza creada entra por lo cargado y las líneas la consumen; en una entrada la suman las líneas.
+                    if (factorNuevo < 0) altaPorRecorte[recorteId] = (altaPorRecorte.TryGetValue(recorteId, out var acumulado) ? acumulado : 0m) + linea.Cantidad;
                 }
 
                 var recorteIds = anteriores.Concat(nuevas).Where(x => x.RecorteId.HasValue).Select(x => x.RecorteId.Value).Distinct().OrderBy(x => x).ToArray();
@@ -77,6 +82,9 @@ namespace SteeLog.Core.Application.Movimientos
                     if (duenos[recorte] != duenosBloqueados[recorte]) throw new InvalidOperationException("El material del recorte cambió durante la operación; vuelva a intentar.");
                 foreach (var linea in nuevas.Where(x => x.RecorteId.HasValue))
                     if (linea.MaterialId != duenosBloqueados[linea.RecorteId.Value]) throw new InvalidOperationException("El recorte no pertenece al material indicado.");
+                // Alta implícita: se suma antes de revertir y de consumir, así el stock previo del recorte (s) queda s -> s+n -> s.
+                foreach (var alta in altaPorRecorte)
+                    recortes[alta.Key] = await repo.GuardarRecorteAsync(alta.Key, decimal.Round(SaldoInventario.Aplicar(recortes[alta.Key], alta.Value), 2, MidpointRounding.AwayFromZero), token).ConfigureAwait(false);
                 var insumos = await repo.BloquearInsumosAsync(insumoIds, token).ConfigureAwait(false);
                 if (previo != null)
                 {

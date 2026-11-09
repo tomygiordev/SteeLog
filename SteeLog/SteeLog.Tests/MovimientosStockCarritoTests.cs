@@ -266,7 +266,7 @@ namespace SteeLog.Tests
         }
 
         [Fact]
-        public void ModalCrearYUsarConMedidasDeUnRecorteExistenteLoValidaComoExistente()
+        public void ModalCrearYUsarConMedidasDeUnRecorteExistenteDevuelveSiempreUnaPiezaNuevaSinId()
         {
             Sta(() => {
                 Recorte consultado = null;
@@ -278,9 +278,11 @@ namespace SteeLog.Tests
                     ((Control)t.GetField("txtAlturaBuscada", Flags).GetValue(modal)).Text = "3";
                     ((Control)t.GetField("txtCantidad", Flags).GetValue(modal)).Text = "4";
                     t.GetMethod("btnCrearNuevo_Click", Flags).Invoke(modal, new object[] { modal, EventArgs.Empty });
-                    Assert.Equal(9, consultado.id);
-                    Assert.Equal(5m, consultado.cantidad);
-                    Assert.Equal(9, modal.RecorteSeleccionado.id);
+                    Assert.Equal(0, consultado.id);
+                    Assert.Equal(0, modal.RecorteSeleccionado.id);
+                    Assert.Equal(2m, modal.RecorteSeleccionado.ancho);
+                    Assert.Equal(3m, modal.RecorteSeleccionado.altura);
+                    Assert.Equal(4m, modal.CantidadSeleccionada);
                 }
             });
         }
