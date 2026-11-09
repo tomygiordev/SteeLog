@@ -671,7 +671,7 @@ namespace SteeLog.Vistas
         {
             if (this.filtroAbierto == null || this.filtroAbierto.IsDisposed)
             {
-                this.filtroAbierto = new FiltroMaterial();
+                this.filtroAbierto = new FiltroMaterial(LocalServices.Current);
                 this.filtroAbierto.onBuscar += RecibirFiltro;
             }
             AbrirFiltros(this.filtroAbierto);

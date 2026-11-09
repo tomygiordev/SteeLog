@@ -9,7 +9,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Threading;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using System.Windows.Forms;
 using SteeLog.Servicios;
 
@@ -17,6 +16,7 @@ namespace SteeLog.Vistas
 {
     public partial class Vista_CanaletasPlegados : Form
     {
+        private readonly IServiciosVista servicios;
         private CanaletasPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionSeleccion, _versionPreview;
@@ -62,8 +62,9 @@ namespace SteeLog.Vistas
             public override string ToString() => Texto;
         }
 
-        public Vista_CanaletasPlegados()
+        public Vista_CanaletasPlegados(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             txtPrecio.KeyPress += TxtPrecio_KeyPress;
             txtFiltroPrecio.KeyPress += TxtPrecio_KeyPress;
@@ -78,7 +79,7 @@ namespace SteeLog.Vistas
 
         // ===================== CARGAS INICIALES =====================
 
-        internal Vista_CanaletasPlegados(CanaletasPresenter presenter) : this() { _presenter = presenter; }
+        internal Vista_CanaletasPlegados(IServiciosVista servicios, CanaletasPresenter presenter) : this(servicios) { _presenter = presenter; }
 
         protected override async void OnLoad(EventArgs e)
         {
@@ -86,7 +87,7 @@ namespace SteeLog.Vistas
             CambiarEstadoGuardado(false);
             try
             {
-                if (_presenter == null) _presenter = new CanaletasPresenter(LocalServices.Current.Executor);
+                if (_presenter == null) _presenter = new CanaletasPresenter(servicios.Executor);
                 if (!_conciliacionIniciada) { _conciliacionIniciada = true; _ = ConciliarAlAbrirAsync(); }
                 var obras = await _presenter.ObrasAsync(_cierre.Token);
                 var items = await _presenter.ListarAsync(null, _cierre.Token);

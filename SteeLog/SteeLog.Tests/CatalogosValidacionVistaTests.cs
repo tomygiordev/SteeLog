@@ -53,7 +53,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var e = new Escenario();
                 e.Tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_" + plural, true);
-                using (e.Vista = (Form)Activator.CreateInstance(e.Tipo, Privado, null, new object[] { new CatalogosPresenter(e.Ejecutor) }, null))
+                using (e.Vista = (Form)Activator.CreateInstance(e.Tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(e.Ejecutor) }, null))
                 {
                     e.Tipo.GetField("Confirmar", Privado).SetValue(e.Vista, new Func<string, MessageBoxIcon, bool>((_, __) => { e.Confirmaciones++; e.OnConfirmar?.Invoke(); return true; }));
                     e.Tipo.GetField("AvisarAdvertencia", Privado).SetValue(e.Vista, new Action<string>(m => e.Advertencias.Add(m)));

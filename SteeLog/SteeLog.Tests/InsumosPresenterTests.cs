@@ -132,7 +132,7 @@ namespace SteeLog.Tests
                 try {
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Insumos", true);
                     const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-                    using (var vista = (Form)Activator.CreateInstance(tipo)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba())) {
                         var avisos = new List<string>();
                         tipo.GetField("AdvertirResultadoIncierto", flags).SetValue(vista, new Action<string>(avisos.Add));
                         var ejecutor = new EjecutorIncierto(); var presenter = new InsumosPresenter(ejecutor, (IInsumosVista)vista);
@@ -172,7 +172,7 @@ namespace SteeLog.Tests
                     const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
                     var tipo = host.GetType("SteeLog.Vistas.Vista_Insumos", true);
                     CancellationTokenSource cancelacionVista;
-                    using (var vista = (Form)Activator.CreateInstance(tipo))
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()))
                     {
                         cancelacionVista = (CancellationTokenSource)tipo.GetField("cierre", flags).GetValue(vista);
                         tipo.GetField("idSeleccionado", flags).SetValue(vista, 7);

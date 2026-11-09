@@ -9,21 +9,23 @@ using System.Text;
 using System.Windows.Forms;
 using System.Threading;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 
 namespace SteeLog.Vistas
 {
     public partial class Vista_Recortes : Form
     {
-        private readonly RecortesPresenter _presenter = new RecortesPresenter(LocalServices.Current.Executor);
+        private readonly IServiciosVista servicios;
+        private readonly RecortesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private int _versionRecortes, _versionMateriales;
         private bool _guardando;
         private List<Recorte> _recortes = new List<Recorte>();
 
-        public Vista_Recortes()
+        public Vista_Recortes(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            _presenter = new RecortesPresenter(servicios.Executor);
             InitializeComponent();
             GestionUi.Abm(this, panelAntiParpadeo1, label1, new[] { panelAntiParpadeo2, panelAntiParpadeo3 }, btnGuardar, btnEliminar);
             GestionUi.Subtitulo(panelAntiParpadeo4, label7);

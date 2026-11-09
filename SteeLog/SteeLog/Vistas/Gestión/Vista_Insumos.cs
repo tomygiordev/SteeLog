@@ -11,13 +11,13 @@ using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.Modelos;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using System.Threading;
 
 namespace SteeLog.Vistas
 {
     public partial class Vista_Insumos : Form, IInsumosVista, IInsumosResultadoIncierto
     {
+        private readonly IServiciosVista servicios;
         private int idSeleccionado = -1;
         private bool ocupada;
         private bool leyendo;
@@ -27,7 +27,7 @@ namespace SteeLog.Vistas
         private List<Insumo> insumos = new List<Insumo>();
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private InsumosPresenter presenter;
-        private InsumosPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearInsumosPresenter(this));
+        private InsumosPresenter Presenter => presenter ?? (presenter = servicios.CrearInsumosPresenter(this));
         public void SetOcupada(bool valor) { ocupada=valor; if (!IsDisposed) { btnGuardar.Enabled=!valor && !leyendo && !resultadoIncierto; btnEliminar.Enabled=!valor && !leyendo && !resultadoIncierto && idSeleccionado!=-1; } }
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public void MarcarResultadoIncierto() { resultadoIncierto = true; if (!IsDisposed && !cierre.IsCancellationRequested) AdvertirResultadoIncierto("Resultado incierto: verifique el listado antes de reintentar. Pulse Ver insumos para recargar."); }
@@ -36,8 +36,9 @@ namespace SteeLog.Vistas
         private bool poblandoFiltros;
         private bool vistaHistorialActiva = false;
 
-        public Vista_Insumos()
+        public Vista_Insumos(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             GestionUi.Abm(this, panelTitulo, lblTitulo, new[] { panelEntrada, panelEntrada2 }, btnGuardar, btnEliminar, btnPDF);
             GestionUi.Tabs(panelTabs, btnVerInsumos, btnVerHistorial);

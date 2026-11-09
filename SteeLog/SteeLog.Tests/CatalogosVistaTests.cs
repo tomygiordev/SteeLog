@@ -77,7 +77,7 @@ namespace SteeLog.Tests
                 var ejecutor = new Ejecutor();
                 var pendiente = new TaskCompletionSource<IReadOnlyList<CategoriaCatalogo>>(); ejecutor.Consultas.Enqueue(pendiente);
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Categorias", true);
-                var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CatalogosPresenter(ejecutor) }, null);
+                var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(ejecutor) }, null);
                 Assert.Equal(0, ejecutor.Llamadas);
                 var boton = (Control)tipo.GetField("guna2Button1", Privado).GetValue(vista);
                 Assert.False(boton.Enabled);
@@ -98,7 +98,7 @@ namespace SteeLog.Tests
                 var a = new TaskCompletionSource<IReadOnlyList<CategoriaCatalogo>>(); var b = new TaskCompletionSource<IReadOnlyList<CategoriaCatalogo>>();
                 ejecutor.Consultas.Enqueue(a); ejecutor.Consultas.Enqueue(b);
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Categorias", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CatalogosPresenter(ejecutor) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(ejecutor) }, null)) {
                     var handle = vista.Handle;
                     var cargar = tipo.GetMethod("CargarAsync", Privado);
                     var primera = (Task)cargar.Invoke(vista, null); var segunda = (Task)cargar.Invoke(vista, null);
@@ -122,7 +122,7 @@ namespace SteeLog.Tests
                 var carga = new TaskCompletionSource<object>(); var recarga = new TaskCompletionSource<object>();
                 ejecutor.Consultas.Enqueue(carga); ejecutor.Consultas.Enqueue(recarga);
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_" + plural, true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CatalogosPresenter(ejecutor) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(ejecutor) }, null)) {
                     tipo.GetField("Confirmar", Privado).SetValue(vista, new Func<string, MessageBoxIcon, bool>((_, __) => true));
                     Assert.Equal(0, ejecutor.Lecturas);
                     var handle = vista.Handle;
@@ -157,7 +157,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var ejecutor = new EjecutorGenerico(); var carga = new TaskCompletionSource<object>(); ejecutor.Consultas.Enqueue(carga);
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_" + plural, true);
-                var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CatalogosPresenter(ejecutor) }, null);
+                var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(ejecutor) }, null);
                 var handle = vista.Handle; tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
                 var cierre = (CancellationTokenSource)tipo.GetField("_cierre", Privado).GetValue(vista);
                 vista.Dispose(); Assert.True(cierre.IsCancellationRequested);
@@ -175,7 +175,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var ejecutor = new EjecutorGenerico(); var carga = new TaskCompletionSource<object>(); ejecutor.Consultas.Enqueue(carga);
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_" + plural, true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CatalogosPresenter(ejecutor) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(ejecutor) }, null)) {
                     var handle = vista.Handle; tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
                     var cierre = (CancellationTokenSource)tipo.GetField("_cierre", Privado).GetValue(vista);
                     tipo.GetMethod("OnFormClosed", Privado).Invoke(vista, new object[] { new FormClosedEventArgs(CloseReason.UserClosing) });
@@ -192,7 +192,7 @@ namespace SteeLog.Tests
                 ejecutor.Herramientas.Add(new HerramientaLectura { Id = 1, Nombre = "Herramienta 1", Estado = "En Reparación", ObraId = null, Obra = "Galpón", Observaciones = "" });
                 ejecutor.Herramientas.Add(new HerramientaLectura { Id = 2, Nombre = "Herramienta 2", Estado = "Óptima", ObraId = null, Obra = "Galpón", Observaciones = "" });
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { ejecutor }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(ejecutor), ejecutor }, null)) {
                     var handle = vista.Handle;
                     tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
                     var grid = (DataGridView)tipo.GetField("dgvHerramientas", Privado).GetValue(vista);
@@ -233,7 +233,7 @@ namespace SteeLog.Tests
                 var ejecutor = new EjecutorHerramientas();
                 ejecutor.Herramientas.Add(new HerramientaLectura { Id = 1, Nombre = "Herramienta 1", Estado = "Óptima", ObraId = null, Obra = "Galpón", Observaciones = "" });
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { ejecutor }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(ejecutor), ejecutor }, null)) {
                     var handle = vista.Handle;
                     tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
                     var grid = (DataGridView)tipo.GetField("dgvHerramientas", Privado).GetValue(vista);

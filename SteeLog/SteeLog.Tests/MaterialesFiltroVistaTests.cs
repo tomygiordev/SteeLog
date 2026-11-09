@@ -42,7 +42,7 @@ namespace SteeLog.Tests
                 try
                 {
                     var consulta = new Consulta();
-                    using (var vista = (Form)Activator.CreateInstance(typeof(Vista_Materiales), BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { new MaterialesPresenter(new Executor(consulta)) }, null))
+                    using (var vista = (Form)Activator.CreateInstance(typeof(Vista_Materiales), BindingFlags.Instance | BindingFlags.NonPublic, null, new object[] { new ServiciosVistaDePrueba(), new MaterialesPresenter(new Executor(consulta)) }, null))
                     {
                         var handle = vista.Handle;
                         var recibir = vista.GetType().GetMethod("RecibirFiltro", BindingFlags.Instance | BindingFlags.NonPublic);

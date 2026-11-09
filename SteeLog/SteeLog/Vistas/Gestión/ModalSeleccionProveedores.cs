@@ -5,7 +5,6 @@ using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.CompositionRoot;
 using SteeLog.Presentation;
 using SteeLog.UI;
 
@@ -13,6 +12,7 @@ namespace SteeLog.Vistas
 {
     public partial class ModalSeleccionProveedores : Form
     {
+        private readonly IServiciosVista servicios;
         private readonly MaterialesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private readonly HashSet<int> _idsIniciales;
@@ -27,17 +27,18 @@ namespace SteeLog.Vistas
             public override string ToString() => Nombre ?? string.Empty;
         }
 
-        public ModalSeleccionProveedores(List<int> idsIniciales) : this(idsIniciales, null)
+        public ModalSeleccionProveedores(IServiciosVista servicios, List<int> idsIniciales) : this(servicios, idsIniciales, null)
         {
         }
 
-        internal ModalSeleccionProveedores(List<int> idsIniciales, MaterialesPresenter presenter)
+        internal ModalSeleccionProveedores(IServiciosVista servicios, List<int> idsIniciales, MaterialesPresenter presenter)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             AplicarEstilo();
             _idsIniciales = idsIniciales != null ? new HashSet<int>(idsIniciales) : new HashSet<int>();
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
-            _presenter = presenter ?? new MaterialesPresenter(LocalServices.Current.Executor);
+            _presenter = presenter ?? new MaterialesPresenter(servicios.Executor);
             FormClosed += (_, __) => _cierre.Cancel();
             Disposed += (_, __) => _cierre.Dispose();
             Shown += ModalSeleccionProveedores_Shown;

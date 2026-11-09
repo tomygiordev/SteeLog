@@ -6,7 +6,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Catalogos;
 using SteeLog.Domain.Catalogos;
 using SteeLog.Presentation;
@@ -15,6 +14,7 @@ namespace SteeLog.Vistas
 {
     public partial class Vista_Obras : Form
     {
+        private readonly IServiciosVista servicios;
         private CatalogosPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private List<ObraCatalogo> _items = new List<ObraCatalogo>();
@@ -25,8 +25,9 @@ namespace SteeLog.Vistas
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
         internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
-        public Vista_Obras()
+        public Vista_Obras(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarObraBoton);
             txtObra.MaxLength = Obra.MaxNombre;
@@ -35,7 +36,7 @@ namespace SteeLog.Vistas
             VisibleChanged += (s, e) => { if (Visible && _listo) { SincronizarResaltado(); ActualizarEstado(); } };
             ActualizarEstado();
         }
-        internal Vista_Obras(CatalogosPresenter presenter) : this() { _presenter = presenter; }
+        internal Vista_Obras(IServiciosVista servicios, CatalogosPresenter presenter) : this(servicios) { _presenter = presenter; }
 
         protected override async void OnLoad(EventArgs e)
         {
@@ -43,7 +44,7 @@ namespace SteeLog.Vistas
             if (System.ComponentModel.LicenseManager.UsageMode == System.ComponentModel.LicenseUsageMode.Designtime) return;
             try
             {
-                if (_presenter == null) _presenter = new CatalogosPresenter(LocalServices.Current.Executor);
+                if (_presenter == null) _presenter = new CatalogosPresenter(servicios.Executor);
                 await CargarAsync();
             }
             catch (OperationCanceledException) { }

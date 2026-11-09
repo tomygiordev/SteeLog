@@ -26,7 +26,7 @@ namespace SteeLog.Tests
         public void GrillaRecortes_NoDuplicaColumnasYUsaEncabezadosConfigurados()
         {
             EnSta(() => {
-                using (var vista = new Vista_Recortes())
+                using (var vista = new Vista_Recortes(new ServiciosVistaDePrueba()))
                 {
                     vista.GetType().GetField("_recortes", Flags).SetValue(vista, new List<Recorte> {
                         new Recorte { id = 1, id_material = 2, nombre_material = "Chapa", nombre_categoria = "Chapas", ancho = 1m, altura = 2m, medida = 2m, cantidad = 3m, estado = "Regular", fecha_creacion = DateTime.Today } });
@@ -44,7 +44,7 @@ namespace SteeLog.Tests
         public void Fletes_ChkActivoEsCheckBoxPersonalizadoConEtiquetaSeparada()
         {
             EnSta(() => {
-                using (var vista = new Vista_Fletes())
+                using (var vista = new Vista_Fletes(new ServiciosVistaDePrueba()))
                 {
                     var chk = vista.GetType().GetField("chkActivo", Flags).GetValue(vista);
                     var lbl = (Label)vista.GetType().GetField("lblActivo", Flags).GetValue(vista);
@@ -55,6 +55,27 @@ namespace SteeLog.Tests
                     Assert.Equal("Activo:", lbl.Text);
                     Assert.True((bool)chk.GetType().GetProperty("Checked").GetValue(chk));
                     Assert.Same(custom.Parent, lbl.Parent);
+                }
+            });
+        }
+
+        [Fact]
+        public void VistasDeGestion_SeInstancianYDisponenSinLanzarExcepcionEnEntornoDiseniador()
+        {
+            EnSta(() => {
+                var tipos = new[] {
+                    typeof(Vista_Insumos),
+                    typeof(Vista_Herramientas)
+                };
+                foreach (var tipo in tipos)
+                {
+                    using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()))
+                    {
+                        Assert.NotNull(form);
+                        Assert.False(form.IsDisposed);
+                        var handle = form.Handle;
+                        Assert.NotEqual(IntPtr.Zero, handle);
+                    }
                 }
             });
         }
@@ -72,8 +93,6 @@ namespace SteeLog.Tests
                     typeof(Vista_Kardex),
                     typeof(Vista_ReporteStock),
                     typeof(Vista_InformeObra),
-                    typeof(Vista_Insumos),
-                    typeof(Vista_Herramientas)
                 };
                 foreach (var tipo in tipos)
                 {

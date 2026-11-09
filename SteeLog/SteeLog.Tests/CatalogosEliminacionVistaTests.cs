@@ -60,7 +60,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var e = new Escenario();
                 e.Tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_" + plural, true);
-                using (e.Vista = (Form)Activator.CreateInstance(e.Tipo, Privado, null, new object[] { new CatalogosPresenter(e.Ejecutor) }, null))
+                using (e.Vista = (Form)Activator.CreateInstance(e.Tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CatalogosPresenter(e.Ejecutor) }, null))
                 {
                     e.Tipo.GetField("Confirmar", Privado).SetValue(e.Vista, new Func<string, MessageBoxIcon, bool>((_, __) => true));
                     e.Tipo.GetField("AvisarAdvertencia", Privado).SetValue(e.Vista, new Action<string>(m => { }));
@@ -176,7 +176,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var consulta = new ConsultaMateriales(); var ejecutor = new EjecutorMateriales(consulta);
                 var tipo = typeof(SteeLog.Vistas.Vista_Materiales);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new MaterialesPresenter(ejecutor) }, null))
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new MaterialesPresenter(ejecutor) }, null))
                 {
                     var errores = new List<string>(); var avisos = new List<string>();
                     tipo.GetField("AvisarError", Privado).SetValue(vista, new Action<string>(m => errores.Add(m)));

@@ -6,7 +6,6 @@ using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Modelos;
 using SteeLog.Presentation;
@@ -16,6 +15,7 @@ namespace SteeLog.Vistas
 {
     public partial class FiltroMaterial : Form
     {
+        private readonly IServiciosVista servicios;
         public event EventHandler<FiltroMaterialParams> onBuscar;
 
         private readonly MaterialesPresenter _presenter;
@@ -40,17 +40,18 @@ namespace SteeLog.Vistas
             public override string ToString() => Nombre ?? string.Empty;
         }
 
-        public FiltroMaterial() : this(null)
+        public FiltroMaterial(IServiciosVista servicios) : this(servicios, null)
         {
         }
 
-        internal FiltroMaterial(MaterialesPresenter presenter)
+        internal FiltroMaterial(IServiciosVista servicios, MaterialesPresenter presenter)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             AplicarEstilo();
 
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
-            _presenter = presenter ?? new MaterialesPresenter(LocalServices.Current.Executor);
+            _presenter = presenter ?? new MaterialesPresenter(servicios.Executor);
             FormClosed += (_, __) => _cierre.Cancel();
             Disposed += (_, __) => _cierre.Dispose();
             Shown += FiltroMaterial_Shown;

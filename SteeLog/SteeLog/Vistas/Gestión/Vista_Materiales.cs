@@ -20,7 +20,6 @@ using System.Windows.Forms;
 using System.Threading;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 
 using SteeLog.Modelos;
 
@@ -37,6 +36,7 @@ namespace SteeLog.Vistas
     public partial class Vista_Materiales : Form
 
     {
+        private readonly IServiciosVista servicios;
 
         private readonly MaterialesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
@@ -54,13 +54,14 @@ namespace SteeLog.Vistas
 
         private FiltroMaterial filtroAbierto = null;
 
-        public Vista_Materiales() : this(new MaterialesPresenter(LocalServices.Current.Executor)) { }
+        public Vista_Materiales(IServiciosVista servicios) : this(servicios, new MaterialesPresenter((servicios ?? throw new ArgumentNullException(nameof(servicios))).Executor)) { }
 
-        internal Vista_Materiales(MaterialesPresenter presenter)
+        internal Vista_Materiales(IServiciosVista servicios, MaterialesPresenter presenter)
 
         {
 
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             GestionUi.Abm(this, panelAntiParpadeo1, label1, new[] { panelAntiParpadeo8 }, guna2Button1, eliminarMaterialBoton);
             GestionUi.FormularioFila(panelAntiParpadeo8, 16, 4);
@@ -158,7 +159,7 @@ namespace SteeLog.Vistas
 
             if (_guardando || _cargandoProveedores || !_proveedoresDisponibles) return;
 
-            using (var modal = new ModalSeleccionProveedores(idsProveedoresSeleccionados, _presenter))
+            using (var modal = new ModalSeleccionProveedores(servicios, idsProveedoresSeleccionados, _presenter))
 
             {
 
@@ -319,9 +320,9 @@ namespace SteeLog.Vistas
 
                 {
 
-                    dgvMateriales.Columns["stockActual"].HeaderText = SessionManager.DebeOcultarCantidadesStockMateriales ? "Disponibilidad" : "Stock";
+                    dgvMateriales.Columns["stockActual"].HeaderText = servicios.Sesion.DebeOcultarCantidadesStockMateriales ? "Disponibilidad" : "Stock";
 
-                    dgvMateriales.Columns["stockActual"].DefaultCellStyle.Format = SessionManager.DebeOcultarCantidadesStockMateriales ? string.Empty : "N0";
+                    dgvMateriales.Columns["stockActual"].DefaultCellStyle.Format = servicios.Sesion.DebeOcultarCantidadesStockMateriales ? string.Empty : "N0";
 
                     dgvMateriales.Columns["stockActual"].AutoSizeMode = DataGridViewAutoSizeColumnMode.AllCells;
 
@@ -335,7 +336,7 @@ namespace SteeLog.Vistas
 
                 {
 
-                    dgvMateriales.Columns["stockMinimo"].Visible = !SessionManager.DebeOcultarCantidadesStockMateriales;
+                    dgvMateriales.Columns["stockMinimo"].Visible = !servicios.Sesion.DebeOcultarCantidadesStockMateriales;
 
                     dgvMateriales.Columns["stockMinimo"].HeaderText = "Mínimo";
 
@@ -522,13 +523,13 @@ namespace SteeLog.Vistas
 
                 {
 
-                    if (SessionManager.DebeOcultarCantidadesStockMateriales
+                    if (servicios.Sesion.DebeOcultarCantidadesStockMateriales
 
                         && dgvMateriales.Columns[e.ColumnIndex].Name == "stockActual")
 
                     {
 
-                        e.Value = SessionManager.ObtenerEstadoStockMaterial(item.stockActual);
+                        e.Value = servicios.Sesion.ObtenerEstadoStockMaterial(item.stockActual);
 
                         e.FormattingApplied = true;
 
@@ -852,7 +853,7 @@ namespace SteeLog.Vistas
 
             {
 
-                this.filtroAbierto = new FiltroMaterial(_presenter);
+                this.filtroAbierto = new FiltroMaterial(servicios, _presenter);
 
                 this.filtroAbierto.onBuscar += RecibirFiltro;
 

@@ -27,7 +27,7 @@ namespace SteeLog.Tests
         public void Recortes_EliminarDeshabilitadoSinSeleccionYHabilitadoConSeleccion()
         {
             EnSta(() => {
-                using (var vista = new Vista_Recortes())
+                using (var vista = new Vista_Recortes(new ServiciosVistaDePrueba()))
                 {
                     var btn = Campo<Control>(vista, "btnEliminar");
                     Assert.False(btn.Enabled);
@@ -51,7 +51,7 @@ namespace SteeLog.Tests
         public void Recortes_GrillaFormateaMedidasConDosDecimales()
         {
             EnSta(() => {
-                using (var vista = new Vista_Recortes())
+                using (var vista = new Vista_Recortes(new ServiciosVistaDePrueba()))
                 {
                     vista.GetType().GetField("_recortes", Flags).SetValue(vista, new List<Recorte> {
                         new Recorte { id = 1, id_material = 2, nombre_material = "Chapa", nombre_categoria = "Chapas", ancho = 1.2m, altura = 1m, medida = 1.2m, cantidad = 3m, estado = "Regular" } });

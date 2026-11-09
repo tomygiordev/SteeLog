@@ -79,7 +79,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var ejecutor = new EjecutorRecargaFallida();
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(ejecutor) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(ejecutor) }, null)) {
                     var avisos = new List<string>(); var exitos = new List<string>();
                     tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(avisos.Add));
                     tipo.GetField("InformarOperacion", Privado).SetValue(vista, new Action<string>(exitos.Add));
@@ -102,7 +102,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var e = new EjecutorApertura(); int hiloUi = Thread.CurrentThread.ManagedThreadId;
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(e) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(e) }, null)) {
                     string aviso = null; tipo.GetField("AdvertirConciliacion", Privado).SetValue(vista, new Action<string>(mensaje => aviso = mensaje));
                     var handle = vista.Handle;
                     tipo.GetMethod("OnLoad", Privado).Invoke(vista, new object[] { EventArgs.Empty });
@@ -137,7 +137,7 @@ namespace SteeLog.Tests
         private static Form Crear(Ejecutor e, out Type tipo)
         {
             tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
-            return (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(e) }, null);
+            return (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(e) }, null);
         }
         [Fact]
         public void CargaDeFotosDescartaRespuestaObsoletaYCierreCancela()
@@ -215,7 +215,7 @@ namespace SteeLog.Tests
         {
             Sta(() => {
                 var e = new EjecutorLimpieza(); var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(e) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(e) }, null)) {
                     var avisos = new List<string>(); tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(avisos.Add));
                     var handle = vista.Handle; tipo.GetField("_inicializando", Privado).SetValue(vista, false);
                     var lista = (ListBox)tipo.GetField("lstFotos", Privado).GetValue(vista); var lh = lista.Handle;
@@ -346,7 +346,7 @@ namespace SteeLog.Tests
             Sta(() => {
                 var e = new EjecutorAltaAdjuntoIncierto();
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_CanaletasPlegados", true);
-                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new CanaletasPresenter(e) }, null)) {
+                using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(e) }, null)) {
                     var handle = vista.Handle;
                     tipo.GetField("_inicializando", Privado).SetValue(vista, false); tipo.GetField("AdvertirAdjuntos", Privado).SetValue(vista, new Action<string>(_ => { }));
                     var lista = (ListBox)tipo.GetField("lstFotos", Privado).GetValue(vista);

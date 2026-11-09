@@ -10,7 +10,6 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.Presentation;
-using SteeLog.CompositionRoot;
 using System.Threading;
 using SteeLog.Modelos;
 
@@ -18,11 +17,12 @@ namespace SteeLog.Vistas
 {
     public partial class Vista_Herramientas : Form, IHerramientasVista
     {
+        private readonly IServiciosVista servicios;
         private int idSeleccionado = -1;
         private readonly CancellationTokenSource cierre = new CancellationTokenSource();
         private readonly CargasHerramientas cargas = new CargasHerramientas();
         private HerramientasPresenter presenter;
-        private HerramientasPresenter Presenter => presenter ?? (presenter = LocalServices.Current.CrearHerramientasPresenter(this));
+        private HerramientasPresenter Presenter => presenter ?? (presenter = servicios.CrearHerramientasPresenter(this));
         private List<Herramienta> herramientas = new List<Herramienta>();
         private List<Obra> obras = new List<Obra>();
         private List<HerramientaMovimiento> historial = new List<HerramientaMovimiento>();
@@ -54,8 +54,9 @@ namespace SteeLog.Vistas
         private bool poblandoFiltros;
         private bool vistaHistorialActiva = false;
 
-        public Vista_Herramientas()
+        public Vista_Herramientas(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             GestionUi.Abm(this, panelTitulo, lblTitulo, new[] { panelEntrada, panelEntrada2 }, btnGuardar, btnEliminar, btnPDF);
             GestionUi.Tabs(panelTabs, btnVerHerramientas, btnVerHistorial);
@@ -79,7 +80,7 @@ namespace SteeLog.Vistas
             printDocument1.PrintPage += new PrintPageEventHandler(printDocument1_PrintPage);
         }
 
-        internal Vista_Herramientas(IUseCaseExecutor executor) : this()
+        internal Vista_Herramientas(IServiciosVista servicios, IUseCaseExecutor executor) : this(servicios)
         {
             presenter = new HerramientasPresenter(executor ?? throw new ArgumentNullException(nameof(executor)), this);
         }

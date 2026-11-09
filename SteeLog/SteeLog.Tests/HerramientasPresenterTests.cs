@@ -62,7 +62,7 @@ namespace SteeLog.Tests
         private static Form CrearVista(EjecutorVista ejecutor)
         {
             var tipo=Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas",true);
-            var vista=(Form)Activator.CreateInstance(tipo,Privado,null,new object[]{ejecutor},null);
+            var vista=(Form)Activator.CreateInstance(tipo,Privado,null,new object[]{new ServiciosVistaDePrueba(ejecutor),ejecutor},null);
             Campo(vista,"confirmar",new Func<string,string,MessageBoxIcon,bool>((m,t,i)=>true));
             Campo(vista,"avisar",new Action<string>(m=>{}));
             return vista;
@@ -111,7 +111,7 @@ namespace SteeLog.Tests
                     const BindingFlags f=BindingFlags.Instance|BindingFlags.NonPublic;
                     var tipo=Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Herramientas",true);
                     CancellationTokenSource cierre;
-                    using(var vista=(Form)Activator.CreateInstance(tipo)) {
+                    using(var vista=(Form)Activator.CreateInstance(tipo,new ServiciosVistaDePrueba())) {
                         cierre=(CancellationTokenSource)tipo.GetField("cierre",f).GetValue(vista);
                         foreach(var nombre in new[]{"btnGuardar","btnEliminar","txtNombre","txtObservaciones","cboEstado","cboObra"}) Assert.False(((Control)tipo.GetField(nombre,f).GetValue(vista)).Enabled);
                         tipo.GetField("obrasCargadas",f).SetValue(vista,true);

@@ -259,7 +259,7 @@ namespace SteeLog
         #region MediaSubMenu
         private void button2_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Materiales());
+            openChildForm(() => new Vista_Materiales(servicios));
             //..
             //your codes
             //..
@@ -268,7 +268,7 @@ namespace SteeLog
 
         private void button3_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Categorias());
+            openChildForm(() => new Vista_Categorias(servicios));
             //..
             //your codes
             //..
@@ -277,7 +277,7 @@ namespace SteeLog
 
         private void button5_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Proveedores());
+            openChildForm(() => new Vista_Proveedores(servicios));
             //..
             //your codes
             //..
@@ -285,12 +285,12 @@ namespace SteeLog
         }
         private void btnRecortes_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Recortes());
+            openChildForm(() => new Vista_Recortes(servicios));
             hideSubMenu();
         }
         private void btnFletes_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Fletes());
+            openChildForm(() => new Vista_Fletes(servicios));
             hideSubMenu();
         }
         #endregion
@@ -614,25 +614,25 @@ namespace SteeLog
 
         private void Obras_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Obras());
+            openChildForm(() => new Vista_Obras(servicios));
             hideSubMenu();
         }
 
         private void Ubicaciones_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Ubicaciones());
+            openChildForm(() => new Vista_Ubicaciones(servicios));
             hideSubMenu();
         }
 
         private void btnHerramientas_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Herramientas());
+            openChildForm(() => new Vista_Herramientas(servicios));
             hideSubMenu();
         }
 
         private void btnInsumos_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Insumos());
+            openChildForm(() => new Vista_Insumos(servicios));
             hideSubMenu();
         }
 
@@ -725,7 +725,7 @@ namespace SteeLog
             btnCanaletasPlegados.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
             btnCanaletasPlegados.Click += (s, e) =>
             {
-                openChildForm(() => new Vista_CanaletasPlegados());
+                openChildForm(() => new Vista_CanaletasPlegados(servicios));
                 hideSubMenu();
             };
             panelGestion.Controls.Add(btnCanaletasPlegados);
