@@ -184,7 +184,6 @@
     <Compile Include="Modelos\Proveedor.cs" />
     <Compile Include="Modelos\Recorte.cs" />
     <Compile Include="Modelos\HistorialMovimiento.cs" />
-    <Compile Include="Modelos\ReporteOrdenPendienteItem.cs" />
     <Compile Include="UI\Tema.cs" />
     <Compile Include="UI\Dialogo.cs" />
     <Compile Include="UI\GestionUi.cs" />

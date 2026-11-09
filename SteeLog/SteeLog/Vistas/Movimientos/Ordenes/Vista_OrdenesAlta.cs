@@ -599,7 +599,6 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     id_proveedor = proveedor.id,
                     costoflete = costoFlete,
                     observaciones = txtObservaciones.Text.Trim(),
-                    usuario_creacion = SessionManager.Username,
                     Detalles = _detalles.ToList()
                 };
 
