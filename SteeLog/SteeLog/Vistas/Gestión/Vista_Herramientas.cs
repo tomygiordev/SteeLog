@@ -324,7 +324,9 @@ namespace SteeLog.Vistas
                 }
                 if (dgvHistorial.Columns["estado"] != null)
                 {
-                    dgvHistorial.Columns["estado"].HeaderText = "Estado";
+                    // El esquema no guarda el estado de cada movimiento: se muestra el estado vigente, rotulado como tal.
+                    dgvHistorial.Columns["estado"].HeaderText = "Estado actual";
+                    dgvHistorial.Columns["estado"].ToolTipText = "Estado vigente de la herramienta; el historial no registra el estado de cada movimiento.";
                     dgvHistorial.Columns["estado"].FillWeight = 14;
                     dgvHistorial.Columns["estado"].DisplayIndex = 1;
                 }
