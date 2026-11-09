@@ -57,7 +57,7 @@ namespace SteeLog.Vistas
         public Vista_ReporteStock(IServiciosVista servicios)
         {
             this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
-            identidadActual = () => this.servicios.Sesion.Email;
+            identidadActual = () => this.servicios.Sesion.Identidad;
             esAdmin = () => this.servicios.Sesion.Role == UserRole.Admin;
             InitializeComponent();
             Tema.SinEscala(this);
@@ -675,7 +675,7 @@ namespace SteeLog.Vistas
         {
             if (this.filtroAbierto == null || this.filtroAbierto.IsDisposed)
             {
-                this.filtroAbierto = new FiltroMaterial(LocalServices.Current);
+                this.filtroAbierto = new FiltroMaterial(servicios);
                 this.filtroAbierto.onBuscar += RecibirFiltro;
             }
             AbrirFiltros(this.filtroAbierto);

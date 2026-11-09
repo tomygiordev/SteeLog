@@ -88,7 +88,7 @@ namespace SteeLog.Vistas.Reportes
         public ModalConfigReporteStock(IServiciosVista servicios, ReporteStockPresenter presenter)
         {
             this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
-            identidadActual = () => this.servicios.Sesion.Email;
+            identidadActual = () => this.servicios.Sesion.Identidad;
             this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             Text = "Configurar secciones del reporte de stock";
             StartPosition = FormStartPosition.CenterParent;

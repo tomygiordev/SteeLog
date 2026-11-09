@@ -61,7 +61,7 @@ namespace SteeLog.Vistas
         public Vista_Kardex(IServiciosVista servicios)
         {
             this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
-            identidadActual = () => this.servicios.Sesion.Email;
+            identidadActual = () => this.servicios.Sesion.Identidad;
             ocultarSaldo = () => this.servicios.Sesion.DebeOcultarCantidadesStockMateriales;
             InitializeComponent();
             Tema.SinEscala(this);

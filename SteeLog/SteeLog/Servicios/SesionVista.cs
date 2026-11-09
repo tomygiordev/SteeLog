@@ -8,6 +8,8 @@ namespace SteeLog.Servicios
         private readonly Session Session;
         public SesionVista(Session session) { Session = session ?? throw new System.ArgumentNullException(nameof(session)); }
         public string Email => Session.Current?.Email;
+        // Misma instancia que Session.Current: permite detectar cambios de sesión por referencia.
+        public object Identidad => Session.Current;
         public string Username => Email == null ? null : Email.Split('@')[0];
         public UserRole Rol => Role;
         public UserRole Role => (UserRole)Session.Role;

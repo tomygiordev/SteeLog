@@ -60,41 +60,24 @@ namespace SteeLog.Tests
         }
 
         [Fact]
-        public void VistasDeGestion_SeInstancianYDisponenSinLanzarExcepcionEnEntornoDiseniador()
-        {
-            EnSta(() => {
-                var tipos = new[] {
-                    typeof(Vista_Insumos),
-                    typeof(Vista_Herramientas)
-                };
-                foreach (var tipo in tipos)
-                {
-                    using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()))
-                    {
-                        Assert.NotNull(form);
-                        Assert.False(form.IsDisposed);
-                        var handle = form.Handle;
-                        Assert.NotEqual(IntPtr.Zero, handle);
-                    }
-                }
-            });
-        }
-
-        [Fact]
         public void VistasPrincipales_SeInstancianYDisponenSinLanzarExcepcionEnEntornoDiseniador()
         {
             EnSta(() => {
-                var tipos = new[] {
-                    typeof(Vista_Login),
-                    typeof(SteeLog.Vistas.Inventario.Vista_Conteo),
-                    typeof(SteeLog.Vistas.Inventario.Vista_Inventario),
-                    typeof(Vista_Kardex),
-                    typeof(Vista_ReporteStock),
-                    typeof(Vista_InformeObra),
+                var creadores = new Func<Form>[] {
+                    () => new Vista_Login(),
+                    () => new Vista_Movimientos(new ServiciosVistaDePrueba()),
+                    () => new Vista_HistorialMovimientos(new ServiciosVistaDePrueba()),
+                    () => new SteeLog.Vistas.Inventario.Vista_Conteo(new ServiciosVistaDePrueba()),
+                    () => new SteeLog.Vistas.Inventario.Vista_Inventario(new ServiciosVistaDePrueba()),
+                    () => new Vista_Kardex(new ServiciosVistaDePrueba()),
+                    () => new Vista_ReporteStock(new ServiciosVistaDePrueba()),
+                    () => new Vista_InformeObra(new ServiciosVistaDePrueba()),
+                    () => new Vista_Insumos(new ServiciosVistaDePrueba()),
+                    () => new Vista_Herramientas(new ServiciosVistaDePrueba())
                 };
-                foreach (var tipo in tipos)
+                foreach (var crear in creadores)
                 {
-                    using (var form = (Form)Activator.CreateInstance(tipo, tipo.GetConstructor(new[] { typeof(SteeLog.Presentation.IServiciosVista) }) != null ? new object[] { new ServiciosVistaDePrueba() } : new object[0]))
+                    using (var form = crear())
                     {
                         Assert.NotNull(form);
                         Assert.False(form.IsDisposed);

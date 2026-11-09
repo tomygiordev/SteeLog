@@ -36,6 +36,23 @@ namespace SteeLog.Tests
             Assert.Equal(UserRole.None, servicios.Sesion.Rol);
         }
 
+        [Fact]
+        public void IdentidadEsNulaSinSesionEstableDuranteLaSesionYNuevaTrasRelogin()
+        {
+            var servicios = new ServiciosVistaDePrueba();
+            Assert.Null(servicios.Sesion.Identidad);
+            servicios.Sesion.SetSession("admin@tesis.local");
+            var primera = servicios.Sesion.Identidad;
+            Assert.NotNull(primera);
+            Assert.Same(servicios.Session.Current, primera);
+            Assert.Same(primera, servicios.Sesion.Identidad);
+            servicios.Sesion.Clear();
+            Assert.Null(servicios.Sesion.Identidad);
+            servicios.Sesion.SetSession("admin@tesis.local");
+            Assert.NotNull(servicios.Sesion.Identidad);
+            Assert.NotSame(primera, servicios.Sesion.Identidad);
+        }
+
         [Theory]
         [InlineData(-1, "Sin stock")]
         [InlineData(0, "Sin stock")]
