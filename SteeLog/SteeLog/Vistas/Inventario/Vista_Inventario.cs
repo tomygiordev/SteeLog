@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Linq;
 using System.Windows.Forms;
 using Guna.UI2.WinForms;
@@ -11,6 +12,7 @@ using SteeLog.Core.Application.Inventario;
 using SteeLog.CompositionRoot;
 using SteeLog.Presentation;
 using SteeLog.Servicios;
+using SteeLog.UI;
 using SteeLog;
 
 namespace SteeLog.Vistas.Inventario
@@ -35,10 +37,10 @@ namespace SteeLog.Vistas.Inventario
         private Label lblObra;
 
         // Resumen
-        private Label lblResumen1;
-        private Label lblResumen2;
-        private Label lblResumen3;
-        private Label lblResumen4;
+        private TarjetaKpi lblResumen1;
+        private TarjetaKpi lblResumen2;
+        private TarjetaKpi lblResumen3;
+        private TarjetaKpi lblResumen4;
 
         // Tabs
         private Guna2Button btnTabMateriales;
@@ -49,24 +51,13 @@ namespace SteeLog.Vistas.Inventario
         // Grid
         private Guna2DataGridView dgvInventario;
 
-        // Colores
-        private readonly Color colorFondo = Color.FromArgb(29, 38, 35);
-        private readonly Color colorPanelOscuro = Color.FromArgb(20, 30, 25);
-        private readonly Color colorVerdeAccent = Color.FromArgb(25, 135, 84);
-        private readonly Color colorVerdeOscuro = Color.FromArgb(35, 63, 43);
-        private readonly Color colorVerdeBoton = Color.FromArgb(47, 84, 57);
-        private readonly Color colorFilaAlt = Color.FromArgb(35, 50, 40);
-        private readonly Color colorFila = Color.FromArgb(28, 40, 32);
-        private readonly Color colorSeleccion = Color.FromArgb(50, 90, 60);
-        private readonly Color colorTexto = Color.White;
-        private readonly Color colorBorde = Color.FromArgb(60, 60, 65);
-
         public Vista_Inventario() : this(LocalServices.Current.Executor) { }
 
         public Vista_Inventario(IUseCaseExecutor executor)
         {
             presenter = new InventarioPresenter(executor);
             InitializeComponent();
+            Tema.SinEscala(this);
             CrearInterfaz();
             Shown += (s, e) => { CargarFiltros(); CargarResumen(); CargarTab("materiales"); };
             FormClosed += (s, e) => cierre.Cancel();
@@ -81,45 +72,23 @@ namespace SteeLog.Vistas.Inventario
 
         private void CrearInterfaz()
         {
-            // ============ TÍTULO ============
-            var panelTitulo = new PanelAntiParpadeo();
-            panelTitulo.Dock = DockStyle.Top;
-            panelTitulo.Height = 50;
-            panelTitulo.ColumnCount = 1;
-            panelTitulo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panelTitulo.RowCount = 1;
-            panelTitulo.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            panelTitulo.Padding = new Padding(40, 0, 40, 0);
+            BackColor = Tema.Fondo;
 
-            var lblTitulo = new Label
-            {
-                Text = "INVENTARIO GENERAL",
-                Font = new Font("Bahnschrift SemiBold", 22F, FontStyle.Bold),
-                ForeColor = colorTexto,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-            panelTitulo.Controls.Add(lblTitulo, 0, 0);
-
-            // ============ RESUMEN (4 tarjetas) ============
+            // ============ RESUMEN (4 tarjetas KPI) ============
             var panelResumen = new PanelAntiParpadeo();
             panelResumen.Dock = DockStyle.Top;
-            panelResumen.Height = 48;
+            panelResumen.Height = 16 + TarjetaKpi.AltoTarjeta + 4;
+            panelResumen.BackColor = Tema.Fondo;
             panelResumen.ColumnCount = 4;
-            panelResumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelResumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelResumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelResumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
+            for (int i = 0; i < 4; i++) panelResumen.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
             panelResumen.RowCount = 1;
             panelResumen.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            panelResumen.Padding = new Padding(40, 0, 40, 0);
+            panelResumen.Padding = new Padding(28, 16, 28, 0);
 
-            Font fntResumen = new Font("Bahnschrift Light", 10.5F);
-
-            lblResumen1 = new Label { Text = "📦 Materiales: —", Font = fntResumen, ForeColor = colorVerdeAccent, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill };
-            lblResumen2 = new Label { Text = "✂ Recortes: —", Font = fntResumen, ForeColor = colorVerdeAccent, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill };
-            lblResumen3 = new Label { Text = "🔧 Herramientas: —", Font = fntResumen, ForeColor = colorVerdeAccent, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill };
-            lblResumen4 = new Label { Text = "📋 Insumos: —", Font = fntResumen, ForeColor = colorVerdeAccent, TextAlign = ContentAlignment.MiddleCenter, Dock = DockStyle.Fill };
+            lblResumen1 = new TarjetaKpi { Etiqueta = "Materiales", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+            lblResumen2 = new TarjetaKpi { Etiqueta = "Recortes", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            lblResumen3 = new TarjetaKpi { Etiqueta = "Herramientas", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            lblResumen4 = new TarjetaKpi { Etiqueta = "Insumos", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
 
             panelResumen.Controls.Add(lblResumen1, 0, 0);
             panelResumen.Controls.Add(lblResumen2, 1, 0);
@@ -127,116 +96,98 @@ namespace SteeLog.Vistas.Inventario
             panelResumen.Controls.Add(lblResumen4, 3, 0);
 
             // ============ TABS ============
-            var panelTabs = new PanelAntiParpadeo();
+            var panelTabs = new FlowLayoutPanel();
             panelTabs.Dock = DockStyle.Top;
-            panelTabs.Height = 42;
-            panelTabs.ColumnCount = 4;
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panelTabs.RowCount = 1;
-            panelTabs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            panelTabs.Padding = new Padding(40, 0, 40, 0);
+            panelTabs.Height = 56;
+            panelTabs.BackColor = Tema.Fondo;
+            panelTabs.Padding = new Padding(28, 14, 28, 0);
+            panelTabs.WrapContents = false;
 
-            Font fntTab = new Font("Bahnschrift Light", 11F);
-            btnTabMateriales = CrearBotonTab("📦 Materiales", fntTab); btnTabMateriales.Click += (s, e) => CargarTab("materiales");
-            btnTabRecortes = CrearBotonTab("✂ Recortes", fntTab); btnTabRecortes.Click += (s, e) => CargarTab("recortes");
-            btnTabHerramientas = CrearBotonTab("🔧 Herramientas", fntTab); btnTabHerramientas.Click += (s, e) => CargarTab("herramientas");
-            btnTabInsumos = CrearBotonTab("📋 Insumos", fntTab); btnTabInsumos.Click += (s, e) => CargarTab("insumos");
+            btnTabMateriales = UiVista.BotonTab("Materiales"); btnTabMateriales.Click += (s, e) => CargarTab("materiales");
+            btnTabRecortes = UiVista.BotonTab("Recortes"); btnTabRecortes.Click += (s, e) => CargarTab("recortes");
+            btnTabHerramientas = UiVista.BotonTab("Herramientas"); btnTabHerramientas.Click += (s, e) => CargarTab("herramientas");
+            btnTabInsumos = UiVista.BotonTab("Insumos"); btnTabInsumos.Click += (s, e) => CargarTab("insumos");
 
-            panelTabs.Controls.Add(btnTabMateriales, 0, 0);
-            panelTabs.Controls.Add(btnTabRecortes, 1, 0);
-            panelTabs.Controls.Add(btnTabHerramientas, 2, 0);
-            panelTabs.Controls.Add(btnTabInsumos, 3, 0);
+            panelTabs.Controls.Add(btnTabMateriales);
+            panelTabs.Controls.Add(btnTabRecortes);
+            panelTabs.Controls.Add(btnTabHerramientas);
+            panelTabs.Controls.Add(btnTabInsumos);
 
             // ============ FILTROS ============
-            var panelFiltros = new PanelAntiParpadeo();
+            var panelFiltros = new TableLayoutPanel();
             panelFiltros.Dock = DockStyle.Top;
-            panelFiltros.Height = 50;
-            panelFiltros.ColumnCount = 9;
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 22)); // Búsqueda
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));    // Lbl Categoría
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18)); // Cmb Categoría
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));    // Lbl Estado
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 15)); // Cmb Estado
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));    // Lbl Obra / spacer
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 18)); // Cmb Obra / spacer
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 14)); // Btn Paquete
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 13)); // Btn Limpiar
+            panelFiltros.Height = 56;
+            panelFiltros.BackColor = Tema.Fondo;
+            panelFiltros.ColumnCount = 2;
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             panelFiltros.RowCount = 1;
             panelFiltros.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            panelFiltros.Padding = new Padding(40, 5, 40, 5);
-
-            Font fntFiltro = new Font("Bahnschrift Light", 10F);
-            Font fntLabel = new Font("Bahnschrift SemiLight", 9.5F);
+            panelFiltros.Padding = new Padding(28, 10, 28, 10);
 
             txtBusqueda = new Guna2TextBox
             {
-                PlaceholderText = "🔍  Buscar...",
-                Font = fntFiltro,
-                ForeColor = Color.FromArgb(230, 230, 230),
-                FillColor = Color.FromArgb(35, 50, 40),
-                BorderColor = colorBorde,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right,
-                BorderRadius = 3,
-                Size = new Size(200, 36),
-                FocusedState = { BorderColor = Color.FromArgb(39, 174, 96) },
-                HoverState = { BorderColor = Color.FromArgb(39, 174, 96) }
+                PlaceholderText = "Buscar...",
+                Dock = DockStyle.Fill,
+                Margin = new Padding(0, 0, 8, 0),
+                Height = Tema.AltoControl
             };
+            Tema.Input(txtBusqueda);
             txtBusqueda.TextChanged += (s, e) => AplicarFiltros();
 
-            lblCategoria = new Label { Text = "Cat:", Font = fntLabel, ForeColor = colorTexto, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right, TextAlign = ContentAlignment.MiddleRight };
-            cmbCategoria = CrearComboFiltro(fntFiltro);
+            var flujo = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+                Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = Tema.Fondo
+            };
+
+            lblCategoria = UiVista.Etiqueta("Categoría:");
+            cmbCategoria = CrearComboFiltro(190);
             cmbCategoria.SelectedIndexChanged += (s, e) => AplicarFiltros();
 
-            lblEstado = new Label { Text = "Estado:", Font = fntLabel, ForeColor = colorTexto, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right, TextAlign = ContentAlignment.MiddleRight };
-            cmbEstado = CrearComboFiltro(fntFiltro);
+            lblEstado = UiVista.Etiqueta("Estado:");
+            cmbEstado = CrearComboFiltro(160);
             cmbEstado.SelectedIndexChanged += (s, e) => AplicarFiltros();
 
-            lblObra = new Label { Text = "Obra:", Font = fntLabel, ForeColor = colorTexto, AutoSize = true, Anchor = AnchorStyles.Left | AnchorStyles.Right, TextAlign = ContentAlignment.MiddleRight };
-            cmbObra = CrearComboFiltro(fntFiltro);
+            lblObra = UiVista.Etiqueta("Obra:");
+            cmbObra = CrearComboFiltro(200);
             cmbObra.SelectedIndexChanged += (s, e) => AplicarFiltros();
-
-            btnLimpiar = new Guna2Button
-            {
-                Text = "LIMPIAR",
-                Font = fntFiltro,
-                FillColor = Color.FromArgb(180, 50, 50),
-                ForeColor = colorTexto,
-                BorderRadius = 2,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right,
-                Size = new Size(80, 34)
-            };
-            btnLimpiar.Click += (s, e) => LimpiarFiltros();
 
             btnPaquete = new Guna2Button
             {
                 Text = "Paquete",
-                Font = new Font("Bahnschrift Light", 10F),
-                FillColor = colorVerdeBoton,
-                ForeColor = colorTexto,
-                BorderRadius = 2,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right,
-                Size = new Size(100, 34),
+                Size = new Size(100, Tema.AltoControl),
+                Margin = new Padding(14, 0, 0, 0),
                 Visible = false
             };
+            Tema.Boton(btnPaquete, Variante.Secundario);
             btnPaquete.Click += (s, e) =>
             {
                 modoPaquete = !modoPaquete;
-                btnPaquete.FillColor = modoPaquete ? colorVerdeAccent : colorVerdeBoton;
+                Tema.Boton(btnPaquete, modoPaquete ? Variante.Primario : Variante.Secundario);
                 AplicarFiltros();
             };
 
+            btnLimpiar = new Guna2Button
+            {
+                Text = "Limpiar",
+                Size = new Size(90, Tema.AltoControl),
+                Margin = new Padding(8, 0, 0, 0)
+            };
+            Tema.Boton(btnLimpiar, Variante.Fantasma);
+            btnLimpiar.Click += (s, e) => LimpiarFiltros();
+
+            flujo.Controls.Add(lblCategoria);
+            flujo.Controls.Add(cmbCategoria);
+            flujo.Controls.Add(lblEstado);
+            flujo.Controls.Add(cmbEstado);
+            flujo.Controls.Add(lblObra);
+            flujo.Controls.Add(cmbObra);
+            flujo.Controls.Add(btnPaquete);
+            flujo.Controls.Add(btnLimpiar);
+
             panelFiltros.Controls.Add(txtBusqueda, 0, 0);
-            panelFiltros.Controls.Add(lblCategoria, 1, 0);
-            panelFiltros.Controls.Add(cmbCategoria, 2, 0);
-            panelFiltros.Controls.Add(lblEstado, 3, 0);
-            panelFiltros.Controls.Add(cmbEstado, 4, 0);
-            panelFiltros.Controls.Add(lblObra, 5, 0);
-            panelFiltros.Controls.Add(cmbObra, 6, 0);
-            panelFiltros.Controls.Add(btnPaquete, 7, 0);
-            panelFiltros.Controls.Add(btnLimpiar, 8, 0);
+            panelFiltros.Controls.Add(flujo, 1, 0);
 
             // ============ GRID ============
             dgvInventario = new Guna2DataGridView();
@@ -249,74 +200,60 @@ namespace SteeLog.Vistas.Inventario
             dgvInventario.RowHeadersVisible = false;
             dgvInventario.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvInventario.MultiSelect = false;
-            dgvInventario.BorderStyle = BorderStyle.None;
-            dgvInventario.CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal;
-            dgvInventario.ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None;
-            dgvInventario.ColumnHeadersHeight = 45;
-            dgvInventario.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvInventario.RowTemplate.Height = 40;
-            dgvInventario.EnableHeadersVisualStyles = false;
-            dgvInventario.BackgroundColor = colorPanelOscuro;
-            dgvInventario.GridColor = Color.FromArgb(40, 60, 50);
+            Tema.Grilla(dgvInventario);
+            dgvInventario.CellPainting += DgvInventario_CellPainting;
 
-            // Theme
-            dgvInventario.ThemeStyle.BackColor = colorPanelOscuro;
-            dgvInventario.ThemeStyle.GridColor = Color.FromArgb(40, 60, 50);
-            dgvInventario.ThemeStyle.HeaderStyle.BackColor = colorVerdeOscuro;
-            dgvInventario.ThemeStyle.HeaderStyle.ForeColor = colorTexto;
-            dgvInventario.ThemeStyle.HeaderStyle.Font = new Font("Bahnschrift", 11F, FontStyle.Bold);
-            dgvInventario.ThemeStyle.HeaderStyle.Height = 45;
-            dgvInventario.ColumnHeadersDefaultCellStyle.SelectionBackColor = colorVerdeOscuro;
-            dgvInventario.ColumnHeadersDefaultCellStyle.SelectionForeColor = colorTexto;
-            dgvInventario.ThemeStyle.RowsStyle.BackColor = colorFila;
-            dgvInventario.ThemeStyle.RowsStyle.ForeColor = colorTexto;
-            dgvInventario.ThemeStyle.RowsStyle.Font = new Font("Bahnschrift Light", 10.5F);
-            dgvInventario.ThemeStyle.RowsStyle.Height = 40;
-            dgvInventario.ThemeStyle.RowsStyle.SelectionBackColor = colorSeleccion;
-            dgvInventario.ThemeStyle.RowsStyle.SelectionForeColor = colorTexto;
-            dgvInventario.ThemeStyle.AlternatingRowsStyle.BackColor = colorFilaAlt;
-            dgvInventario.ThemeStyle.AlternatingRowsStyle.ForeColor = colorTexto;
-            dgvInventario.ThemeStyle.AlternatingRowsStyle.SelectionBackColor = colorSeleccion;
-            dgvInventario.ThemeStyle.AlternatingRowsStyle.SelectionForeColor = colorTexto;
+            var panelGrilla = new Panel { Dock = DockStyle.Fill, BackColor = Tema.Fondo, Padding = new Padding(28, 4, 28, 20) };
+            panelGrilla.Controls.Add(dgvInventario);
 
             // ============ AGREGAR AL FORM (orden inverso por DockStyle) ============
-            this.Controls.Add(dgvInventario);
+            this.Controls.Add(panelGrilla);
             this.Controls.Add(panelFiltros);
             this.Controls.Add(panelTabs);
             this.Controls.Add(panelResumen);
-            this.Controls.Add(panelTitulo);
+            var banda = Tema.TituloVista(this, "Inventario general");
+            if (banda != null) banda.SendToBack();
+        }
+
+        private void DgvInventario_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            try
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex < 0 || e.ColumnIndex >= dgvInventario.Columns.Count) return;
+                if (dgvInventario.Columns[e.ColumnIndex].Name != "Estado") return;
+                string texto = Convert.ToString(e.Value);
+                if (string.IsNullOrWhiteSpace(texto)) return;
+                UiVista.PintarPildora(e, UiVista.TextoEstado(texto), UiVista.ColorEstado(texto), false);
+            }
+            catch (Exception) { }
         }
 
         // ======================== HELPERS ========================
-        private Guna2Button CrearBotonTab(string text, Font font)
-        {
-            return new Guna2Button
-            {
-                Text = text,
-                Font = font,
-                FillColor = colorVerdeOscuro,
-                ForeColor = colorTexto,
-                BorderRadius = 0,
-                Anchor = AnchorStyles.Left | AnchorStyles.Right,
-                Size = new Size(180, 36)
-            };
-        }
-
-        private Guna2ComboBox CrearComboFiltro(Font font)
+        private Guna2ComboBox CrearComboFiltro(int ancho)
         {
             var cmb = new Guna2ComboBox();
-            cmb.Font = font;
-            cmb.ForeColor = Color.FromArgb(230, 230, 230);
-            cmb.FillColor = Color.FromArgb(35, 50, 40);
-            cmb.BorderColor = colorBorde;
             cmb.DropDownStyle = ComboBoxStyle.DropDownList;
-            cmb.ItemHeight = 26;
-            cmb.Anchor = AnchorStyles.Left | AnchorStyles.Right;
-            cmb.Size = new Size(150, 34);
-            cmb.BorderRadius = 3;
-            cmb.FocusedColor = Color.FromArgb(39, 174, 96);
-            cmb.FocusedState.BorderColor = Color.FromArgb(39, 174, 96);
+            cmb.Size = new Size(ancho, Tema.AltoControl);
+            cmb.Margin = new Padding(0, 7, 0, 0);
+            Tema.Combo(cmb);
+            cmb.ItemHeight = 30; cmb.Height = Tema.AltoControl;
             return cmb;
+        }
+
+        // Los combos muestran "Todas"/"Todos" y sentence case; la consulta usa los valores de dominio.
+        private static string ValorFiltro(object seleccion, bool mayusculas)
+        {
+            string s = seleccion == null ? "" : seleccion.ToString();
+            if (string.Equals(s, "Todas", StringComparison.OrdinalIgnoreCase)) return "TODAS";
+            if (string.Equals(s, "Todos", StringComparison.OrdinalIgnoreCase)) return "TODOS";
+            return mayusculas ? s.ToUpperInvariant() : s;
+        }
+
+        private static string MostrarFiltro(string valor)
+        {
+            if (valor == "TODAS") return "Todas";
+            if (valor == "TODOS") return "Todos";
+            return valor;
         }
 
         private void ConfigurarComboBuscable(Guna2ComboBox combo)
@@ -336,7 +273,7 @@ namespace SteeLog.Vistas.Inventario
                 var categorias = await presenter.CategoriasAsync(cierre.Token);
                 if (cierre.IsCancellationRequested || IsDisposed) return;
                 cmbCategoria.Items.Clear();
-                foreach (var c in categorias) cmbCategoria.Items.Add(c);
+                foreach (var c in categorias) cmbCategoria.Items.Add(MostrarFiltro(c));
                 ConfigurarComboBuscable(cmbCategoria);
                 if (cmbCategoria.Items.Count > 0) cmbCategoria.SelectedIndex = 0;
 
@@ -359,7 +296,7 @@ namespace SteeLog.Vistas.Inventario
             switch (tabActual)
             {
                 case "materiales":
-                    cmbEstado.Items.AddRange(new object[] { "TODOS", "CON STOCK", "STOCK BAJO", "SIN STOCK" });
+                    cmbEstado.Items.AddRange(new object[] { "Todos", "Con stock", "Stock bajo", "Sin stock" });
                     lblEstado.Text = "Stock:";
                     lblObra.Visible = false;
                     cmbObra.Visible = false;
@@ -374,10 +311,10 @@ namespace SteeLog.Vistas.Inventario
                     cmbObra.Visible = false;
                     lblCategoria.Visible = true;
                     cmbCategoria.Visible = true;
-                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; btnPaquete.FillColor = colorVerdeBoton; }
+                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; Tema.Boton(btnPaquete, Variante.Secundario); }
                     break;
                 case "herramientas":
-                    cmbEstado.Items.AddRange(new object[] { "TODOS", "EN OBRA", "DISPONIBLE" });
+                    cmbEstado.Items.AddRange(new object[] { "Todos", "En obra", "Disponible" });
                     cmbEstado.Visible = true;
                     lblEstado.Visible = true;
                     lblEstado.Text = "Estado:";
@@ -385,10 +322,10 @@ namespace SteeLog.Vistas.Inventario
                     cmbObra.Visible = true;
                     lblCategoria.Visible = false;
                     cmbCategoria.Visible = false;
-                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; btnPaquete.FillColor = colorVerdeBoton; }
+                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; Tema.Boton(btnPaquete, Variante.Secundario); }
                     break;
                 case "insumos":
-                    cmbEstado.Items.AddRange(new object[] { "TODOS", "EN OBRA", "CONSUMIDO", "DISPONIBLE" });
+                    cmbEstado.Items.AddRange(new object[] { "Todos", "En obra", "Consumido", "Disponible" });
                     cmbEstado.Visible = true;
                     lblEstado.Visible = true;
                     lblEstado.Text = "Estado:";
@@ -396,11 +333,11 @@ namespace SteeLog.Vistas.Inventario
                     cmbObra.Visible = true;
                     lblCategoria.Visible = false;
                     cmbCategoria.Visible = false;
-                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; btnPaquete.FillColor = colorVerdeBoton; }
+                    if (btnPaquete != null) { btnPaquete.Visible = false; modoPaquete = false; Tema.Boton(btnPaquete, Variante.Secundario); }
                     break;
             }
             if (cmbEstado.Items.Count > 0)
-                cmbEstado.SelectedItem = tabActual == "herramientas" ? "EN OBRA" : "TODOS";
+                cmbEstado.SelectedItem = tabActual == "herramientas" ? "En obra" : "Todos";
         }
 
         private async void CargarObrasFiltro()
@@ -414,7 +351,7 @@ namespace SteeLog.Vistas.Inventario
 
             cmbObra.Items.Clear();
             foreach (var obra in obras)
-                cmbObra.Items.Add(obra);
+                cmbObra.Items.Add(MostrarFiltro(obra));
 
             if (cmbObra.Items.Count > 0)
                 cmbObra.SelectedIndex = 0;
@@ -430,10 +367,15 @@ namespace SteeLog.Vistas.Inventario
             {
                 var resumen = await presenter.ResumenAsync(cierre.Token);
                 if (cierre.IsCancellationRequested || IsDisposed || version != versionResumen) return;
-                lblResumen1.Text = $"📦 Materiales: {resumen.total_materiales} ({resumen.materiales_sin_stock} sin stock)";
-                lblResumen2.Text = $"✂ Recortes: {resumen.total_recortes} disponibles";
-                lblResumen3.Text = $"🔧 Herramientas: {resumen.total_herramientas} ({resumen.herramientas_en_obra} en obra)";
-                lblResumen4.Text = $"📋 Insumos: {resumen.total_insumos} ({resumen.insumos_en_obra} en obra)";
+                lblResumen1.Valor = resumen.total_materiales.ToString("N0");
+                lblResumen1.Detalle = resumen.materiales_sin_stock + " sin stock";
+                lblResumen1.ColorDetalle = resumen.materiales_sin_stock > 0 ? Tema.Advertencia : Tema.TextoApagado;
+                lblResumen2.Valor = resumen.total_recortes.ToString("N0");
+                lblResumen2.Detalle = "disponibles";
+                lblResumen3.Valor = resumen.total_herramientas.ToString("N0");
+                lblResumen3.Detalle = resumen.herramientas_en_obra + " en obra";
+                lblResumen4.Valor = resumen.total_insumos.ToString("N0");
+                lblResumen4.Detalle = resumen.insumos_en_obra + " en obra";
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if (!cierre.IsCancellationRequested && version == versionResumen) ToastNotification.ShowError("Error cargando resumen: " + ex.Message); }
@@ -453,10 +395,10 @@ namespace SteeLog.Vistas.Inventario
 
         private void ActualizarEstiloTabs()
         {
-            btnTabMateriales.FillColor = tabActual == "materiales" ? colorVerdeAccent : colorVerdeOscuro;
-            btnTabRecortes.FillColor = tabActual == "recortes" ? colorVerdeAccent : colorVerdeOscuro;
-            btnTabHerramientas.FillColor = tabActual == "herramientas" ? colorVerdeAccent : colorVerdeOscuro;
-            btnTabInsumos.FillColor = tabActual == "insumos" ? colorVerdeAccent : colorVerdeOscuro;
+            Tema.Boton(btnTabMateriales, tabActual == "materiales" ? Variante.TabActiva : Variante.Tab);
+            Tema.Boton(btnTabRecortes, tabActual == "recortes" ? Variante.TabActiva : Variante.Tab);
+            Tema.Boton(btnTabHerramientas, tabActual == "herramientas" ? Variante.TabActiva : Variante.Tab);
+            Tema.Boton(btnTabInsumos, tabActual == "insumos" ? Variante.TabActiva : Variante.Tab);
         }
 
         // ======================== FILTROS ========================
@@ -466,9 +408,9 @@ namespace SteeLog.Vistas.Inventario
             try
             {
                 string busqueda = txtBusqueda?.Text?.Trim() ?? "";
-                string categoria = cmbCategoria?.SelectedItem?.ToString() ?? "";
-                string estado = cmbEstado?.SelectedItem?.ToString() ?? "";
-                string obra = cmbObra?.SelectedItem?.ToString() ?? "";
+                string categoria = ValorFiltro(cmbCategoria?.SelectedItem, false);
+                string estado = ValorFiltro(cmbEstado?.SelectedItem, true);
+                string obra = ValorFiltro(cmbObra?.SelectedItem, false);
 
                 switch (tabActual)
                 {
@@ -505,7 +447,7 @@ namespace SteeLog.Vistas.Inventario
             if (cmbEstado.Items.Count > 0) cmbEstado.SelectedIndex = 0;
             if (cmbObra.Items.Count > 0) cmbObra.SelectedIndex = 0;
             modoPaquete = false;
-            if (btnPaquete != null) btnPaquete.FillColor = colorVerdeBoton;
+            if (btnPaquete != null) Tema.Boton(btnPaquete, Variante.Secundario);
             AplicarFiltros();
         }
 
@@ -553,7 +495,6 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Nombre"] != null)
             {
                 dgvInventario.Columns["Nombre"].FillWeight = mostrarPrecios ? 21 : 25;
-                dgvInventario.Columns["Nombre"].DefaultCellStyle.Padding = new Padding(20, 0, 0, 0);
             }
             if (dgvInventario.Columns["Categoría"] != null) dgvInventario.Columns["Categoría"].FillWeight = mostrarPrecios ? 13 : 15;
             if (dgvInventario.Columns["Stock Actual"] != null)
@@ -629,8 +570,6 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Material"] != null)
             {
                 dgvInventario.Columns["Material"].FillWeight = 55;
-                dgvInventario.Columns["Material"].DefaultCellStyle.Padding = new Padding(20, 0, 0, 0);
-                dgvInventario.Columns["Material"].HeaderCell.Style.Padding = new Padding(20, 0, 0, 0);
             }
             foreach (string col in new[] { "Unidades", "Paq. Completos", "Sobrante (u)" })
             {
@@ -663,7 +602,6 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Material"] != null)
             {
                 dgvInventario.Columns["Material"].FillWeight = 30;
-                dgvInventario.Columns["Material"].DefaultCellStyle.Padding = new Padding(20, 0, 0, 0);
             }
             if (dgvInventario.Columns["Categoría"] != null) dgvInventario.Columns["Categoría"].FillWeight = 20;
             if (dgvInventario.Columns["Dimensiones"] != null)
@@ -767,7 +705,6 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Herramienta"] != null)
             {
                 dgvInventario.Columns["Herramienta"].FillWeight = 30;
-                dgvInventario.Columns["Herramienta"].DefaultCellStyle.Padding = new Padding(20, 0, 0, 0);
             }
             if (dgvInventario.Columns["Estado"] != null)
             {
@@ -796,7 +733,6 @@ namespace SteeLog.Vistas.Inventario
             if (dgvInventario.Columns["Insumo"] != null)
             {
                 dgvInventario.Columns["Insumo"].FillWeight = 30;
-                dgvInventario.Columns["Insumo"].DefaultCellStyle.Padding = new Padding(20, 0, 0, 0);
             }
             if (dgvInventario.Columns["Estado"] != null)
             {

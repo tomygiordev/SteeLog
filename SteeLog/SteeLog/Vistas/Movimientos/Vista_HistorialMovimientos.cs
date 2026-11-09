@@ -13,6 +13,8 @@ using Guna.UI2.WinForms;
 using SteeLog.Modelos;
 using SteeLog.Servicios;
 using SteeLog;
+using SteeLog.UI;
+using SteeLog.Vistas.Movimientos.Ordenes;
 
 namespace SteeLog.Vistas.Movimientos
 {
@@ -37,13 +39,14 @@ namespace SteeLog.Vistas.Movimientos
         private List<MovimientoGrupo> listaGrupos = new List<MovimientoGrupo>();
         private Guna.UI2.WinForms.Guna2DataGridView dgvDetalles;
         private Label lblDetalles;
-        private CheckBox chkDesde;
-        private CheckBox chkHasta;
+        private CheckTema chkDesde;
+        private CheckTema chkHasta;
         private decimal precioUnitarioAnterior;
 
         public Vista_HistorialMovimientos()
         {
             InitializeComponent();
+            Tema.SinEscala(this);
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             Application.AddMessageFilter(this);
             FormClosed += (s, e) => CerrarRecursos();
@@ -53,6 +56,7 @@ namespace SteeLog.Vistas.Movimientos
             ConfigurarUIAdicional();
             ConfigurarFechas();
             ConfigurarGrid();
+            Load += (s, e) => AplicarTemaHistorial();
             Load += (s, e) => { CargarTiposMovimiento(); CargarHistorial(); };
         }
 
@@ -90,27 +94,14 @@ namespace SteeLog.Vistas.Movimientos
             materiales.RowStyles.Add(new RowStyle(SizeType.Percent, 50F));
 
             lblDetalles = new Label();
-            lblDetalles.Text = "Materiales del Movimiento Seleccionado";
-            lblDetalles.Font = new Font("Bahnschrift SemiBold", 12F, FontStyle.Bold);
-            lblDetalles.ForeColor = Color.White;
+            lblDetalles.Text = "MATERIALES DEL MOVIMIENTO SELECCIONADO";
+            lblDetalles.Font = Tema.FuenteSubtitulo;
+            lblDetalles.ForeColor = Tema.TextoSecundario;
+            lblDetalles.Padding = new Padding(4, 0, 0, 0);
             lblDetalles.Dock = DockStyle.Fill;
             lblDetalles.TextAlign = ContentAlignment.MiddleLeft;
 
             dgvDetalles = new Guna.UI2.WinForms.Guna2DataGridView();
-            dgvDetalles.EnableHeadersVisualStyles = false;
-            dgvDetalles.ThemeStyle.AlternatingRowsStyle.BackColor = Color.FromArgb(29, 38, 35);
-            dgvDetalles.ThemeStyle.BackColor = Color.FromArgb(29, 38, 35);
-            dgvDetalles.ThemeStyle.GridColor = Color.FromArgb(29, 38, 35);
-            dgvDetalles.ThemeStyle.HeaderStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvDetalles.ThemeStyle.HeaderStyle.ForeColor = Color.White;
-            dgvDetalles.ThemeStyle.HeaderStyle.Height = 35;
-            dgvDetalles.ThemeStyle.RowsStyle.BackColor = Color.FromArgb(29, 38, 35);
-            dgvDetalles.ThemeStyle.RowsStyle.ForeColor = Color.White;
-            dgvDetalles.ThemeStyle.RowsStyle.Height = 35;
-            dgvDetalles.ThemeStyle.RowsStyle.SelectionBackColor = Color.FromArgb(45, 55, 52);
-            dgvDetalles.ThemeStyle.RowsStyle.SelectionForeColor = Color.White;
-            dgvDetalles.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvDetalles.RowTemplate.Height = 35;
             dgvDetalles.AllowUserToAddRows = false;
             dgvDetalles.AllowUserToDeleteRows = false;
             dgvDetalles.ReadOnly = true;
@@ -189,26 +180,26 @@ namespace SteeLog.Vistas.Movimientos
                 if (det.esrecorte)
                 {
                     e.Value = "RECORTE" + (det.medida_recorte.HasValue ? $" ({det.medida_recorte.Value})" : "");
-                    e.CellStyle.ForeColor = Color.Orange;
-                    e.CellStyle.SelectionForeColor = Color.Orange;
+                    e.CellStyle.ForeColor = Tema.Advertencia;
+                    e.CellStyle.SelectionForeColor = Tema.Advertencia;
                 }
                 else if (det.esinsumo)
                 {
                     e.Value = "INSUMO";
-                    e.CellStyle.ForeColor = Color.FromArgb(0, 188, 212);
-                    e.CellStyle.SelectionForeColor = Color.FromArgb(0, 188, 212);
+                    e.CellStyle.ForeColor = Tema.Info;
+                    e.CellStyle.SelectionForeColor = Tema.Info;
                 }
                 else if (det.es_compra_eventual)
                 {
                     e.Value = "EVENTUAL";
-                    e.CellStyle.ForeColor = Color.FromArgb(255, 165, 0);
-                    e.CellStyle.SelectionForeColor = Color.FromArgb(255, 165, 0);
+                    e.CellStyle.ForeColor = Tema.Advertencia;
+                    e.CellStyle.SelectionForeColor = Tema.Advertencia;
                 }
                 else
                 {
                     e.Value = "—";
-                    e.CellStyle.ForeColor = Color.FromArgb(80, 80, 80);
-                    e.CellStyle.SelectionForeColor = Color.FromArgb(80, 80, 80);
+                    e.CellStyle.ForeColor = Tema.TextoApagado;
+                    e.CellStyle.SelectionForeColor = Tema.TextoApagado;
                 }
                 e.FormattingApplied = true;
             }
@@ -220,8 +211,8 @@ namespace SteeLog.Vistas.Movimientos
             else if (colName == "colDetPrecio")
             {
                 e.CellStyle.ForeColor = det.es_compra_eventual
-                    ? Color.DarkOrange
-                    : Color.FromArgb(140, 140, 140);
+                    ? Tema.Advertencia
+                    : Tema.TextoApagado;
                 e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
             }
         }
@@ -316,30 +307,30 @@ namespace SteeLog.Vistas.Movimientos
         {
             dtpDesde.Value = DateTime.Now.AddMonths(-1);
             dtpHasta.Value = DateTime.Now;
-            dtpDesde.Enabled = false;
-            dtpHasta.Enabled = false;
+            UiVista.AtenuarFecha(dtpDesde, false);
+            UiVista.AtenuarFecha(dtpHasta, false);
+            dtpDesde.ValueChanged += (s, e) => { if (chkDesde != null && !chkDesde.Checked) chkDesde.Checked = true; };
+            dtpHasta.ValueChanged += (s, e) => { if (chkHasta != null && !chkHasta.Checked) chkHasta.Checked = true; };
 
             // Checkbox Desde
-            chkDesde = new CheckBox();
+            chkDesde = new CheckTema();
             chkDesde.Text = "Desde:";
-            chkDesde.ForeColor = System.Drawing.Color.White;
-            chkDesde.Font = new System.Drawing.Font("Bahnschrift Light", 11.5F);
+            chkDesde.ForeColor = Tema.TextoSecundario;
             chkDesde.AutoSize = true;
             chkDesde.Anchor = AnchorStyles.Left;
             chkDesde.Checked = false;
-            chkDesde.CheckedChanged += (s, e) => { dtpDesde.Enabled = chkDesde.Checked; BuscarHistorial(); };
+            chkDesde.CheckedChanged += (s, e) => { UiVista.AtenuarFecha(dtpDesde, chkDesde.Checked); BuscarHistorial(); };
             materiales.Controls.Remove(lblDesde);
             materiales.Controls.Add(chkDesde, 0, 0);
 
             // Checkbox Hasta
-            chkHasta = new CheckBox();
+            chkHasta = new CheckTema();
             chkHasta.Text = "Hasta:";
-            chkHasta.ForeColor = System.Drawing.Color.White;
-            chkHasta.Font = new System.Drawing.Font("Bahnschrift Light", 11.5F);
+            chkHasta.ForeColor = Tema.TextoSecundario;
             chkHasta.AutoSize = true;
             chkHasta.Anchor = AnchorStyles.Left;
             chkHasta.Checked = false;
-            chkHasta.CheckedChanged += (s, e) => { dtpHasta.Enabled = chkHasta.Checked; BuscarHistorial(); };
+            chkHasta.CheckedChanged += (s, e) => { UiVista.AtenuarFecha(dtpHasta, chkHasta.Checked); BuscarHistorial(); };
             materiales.Controls.Remove(lblHasta);
             materiales.Controls.Add(chkHasta, 2, 0);
         }
@@ -386,9 +377,7 @@ namespace SteeLog.Vistas.Movimientos
                     }
                 }
 
-                cmbTipoMov.DataSource = dtOrdenado;
-                cmbTipoMov.DisplayMember = "nombre";
-                cmbTipoMov.ValueMember = "nombre";
+                UiVista.AsignarDatos(cmbTipoMov, dtOrdenado, "nombre", "nombre");
                 cmbTipoMov.SelectedIndex = 0;
             }
             catch (OperationCanceledException) { }
@@ -403,6 +392,74 @@ namespace SteeLog.Vistas.Movimientos
             }
         }
 
+        private void AplicarTemaHistorial()
+        {
+            BackColor = Tema.Fondo;
+            Padding = new Padding(0);
+
+            // Banda estandar; el contador pasa a texto secundario a la derecha.
+            panelTitulo.Visible = false;
+            var banda = Tema.TituloVista(this, "Historial de movimientos");
+            lblSubtitulo.AutoSize = false;
+            lblSubtitulo.Anchor = AnchorStyles.None;
+            lblSubtitulo.Dock = DockStyle.Right;
+            lblSubtitulo.Width = 320;
+            lblSubtitulo.Padding = new Padding(0, 0, 28, 0);
+            lblSubtitulo.TextAlign = ContentAlignment.MiddleRight;
+            lblSubtitulo.Font = Tema.FuenteTexto;
+            lblSubtitulo.ForeColor = Tema.TextoSecundario;
+            lblSubtitulo.BackColor = Color.Transparent;
+            panelTitulo.Controls.Remove(lblSubtitulo);
+            banda.Controls.Add(lblSubtitulo);
+
+            materiales.AutoSize = false;
+            materiales.Anchor = AnchorStyles.Top | AnchorStyles.Left;
+            materiales.Dock = DockStyle.Fill;
+            materiales.BringToFront();
+            materiales.CellBorderStyle = TableLayoutPanelCellBorderStyle.None;
+            materiales.BackColor = Tema.Fondo;
+            materiales.Padding = new Padding(16, 12, 16, 12);
+            materiales.RowStyles[0] = new RowStyle(SizeType.Absolute, 52F);
+            materiales.RowStyles[1] = new RowStyle(SizeType.Percent, 58F);
+            materiales.RowStyles[2] = new RowStyle(SizeType.Absolute, 40F);
+            materiales.RowStyles[3] = new RowStyle(SizeType.Percent, 42F);
+
+            foreach (var chk in new[] { chkDesde, chkHasta }) { chk.Margin = new Padding(3, 3, 6, 3); }
+            lblTipo.Font = Tema.FuenteTexto; lblTipo.ForeColor = Tema.TextoSecundario; lblTipo.Margin = new Padding(14, 0, 6, 0);
+            foreach (var dtp in new[] { dtpDesde, dtpHasta })
+            {
+                Tema.Fecha(dtp);
+                dtp.Size = new Size(140, Tema.AltoControl);
+                dtp.Anchor = AnchorStyles.Left;
+                dtp.Margin = new Padding(0, 0, 8, 0);
+            }
+            Tema.Combo(cmbTipoMov);
+            cmbTipoMov.ItemHeight = 28;
+            cmbTipoMov.Size = new Size(190, Tema.AltoControl);
+            cmbTipoMov.Anchor = AnchorStyles.Left;
+            cmbTipoMov.Margin = new Padding(0, 0, 12, 0);
+            Tema.Input(txtBuscarMaterial);
+            txtBuscarMaterial.Dock = DockStyle.None;
+            txtBuscarMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtBuscarMaterial.Height = Tema.AltoControl;
+            txtBuscarMaterial.Margin = new Padding(0, 0, 12, 0);
+            Tema.Boton(btnExportar, Variante.Primario);
+            btnExportar.Text = "Exportar Excel";
+            btnExportar.Size = new Size(130, Tema.AltoControl);
+            btnExportar.Anchor = AnchorStyles.Left;
+            btnExportar.Margin = new Padding(0);
+
+            UiVista.AtenuarFecha(dtpDesde, chkDesde.Checked);
+            UiVista.AtenuarFecha(dtpHasta, chkHasta.Checked);
+
+            Tema.Grilla(dgvHistorial);
+            dgvHistorial.RowTemplate.DefaultCellStyle.Font = Tema.FuenteTexto;
+            dgvHistorial.AutoSizeRowsMode = DataGridViewAutoSizeRowsMode.None;
+            Tema.Grilla(dgvDetalles);
+            dgvDetalles.Margin = new Padding(0);
+            dgvHistorial.Margin = new Padding(0);
+        }
+
         private void ConfigurarGrid()
         {
             dgvHistorial.EnableHeadersVisualStyles = false;
@@ -410,22 +467,8 @@ namespace SteeLog.Vistas.Movimientos
             dgvHistorial.MultiSelect = false;
             dgvHistorial.ReadOnly = true;
             dgvHistorial.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvHistorial.ColumnHeadersHeight = 35;
 
-            // Colores de gestión estándar
-            dgvHistorial.ThemeStyle.HeaderStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvHistorial.ThemeStyle.HeaderStyle.ForeColor = Color.White;
-            dgvHistorial.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvHistorial.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgvHistorial.ThemeStyle.RowsStyle.BackColor = Color.FromArgb(29, 38, 35);
-            dgvHistorial.ThemeStyle.RowsStyle.ForeColor = Color.White;
-            dgvHistorial.ThemeStyle.RowsStyle.SelectionBackColor = Color.FromArgb(45, 55, 52);
-            dgvHistorial.ThemeStyle.RowsStyle.SelectionForeColor = Color.White;
-            dgvHistorial.ThemeStyle.AlternatingRowsStyle.BackColor = Color.FromArgb(29, 38, 35);
-            dgvHistorial.RowTemplate.Height = 40;
+            dgvHistorial.RowTemplate.Height = Tema.AltoFila;
 
             dgvHistorial.AutoGenerateColumns = false;
             dgvHistorial.Columns.Clear();
@@ -435,21 +478,21 @@ namespace SteeLog.Vistas.Movimientos
                 Name = "colFecha",
                 HeaderText = "Fecha",
                 DataPropertyName = "fecha",
-                FillWeight = 12
+                FillWeight = 10
             });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "colIdMov",
                 HeaderText = "Nº Mov",
                 DataPropertyName = "id_movimiento",
-                FillWeight = 8
+                FillWeight = 7
             });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn
             {
                 Name = "colRemito",
                 HeaderText = "Remito",
                 DataPropertyName = "nroremito",
-                FillWeight = 8
+                FillWeight = 15
             });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn
             {
@@ -478,14 +521,9 @@ namespace SteeLog.Vistas.Movimientos
             colPdf.HeaderText = "";
             colPdf.Text = "PDF";
             colPdf.UseColumnTextForButtonValue = true;
-            colPdf.Width = 45;
-            colPdf.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colPdf.FlatStyle = FlatStyle.Flat;
-            colPdf.DefaultCellStyle.BackColor = Color.FromArgb(29, 38, 35);
-            colPdf.DefaultCellStyle.ForeColor = Color.FromArgb(100, 200, 100); // Verde suave en lugar de azul
-            colPdf.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 55, 52);
-            colPdf.DefaultCellStyle.SelectionForeColor = Color.FromArgb(100, 200, 100);
-            colPdf.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+            colPdf.Width = 80;
+            colPdf.AutoSizeMode = DataGridViewAutoSizeColumnMode.None; // Verde suave en lugar de azul
+                colPdf.Tag = Variante.Primario;
             dgvHistorial.Columns.Add(colPdf);
 
             var colEditar = new DataGridViewButtonColumn();
@@ -493,36 +531,25 @@ namespace SteeLog.Vistas.Movimientos
             colEditar.HeaderText = "";
             colEditar.Text = "Editar";
             colEditar.UseColumnTextForButtonValue = true;
-            colEditar.Width = 55;
+            colEditar.Width = 90;
             colEditar.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colEditar.FlatStyle = FlatStyle.Flat;
-            colEditar.DefaultCellStyle.BackColor = Color.FromArgb(29, 38, 35);
-            colEditar.DefaultCellStyle.ForeColor = Color.DarkOrange; 
-            colEditar.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 55, 52);
-            colEditar.DefaultCellStyle.SelectionForeColor = Color.DarkOrange;
-            colEditar.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                colEditar.Tag = Variante.Secundario;
             dgvHistorial.Columns.Add(colEditar);
 
             // Ocultar Editar para rol Galpon
             if (SteeLog.Servicios.SessionManager.Role != SteeLog.Servicios.UserRole.Admin)
             {
                 colEditar.Visible = false;
-                colEditar.Width = 0;
             }
 
             var colEliminar = new DataGridViewButtonColumn();
             colEliminar.Name = "colEliminar";
             colEliminar.HeaderText = "";
-            colEliminar.Text = "X";
+            colEliminar.Text = "Eliminar";
             colEliminar.UseColumnTextForButtonValue = true;
-            colEliminar.Width = 35;
+            colEliminar.Width = 100;
             colEliminar.AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-            colEliminar.FlatStyle = FlatStyle.Flat;
-            colEliminar.DefaultCellStyle.BackColor = Color.FromArgb(29, 38, 35);
-            colEliminar.DefaultCellStyle.ForeColor = Color.IndianRed;
-            colEliminar.DefaultCellStyle.SelectionBackColor = Color.FromArgb(45, 55, 52);
-            colEliminar.DefaultCellStyle.SelectionForeColor = Color.IndianRed;
-            colEliminar.DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                colEliminar.Tag = Variante.Peligro;
             dgvHistorial.Columns.Add(colEliminar);
 
             dgvHistorial.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
@@ -607,17 +634,14 @@ namespace SteeLog.Vistas.Movimientos
                     AdvertirResultadoIncierto("Hay un resultado incierto pendiente. Recargue el historial (F5) y verifique antes de eliminar.");
                 return;
             }
-            var result = MessageBox.Show(
+            bool confirmado = Dialogo.Confirmar(
                 $"¿Está seguro de que desea eliminar el movimiento completo?\r\n\r\n" +
                 $"Movimiento: {row.id_movimiento}\r\n" +
                 $"Origen: {row.origen} | Destino: {row.destino}\r\n\r\n" +
                 "El stock de todos sus materiales se revertirá automáticamente.",
-                "Confirmar Eliminación",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
+                "Confirmar eliminación", true, this.FindForm());
 
-            if (result == DialogResult.Yes)
+            if (confirmado)
             {
                 try
                 {
@@ -660,11 +684,11 @@ namespace SteeLog.Vistas.Movimientos
                 string tipo = e.Value.ToString().ToUpper();
                 if (tipo.Contains("ENTRADA") || tipo.Contains("INGRESO") || tipo.Contains("COMPRA") || tipo.Contains("AJUSTE POSITIVO") || tipo.Contains("APORTE"))
                 {
-                    e.CellStyle.ForeColor = Color.FromArgb(100, 200, 100); e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
+                    e.CellStyle.ForeColor = Tema.AcentoHover; e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
                 }
                 else if (tipo.Contains("SALIDA") || tipo.Contains("EGRESO") || tipo.Contains("ENVIO") || tipo.Contains("ENVÍO") || tipo.Contains("AJUSTE NEGATIVO") || tipo.Contains("RECORTE"))
                 {
-                    e.CellStyle.ForeColor = Color.FromArgb(200, 100, 100); e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
+                    e.CellStyle.ForeColor = Color.FromArgb(222, 110, 100); e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
                 }
             }
 

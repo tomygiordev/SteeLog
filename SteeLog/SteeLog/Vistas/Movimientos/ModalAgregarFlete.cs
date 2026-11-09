@@ -3,6 +3,8 @@ using System.Windows.Forms;
 using SteeLog.Presentation;
 using SteeLog.CompositionRoot;
 using System.Threading;
+using System.Drawing;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos
 {
@@ -19,8 +21,31 @@ namespace SteeLog.Vistas.Movimientos
         public ModalAgregarFlete()
         {
             InitializeComponent();
+            AplicarTema();
             FormClosed += (s,e) => cierre.Cancel();
             Disposed += (s,e) => cierre.Cancel();
+        }
+
+        private void AplicarTema()
+        {
+            // El titulo vive en la barra del modal (Tema.ChromeModal): se reacomoda el contenido hacia arriba.
+            lblTitulo.Visible = false;
+            lblNombre.Font = Tema.FuenteTexto;
+            lblNombre.ForeColor = Tema.TextoSecundario;
+            lblNombre.Location = new Point(24, 20);
+            Tema.Input(txtNombre);
+            txtNombre.Location = new Point(24, 46);
+            txtNombre.Size = new Size(352, Tema.AltoControl);
+            Tema.Boton(btnConfirmar, Variante.Primario);
+            Tema.Boton(btnCancelar, Variante.Secundario);
+            btnConfirmar.Size = new Size(130, Tema.AltoControl);
+            btnCancelar.Size = new Size(130, Tema.AltoControl);
+            btnConfirmar.Location = new Point(246, 104);
+            btnCancelar.Location = new Point(106, 104);
+            ClientSize = new Size(400, 156);
+            AcceptButton = btnConfirmar;
+            CancelButton = btnCancelar;
+            Tema.ChromeModal(this, "Nuevo flete");
         }
 
         private async void btnConfirmar_Click(object sender, EventArgs e)

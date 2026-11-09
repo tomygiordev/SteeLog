@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -22,11 +23,12 @@ namespace SteeLog.Vistas
         private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
         public Vista_Obras()
         {
             InitializeComponent();
+            GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarObraBoton);
             txtObra.MaxLength = Obra.MaxNombre;
             dgvObras.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
             dgvObras.SelectionChanged += dgvObras_SelectionChanged;
@@ -86,20 +88,13 @@ namespace SteeLog.Vistas
             dgvObras.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvObras.RowHeadersVisible = false;
             dgvObras.AllowUserToResizeRows = false;
-            dgvObras.ColumnHeadersHeight = 35;
             dgvObras.MultiSelect = false;
             dgvObras.ReadOnly = true;
             dgvObras.AllowUserToResizeColumns = false;
-            dgvObras.EnableHeadersVisualStyles = false;
-            dgvObras.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvObras.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvObras.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvObras.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvObras.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvObras.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             if (dgvObras.Columns["Id"] != null) dgvObras.Columns["Id"].Visible = false;
             if (dgvObras.Columns["Nombre"] != null) { dgvObras.Columns["Nombre"].HeaderText = "Nombre de obra"; dgvObras.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
             if (dgvObras.Columns["Activa"] != null) { dgvObras.Columns["Activa"].HeaderText = "Estado"; dgvObras.Columns["Activa"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; dgvObras.Columns["Activa"].FillWeight = 25; }
+            GestionUi.AjustarColumnas(dgvObras);
         }
         private void LimpiarSeleccion()
         {

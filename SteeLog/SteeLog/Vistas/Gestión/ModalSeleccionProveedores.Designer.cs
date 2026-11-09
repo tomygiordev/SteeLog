@@ -15,7 +15,7 @@
 
         private void InitializeComponent()
         {
-            this.clbProveedores = new System.Windows.Forms.CheckedListBox();
+            this.clbProveedores = new SteeLog.UI.ListaChecksTema();
             this.btnAceptar = new Guna.UI2.WinForms.Guna2Button();
             this.btnCancelar = new Guna.UI2.WinForms.Guna2Button();
             this.label1 = new System.Windows.Forms.Label();
@@ -96,13 +96,13 @@
             this.MinimizeBox = false;
             this.Name = "ModalSeleccionProveedores";
             this.StartPosition = System.Windows.Forms.FormStartPosition.CenterParent;
-            this.Text = "SelecciÃ³n de Proveedores";
+            this.Text = "Selección de proveedores";
             this.ResumeLayout(false);
             this.PerformLayout();
 
         }
 
-        private System.Windows.Forms.CheckedListBox clbProveedores;
+        private SteeLog.UI.ListaChecksTema clbProveedores;
         private Guna.UI2.WinForms.Guna2Button btnAceptar;
         private Guna.UI2.WinForms.Guna2Button btnCancelar;
         private System.Windows.Forms.Label label1;

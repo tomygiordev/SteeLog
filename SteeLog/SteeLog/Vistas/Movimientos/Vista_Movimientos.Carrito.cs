@@ -1,3 +1,4 @@
+using SteeLog.UI;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -195,10 +196,10 @@ namespace SteeLog.Vistas.Movimientos
             if (chkCompraEventual.Checked)
             {
                 // Visual feedback for Eventual Purchase
-                txtBuscadorMaterial.BorderColor = Color.FromArgb(255, 165, 0); // Orange/Amber
+                txtBuscadorMaterial.BorderColor = Tema.Advertencia;
                 txtBuscadorMaterial.PlaceholderText = "Escribir nombre de material eventual...";
-                txtBuscadorMaterial.FillColor = Color.FromArgb(45, 40, 30);
-                txtBuscadorMaterial.ForeColor = Color.FromArgb(255, 200, 100);
+                txtBuscadorMaterial.FillColor = Color.FromArgb(48, 44, 34);
+                txtBuscadorMaterial.ForeColor = Color.FromArgb(240, 205, 130);
 
                 // Disable search behavior (if implemented via autocomplete or similar)
                 if (!isProgrammaticChange)
@@ -215,10 +216,10 @@ namespace SteeLog.Vistas.Movimientos
             else
             {
                 // Restore standard look
-                txtBuscadorMaterial.BorderColor = Color.FromArgb(60, 60, 65);
-                txtBuscadorMaterial.PlaceholderText = "🔍 Buscar material...";
-                txtBuscadorMaterial.FillColor = Color.FromArgb(25, 30, 28);
-                txtBuscadorMaterial.ForeColor = Color.FromArgb(200, 200, 200);
+                txtBuscadorMaterial.BorderColor = Tema.Borde;
+                txtBuscadorMaterial.PlaceholderText = "Buscar material...";
+                txtBuscadorMaterial.FillColor = Tema.FondoInput;
+                txtBuscadorMaterial.ForeColor = Tema.Texto;
             }
 
             if (!isProgrammaticChange && chkCompraEventual.Checked && _idMovimientoAEditar == 0 && panelSeleccionado != null)
@@ -250,7 +251,7 @@ namespace SteeLog.Vistas.Movimientos
             // Los recortes y compras eventuales aceptan decimales (ej: 0.5, 1.25).
             if (!tieneRecorteSel && !esCompraEventual && cantidadVal != Math.Floor(cantidadVal))
             {
-                var resp = MessageBox.Show(
+                var resp = Dialogo.Mostrar(this,
                     $"La cantidad '{cantidadVal.ToString(CultureInfo.InvariantCulture)}' tiene decimales y se guardará redondeada a {Math.Round(cantidadVal, MidpointRounding.AwayFromZero)}.\n\n¿Continuar?",
                     "Cantidad con decimales",
                     MessageBoxButtons.YesNo,
@@ -279,7 +280,7 @@ namespace SteeLog.Vistas.Movimientos
             if (panelSeleccionado != null && panelSeleccionado.Tag is MovimientoMaterial)
             {
                 itemAnterior = (MovimientoMaterial)panelSeleccionado.Tag;
-                var confirmEdit = MessageBox.Show(
+                var confirmEdit = Dialogo.Mostrar(this,
                     "¿Estás seguro que querés editar este material?",
                     "Confirmar edición",
                     MessageBoxButtons.YesNo,
@@ -409,9 +410,9 @@ namespace SteeLog.Vistas.Movimientos
                     Label lblTip = tbl.GetControlFromPosition(1, 0) as Label;
                     if (lblTip != null)
                     {
-                        if (nuevoItem.EsRecorte) { lblTip.Text = "RECORTE"; lblTip.ForeColor = Color.Orange; }
-                        else if (nuevoItem.EsInsumo) { lblTip.Text = "INSUMO"; lblTip.ForeColor = Color.FromArgb(0, 188, 212); }
-                        else if (nuevoItem.EsCompraEventual) { lblTip.Text = "EVENTUAL"; lblTip.ForeColor = Color.FromArgb(255, 165, 0); }
+                        if (nuevoItem.EsRecorte) { lblTip.Text = "RECORTE"; lblTip.ForeColor = Tema.Advertencia; }
+                        else if (nuevoItem.EsInsumo) { lblTip.Text = "INSUMO"; lblTip.ForeColor = Tema.Info; }
+                        else if (nuevoItem.EsCompraEventual) { lblTip.Text = "EVENTUAL"; lblTip.ForeColor = Tema.Advertencia; }
                         else { lblTip.Text = ""; }
                     }
 
@@ -468,7 +469,7 @@ namespace SteeLog.Vistas.Movimientos
             cantMatMov.Text = "";
             chkCompraEventual.Checked = cmbMovimientos.Text.ToUpper().Contains("COMPRA EVENTUAL");
             btnRecorte.Enabled = false;
-            guna2Button1.Text = "Agregar Material";
+            guna2Button1.Text = "Agregar material";
             isProgrammaticChange = false;
 
             ActualizarVisibilidadPrecios();
@@ -490,7 +491,7 @@ namespace SteeLog.Vistas.Movimientos
             pnlItem.Width = flpMateriales.ClientSize.Width > 5
                 ? flpMateriales.ClientSize.Width - 5
                 : 600;
-            pnlItem.Height = 40;
+            pnlItem.Height = Tema.AltoFila + 4;
             pnlItem.Tag = item;
             pnlItem.Cursor = Cursors.Hand;
             pnlItem.BackColor = Color.Transparent;
@@ -513,8 +514,8 @@ namespace SteeLog.Vistas.Movimientos
                 textoPrecio = $" (${item.precio_unitario:N2})";
             }
             lblMaterial.Text = item.NombreMaterial + textoPrecio;
-            lblMaterial.Font = new Font("Bahnschrift SemiLight", 12.5f);
-            lblMaterial.ForeColor = Color.White;
+            lblMaterial.Font = Tema.FuenteTexto;
+            lblMaterial.ForeColor = Tema.Texto;
             lblMaterial.Dock = DockStyle.Fill;
             lblMaterial.TextAlign = ContentAlignment.MiddleLeft;
             lblMaterial.AutoEllipsis = true;
@@ -523,17 +524,17 @@ namespace SteeLog.Vistas.Movimientos
             Label lblTipo = new Label();
             lblTipo.Dock = DockStyle.Fill;
             lblTipo.TextAlign = ContentAlignment.MiddleCenter;
-            lblTipo.Font = new Font("Bahnschrift SemiBold", 9.5f);
+            lblTipo.Font = Tema.Fuente(9.5f, true);
             lblTipo.Padding = new Padding(4, 0, 4, 0);
-            if (item.EsRecorte)       { lblTipo.Text = "RECORTE"; lblTipo.ForeColor = Color.Orange; }
-            else if (item.EsInsumo)   { lblTipo.Text = "INSUMO";  lblTipo.ForeColor = Color.FromArgb(0, 188, 212); }
-            else if (item.EsCompraEventual) { lblTipo.Text = "EVENTUAL"; lblTipo.ForeColor = Color.FromArgb(255, 165, 0); }
+            if (item.EsRecorte)       { lblTipo.Text = "RECORTE"; lblTipo.ForeColor = Tema.Advertencia; }
+            else if (item.EsInsumo)   { lblTipo.Text = "INSUMO";  lblTipo.ForeColor = Tema.Info; }
+            else if (item.EsCompraEventual) { lblTipo.Text = "EVENTUAL"; lblTipo.ForeColor = Tema.Advertencia; }
             tbl.Controls.Add(lblTipo, 1, 0);
 
             Label lblCantidad = new Label();
             lblCantidad.Text = item.cantidad.ToString("G29", CultureInfo.InvariantCulture);
-            lblCantidad.Font = new Font("Bahnschrift SemiBold", 12.5f);
-            lblCantidad.ForeColor = Color.FromArgb(150, 220, 150);
+            lblCantidad.Font = Tema.FuenteBoton;
+            lblCantidad.ForeColor = Tema.AcentoHover;
             lblCantidad.Dock = DockStyle.Fill;
             lblCantidad.TextAlign = ContentAlignment.MiddleRight;
             tbl.Controls.Add(lblCantidad, 2, 0);
@@ -565,8 +566,8 @@ namespace SteeLog.Vistas.Movimientos
                 panelSeleccionado.BackColor = Color.Transparent;
 
             panelSeleccionado = clickedPanel;
-            panelSeleccionado.BackColor = Color.FromArgb(75, 145, 90);
-            guna2Button1.Text = "Editar Material";
+            panelSeleccionado.BackColor = Tema.Seleccion;
+            guna2Button1.Text = "Editar material";
 
             // Cargar el material y cantidad en los campos del selector
             if (panelSeleccionado.Tag is MovimientoMaterial itemSel)

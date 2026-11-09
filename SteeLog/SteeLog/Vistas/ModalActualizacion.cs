@@ -5,6 +5,7 @@ using System.Windows.Forms;
 using SteeLog.Servicios;
 using SteeLog.Core.Application.Actualizaciones;
 using System.Threading;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas
 {
@@ -13,7 +14,7 @@ namespace SteeLog.Vistas
         private Label lblTitulo;
         private Label lblVersion;
         private Label lblNotas;
-        private TextBox txtNotas;
+        private Guna.UI2.WinForms.Guna2TextBox txtNotas;
         private Guna.UI2.WinForms.Guna2ProgressBar progressBar;
         private Label lblProgreso;
         private Guna.UI2.WinForms.Guna2Button btnActualizar;
@@ -31,102 +32,100 @@ namespace SteeLog.Vistas
         private void InitUI()
         {
             this.Text = "Actualización DEMO";
-            this.Size = new Size(460, 320);
-            this.FormBorderStyle = FormBorderStyle.FixedDialog;
-            this.MaximizeBox = false;
-            this.MinimizeBox = false;
+            this.ClientSize = new Size(480, 300);
             this.StartPosition = FormStartPosition.CenterParent;
-            this.BackColor = Color.FromArgb(29, 38, 35);
-            this.ForeColor = Color.White;
+            this.BackColor = Tema.Fondo;
+            this.ForeColor = Tema.Texto;
 
             lblTitulo = new Label
             {
                 Text = "Actualización demostrativa",
-                Font = new Font("Bahnschrift SemiBold", 14F),
-                ForeColor = Color.FromArgb(39, 174, 96),
-                Location = new Point(20, 20),
-                Size = new Size(420, 28),
+                Font = Tema.Fuente(13f, true),
+                ForeColor = Tema.Acento,
+                Location = new Point(24, 20),
+                Size = new Size(432, 28),
                 TextAlign = ContentAlignment.MiddleLeft
             };
 
             lblVersion = new Label
             {
                 Text = $"Versión actual: {AppVersion.Current}   →   Nueva: {_update.Version}",
-                Font = new Font("Bahnschrift Light", 10F),
-                ForeColor = Color.FromArgb(180, 210, 190),
-                Location = new Point(20, 55),
-                Size = new Size(420, 20)
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.Texto,
+                Location = new Point(24, 52),
+                Size = new Size(432, 22),
+                TextAlign = ContentAlignment.MiddleLeft
             };
 
             lblNotas = new Label
             {
-                Text = "Novedades:",
-                Font = new Font("Bahnschrift Light", 10F),
-                ForeColor = Color.FromArgb(155, 185, 165),
-                Location = new Point(20, 82),
-                Size = new Size(100, 18)
+                Text = "Novedades",
+                Font = Tema.FuenteSubtitulo,
+                ForeColor = Tema.TextoSecundario,
+                Location = new Point(24, 84),
+                Size = new Size(200, 20)
             };
 
-            txtNotas = new TextBox
+            txtNotas = new Guna.UI2.WinForms.Guna2TextBox
             {
                 Text = string.IsNullOrWhiteSpace(_update.ReleaseNotes) ? "Sin notas." : _update.ReleaseNotes,
-                Location = new Point(20, 103),
-                Size = new Size(415, 80),
+                Location = new Point(24, 108),
+                Size = new Size(432, 84),
                 Multiline = true,
                 ReadOnly = true,
-                ScrollBars = ScrollBars.Vertical,
-                BackColor = Color.FromArgb(22, 30, 26),
-                ForeColor = Color.FromArgb(200, 200, 200),
-                BorderStyle = BorderStyle.FixedSingle,
-                Font = new Font("Segoe UI", 9F)
+                ScrollBars = ScrollBars.Vertical
             };
+            Tema.Input(txtNotas);
+            txtNotas.Cursor = Cursors.Default;
+            txtNotas.TabStop = false;
+            txtNotas.GotFocus += (s, e) => txtNotas.SelectionLength = 0;
 
             progressBar = new Guna.UI2.WinForms.Guna2ProgressBar
             {
-                Location = new Point(20, 198),
-                Size = new Size(415, 14),
+                Location = new Point(24, 204),
+                Size = new Size(432, 8),
                 Value = 0,
-                FillColor = Color.FromArgb(39, 174, 96),
-                ProgressColor = Color.FromArgb(39, 174, 96),
+                FillColor = Tema.FondoInput,
+                ProgressColor = Tema.Acento,
+                ProgressColor2 = Tema.AcentoHover,
+                BorderRadius = 4,
                 Visible = false
             };
 
             lblProgreso = new Label
             {
                 Text = "",
-                Font = new Font("Bahnschrift Light", 9F),
-                ForeColor = Color.FromArgb(155, 185, 165),
-                Location = new Point(20, 215),
-                Size = new Size(415, 18),
+                Font = Tema.Fuente(10f),
+                ForeColor = Tema.TextoSecundario,
+                Location = new Point(24, 218),
+                Size = new Size(432, 20),
                 Visible = false
             };
 
             btnActualizar = new Guna.UI2.WinForms.Guna2Button
             {
                 Text = "Preparar paquete demo",
-                FillColor = Color.FromArgb(39, 174, 96),
-                ForeColor = Color.White,
-                Font = new Font("Bahnschrift Light", 11F),
-                Location = new Point(20, 240),
-                Size = new Size(200, 36)
+                Location = new Point(24, 246),
+                Size = new Size(220, Tema.AltoBotonPrincipal)
             };
+            Tema.Boton(btnActualizar, Variante.Primario);
             btnActualizar.Click += BtnActualizar_Click;
 
             btnCancelar = new Guna.UI2.WinForms.Guna2Button
             {
                 Text = "Cancelar",
-                FillColor = Color.FromArgb(55, 70, 62),
-                ForeColor = Color.FromArgb(180, 180, 180),
-                Font = new Font("Bahnschrift Light", 11F),
-                Location = new Point(235, 240),
-                Size = new Size(200, 36)
+                Location = new Point(256, 246),
+                Size = new Size(200, Tema.AltoBotonPrincipal)
             };
+            Tema.Boton(btnCancelar, Variante.Secundario);
             btnCancelar.Click += (s, e) => { cancellation.Cancel(); this.Close(); };
 
             this.Controls.AddRange(new Control[] {
                 lblTitulo, lblVersion, lblNotas, txtNotas,
                 progressBar, lblProgreso, btnActualizar, btnCancelar
             });
+
+            Tema.ChromeModal(this, "Actualización DEMO");
         }
 
         protected override void OnFormClosing(FormClosingEventArgs e)
@@ -156,7 +155,7 @@ namespace SteeLog.Vistas
                 if (IsDisposed) return;
                 lblProgreso.Text = "Paquete demo preparado; no se instaló ninguna actualización.";
                 btnCancelar.Text = "Cerrar";
-                MessageBox.Show("Paquete demo preparado en:\n" + path + "\nNo se modificó ni reinició la aplicación.", "Demostración", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                Dialogo.Mostrar(this, "Paquete demo preparado en:\n" + path + "\nNo se modificó ni reinició la aplicación.", "Demostración", MessageBoxButtons.OK, MessageBoxIcon.Information);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex)
@@ -166,7 +165,7 @@ namespace SteeLog.Vistas
                 btnCancelar.Enabled = true;
                 progressBar.Visible = false;
                 lblProgreso.Visible = false;
-                MessageBox.Show("Error al preparar paquete demo: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                Dialogo.Mostrar(this, "Error al preparar paquete demo: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }

@@ -64,6 +64,7 @@ namespace SteeLog
             this.DoubleBuffered = true; // mejora el parpadeo al redimensionar
             this.MaximizeBox = true;
             this.MinimizeBox = true;
+            this.MinimumSize = new Size(1280, 720);
 
             // Ajuste de fuentes para la barra lateral (Padres > Hijos)
             // La fuente base ya fue incrementada en el Designer (aprox 11.75F), que afectará a los hijos.
@@ -91,12 +92,12 @@ namespace SteeLog
                 Text = "  Cerrar sesión",
                 Dock = DockStyle.Bottom,
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(100, 120, 110),
+                ForeColor = Color.FromArgb(125, 150, 138),
                 BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(5, 0, 0, 0),
                 Height = 38,
-                Font = new Font(this.Font.FontFamily, 9.5f)
+                Font = UI.Tema.Fuente(10.5f)
             };
             btnLogout.FlatAppearance.BorderSize = 0;
             btnLogout.FlatAppearance.MouseOverBackColor = Color.FromArgb(20, 24, 22);
@@ -114,12 +115,12 @@ namespace SteeLog
                 Text = "  Buscar actualizaciones",
                 Dock = DockStyle.Bottom,
                 FlatStyle = FlatStyle.Flat,
-                ForeColor = Color.FromArgb(120, 160, 140),
+                ForeColor = Color.FromArgb(125, 150, 138),
                 BackColor = Color.Transparent,
                 TextAlign = ContentAlignment.MiddleLeft,
                 Padding = new Padding(5, 0, 0, 0),
                 Height = 38,
-                Font = new Font(this.Font.FontFamily, 11f)
+                Font = UI.Tema.Fuente(10.5f)
             };
             btnUpdate.FlatAppearance.BorderSize = 0;
             btnUpdate.FlatAppearance.MouseOverBackColor = Color.FromArgb(24, 29, 34);

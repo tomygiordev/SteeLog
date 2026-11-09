@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -22,11 +23,12 @@ namespace SteeLog.Vistas
         private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
         public Vista_Ubicaciones()
         {
             InitializeComponent();
+            GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarUbicacionBoton);
             txtUbicacion.MaxLength = Ubicacion.MaxNombre;
             dgvUbicaciones.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
             dgvUbicaciones.SelectionChanged += dgvUbicaciones_SelectionChanged;
@@ -85,20 +87,13 @@ namespace SteeLog.Vistas
             dgvUbicaciones.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvUbicaciones.RowHeadersVisible = false;
             dgvUbicaciones.AllowUserToResizeRows = false;
-            dgvUbicaciones.ColumnHeadersHeight = 35;
             dgvUbicaciones.MultiSelect = false;
             dgvUbicaciones.ReadOnly = true;
             dgvUbicaciones.AllowUserToResizeColumns = false;
-            dgvUbicaciones.EnableHeadersVisualStyles = false;
-            dgvUbicaciones.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvUbicaciones.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvUbicaciones.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvUbicaciones.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvUbicaciones.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvUbicaciones.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             if (dgvUbicaciones.Columns["Id"] != null) dgvUbicaciones.Columns["Id"].Visible = false;
             if (dgvUbicaciones.Columns["Nombre"] != null) { dgvUbicaciones.Columns["Nombre"].HeaderText = "Nombre de ubicación"; dgvUbicaciones.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
 
+            GestionUi.AjustarColumnas(dgvUbicaciones);
         }
         private void LimpiarSeleccion()
         {

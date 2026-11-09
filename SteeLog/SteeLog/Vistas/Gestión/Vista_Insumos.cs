@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -31,13 +32,19 @@ namespace SteeLog.Vistas
         public void MostrarError(Exception error) { if (!IsDisposed) ToastNotification.ShowError(error.Message); }
         public void MarcarResultadoIncierto() { resultadoIncierto = true; if (!IsDisposed && !cierre.IsCancellationRequested) AdvertirResultadoIncierto("Resultado incierto: verifique el listado antes de reintentar. Pulse Ver insumos para recargar."); }
         private PrintDocument printDocument1;
-        private Color tabActiveColor = Color.FromArgb(25, 135, 84);
-        private Color tabInactiveColor = Color.FromArgb(47, 84, 57);
+        // Mientras se rellena el combo con DataSource no se recarga el historial (repintado con el combo a medio enlazar = X roja).
+        private bool poblandoFiltros;
         private bool vistaHistorialActiva = false;
 
         public Vista_Insumos()
         {
             InitializeComponent();
+            GestionUi.Abm(this, panelTitulo, lblTitulo, new[] { panelEntrada, panelEntrada2 }, btnGuardar, btnEliminar, btnPDF);
+            GestionUi.Tabs(panelTabs, btnVerInsumos, btnVerHistorial);
+            GestionUi.Tab(btnVerInsumos, true);
+            GestionUi.Tab(btnVerHistorial, false);
+            GestionUi.Filtros(panelFiltro);
+            panelGrid.Dock = DockStyle.Fill; panelGridHistorial.Dock = DockStyle.Fill;
             FormClosed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
             Disposed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
             btnEliminar.Enabled = false;
@@ -56,10 +63,15 @@ namespace SteeLog.Vistas
                 if (!Vigente(actual)) return;
                 var listaObras = new List<Obra> { new Obra { id = 0, nombre = "Galpón" } };
                 listaObras.AddRange(obras.Select(x => new Obra { id = x.Id, nombre = x.Nombre }));
-                cboObra.DataSource = listaObras;
-                cboObra.DisplayMember = "nombre";
-                cboObra.ValueMember = "id";
-                cboObra.SelectedIndex = 0;
+                cboObra.BeginUpdate();
+                try
+                {
+                    cboObra.DataSource = listaObras;
+                    cboObra.DisplayMember = "nombre";
+                    cboObra.ValueMember = "id";
+                    cboObra.SelectedIndex = 0;
+                }
+                finally { cboObra.EndUpdate(); }
                 CambiarLectura(false);
                 await CargarInsumos();
             }
@@ -80,10 +92,20 @@ namespace SteeLog.Vistas
         {
             var lista = new List<OpcionFiltroInsumo> { new OpcionFiltroInsumo { Id = 0, Etiqueta = "— Todos —" } };
             lista.AddRange(InsumosPresenter.OpcionesFiltro(insumos.Select(x => new SteeLog.Core.Application.Activos.InsumoLectura { Id = x.id, Nombre = x.nombre }).ToArray()));
-            cboFiltroInsumo.DataSource = lista;
-            cboFiltroInsumo.DisplayMember = "Etiqueta";
-            cboFiltroInsumo.ValueMember = "Id";
-            cboFiltroInsumo.SelectedIndex = 0;
+            poblandoFiltros = true;
+            try
+            {
+                cboFiltroInsumo.BeginUpdate(); // sin repintado mientras el combo queda a medio enlazar
+                try
+                {
+                    cboFiltroInsumo.DataSource = lista;
+                    cboFiltroInsumo.DisplayMember = "Etiqueta";
+                    cboFiltroInsumo.ValueMember = "Id";
+                    cboFiltroInsumo.SelectedIndex = 0;
+                }
+                finally { cboFiltroInsumo.EndUpdate(); }
+            }
+            finally { poblandoFiltros = false; }
         }
 
         // ===================== GRILLA INSUMOS =====================
@@ -105,21 +127,11 @@ namespace SteeLog.Vistas
                 dgvInsumos.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvInsumos.RowHeadersVisible = false;
                 dgvInsumos.AllowUserToResizeRows = false;
-                dgvInsumos.ColumnHeadersHeight = 35;
                 dgvInsumos.MultiSelect = false;
                 dgvInsumos.ReadOnly = true;
                 dgvInsumos.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
                 dgvInsumos.AllowUserToResizeColumns = false;
                 dgvInsumos.ScrollBars = ScrollBars.None;
-
-                dgvInsumos.EnableHeadersVisualStyles = false;
-                dgvInsumos.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvInsumos.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                dgvInsumos.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                dgvInsumos.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                dgvInsumos.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-                dgvInsumos.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
                 if (dgvInsumos.Columns["id"] != null)
                     dgvInsumos.Columns["id"].Visible = false;
@@ -150,6 +162,7 @@ namespace SteeLog.Vistas
                     dgvInsumos.Columns["observaciones"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                     dgvInsumos.Columns["observaciones"].FillWeight = 30;
                 }
+                GestionUi.AjustarColumnas(dgvInsumos);
                 resultadoIncierto = false;
             }
             catch (Exception ex)
@@ -181,21 +194,11 @@ namespace SteeLog.Vistas
                 dgvHistorial.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvHistorial.RowHeadersVisible = false;
                 dgvHistorial.AllowUserToResizeRows = false;
-                dgvHistorial.ColumnHeadersHeight = 35;
                 dgvHistorial.MultiSelect = false;
                 dgvHistorial.ReadOnly = true;
                 dgvHistorial.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
                 dgvHistorial.AllowUserToResizeColumns = false;
                 dgvHistorial.ScrollBars = ScrollBars.None;
-
-                dgvHistorial.EnableHeadersVisualStyles = false;
-                dgvHistorial.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvHistorial.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                dgvHistorial.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-                dgvHistorial.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
                 if (dgvHistorial.Columns["id"] != null)
                     dgvHistorial.Columns["id"].Visible = false;
@@ -225,6 +228,7 @@ namespace SteeLog.Vistas
                     dgvHistorial.Columns["fecha"].FillWeight = 20;
                     dgvHistorial.Columns["fecha"].DefaultCellStyle.Format = "dd/MM/yyyy HH:mm";
                 }
+                GestionUi.AjustarColumnas(dgvHistorial);
             }
             catch (Exception ex)
             {
@@ -237,7 +241,7 @@ namespace SteeLog.Vistas
 
         private async void cboFiltroInsumo_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (vistaHistorialActiva)
+            if (vistaHistorialActiva && !poblandoFiltros)
                 await CargarHistorial();
         }
 
@@ -249,8 +253,8 @@ namespace SteeLog.Vistas
             panelGrid.Visible = true;
             panelGridHistorial.Visible = false;
             panelFiltro.Visible = false;
-            btnVerInsumos.FillColor = tabActiveColor;
-            btnVerHistorial.FillColor = tabInactiveColor;
+            GestionUi.Tab(btnVerInsumos, true);
+            GestionUi.Tab(btnVerHistorial, false);
             await CargarInsumos();
         }
 
@@ -260,8 +264,8 @@ namespace SteeLog.Vistas
             panelGrid.Visible = false;
             panelGridHistorial.Visible = true;
             panelFiltro.Visible = true;
-            btnVerInsumos.FillColor = tabInactiveColor;
-            btnVerHistorial.FillColor = tabActiveColor;
+            GestionUi.Tab(btnVerInsumos, false);
+            GestionUi.Tab(btnVerHistorial, true);
             CargarComboFiltroInsumo();
             await CargarHistorial();
         }
@@ -344,7 +348,7 @@ namespace SteeLog.Vistas
             string observaciones = txtObservaciones.Text.Trim();
 
             string _msg = idSeleccionado == -1 ? "¿Crear este insumo?" : "¿Actualizar este insumo?";
-            if (MessageBox.Show(_msg, "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!GestionUi.Confirmar(_msg, "Confirmar", MessageBoxIcon.Question)) return;
 
             try
             {
@@ -363,12 +367,7 @@ namespace SteeLog.Vistas
         {
             if (ocupada || leyendo || resultadoIncierto || idSeleccionado == -1) return;
 
-            DialogResult resultado = MessageBox.Show(
-                "¿Estás seguro de eliminar este insumo?",
-                "Confirmar",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Warning
-            );
+            DialogResult resultado = GestionUi.Confirmar("¿Estás seguro de eliminar este insumo?", "Confirmar", MessageBoxIcon.Warning) ? DialogResult.Yes : DialogResult.No;
 
             if (resultado == DialogResult.Yes)
             {

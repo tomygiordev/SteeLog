@@ -17,6 +17,7 @@ using SteeLog.Core.Application.Reportes;
 using System.Threading;
 using System.IO;
 using OfficeOpenXml;
+using SteeLog.UI;
 using System.Windows.Forms.DataVisualization.Charting;
 
 namespace SteeLog.Vistas
@@ -55,6 +56,8 @@ namespace SteeLog.Vistas
         public Vista_ReporteStock()
         {
             InitializeComponent();
+            Tema.SinEscala(this);
+            AplicarEstiloUI();
             this.Load += Vista_ReporteStock_Load;
             dgvMateriales.CellPainting += dgvMateriales_CellPainting;
             dgvMateriales.SelectionChanged += dgvMateriales_SelectionChanged;
@@ -80,42 +83,130 @@ namespace SteeLog.Vistas
             CargarMateriales();
             panelDashboardHeight = panelDashboard.Height;
             panelDashboard.Visible = false;
-            materiales.Top = panelDashboard.Top;
-            materiales.Height = this.ClientSize.Height - materiales.Top;
+        }
+
+        private static readonly Color ColorSeccion = Tema.Mezclar(Tema.Fondo, Tema.Acento, 0.22);
+
+        private void AplicarEstiloUI()
+        {
+            BackColor = Tema.Fondo;
+            SuspendLayout();
+            panelAntiParpadeo1.Visible = false;
+
+            // Subtítulo de sección
+            panelAntiParpadeo6.BackColor = Tema.Fondo;
+            panelAntiParpadeo6.Height = 58;
+            panelAntiParpadeo6.Padding = new Padding(28, 12, 28, 6);
+            label8.Text = "LISTADO DE MATERIALES";
+            label8.Font = Tema.FuenteSubtitulo;
+            label8.ForeColor = Tema.TextoSecundario;
+            label8.AutoSize = true;
+            label8.Anchor = AnchorStyles.Left;
+
+            // Resumen (se muestra/oculta con el botón)
+            panelDashboard.BackColor = Tema.Fondo;
+            panelDashboard.Height = 116;
+            panelDashboard.Padding = new Padding(28, 0, 28, 8);
+            foreach (var panel in new[] { panelTotal, panelBajo })
+            {
+                panel.FillColor = Tema.Superficie;
+                panel.BorderColor = Tema.Borde;
+                panel.BorderRadius = 6;
+                panel.BorderThickness = 1;
+                panel.Margin = new Padding(0, 0, 12, 0);
+            }
+            lblTotalTit.Font = Tema.Fuente(10f); lblTotalTit.ForeColor = Tema.TextoSecundario; lblTotalTit.Text = "Total de materiales";
+            lblBajoTit.Font = Tema.Fuente(10f); lblBajoTit.ForeColor = Tema.Advertencia; lblBajoTit.Text = "En stock bajo";
+            lblTotalVal.Font = Tema.Fuente(20f, true); lblTotalVal.ForeColor = Tema.Texto;
+            lblBajoVal.Font = Tema.Fuente(20f, true); lblBajoVal.ForeColor = Tema.Texto;
+            lblTotalTit.Location = new Point(18, 14); lblBajoTit.Location = new Point(18, 14);
+            lblTotalVal.Location = new Point(16, 40); lblBajoVal.Location = new Point(16, 40);
+            chartCategorias.Legends[0].ForeColor = Tema.Texto;
+            chartCategorias.Legends[0].Font = Tema.Fuente(9f);
+
+            // Barra de filtros + grilla
+            dgvMateriales.RowTemplate.DefaultCellStyle.Font = Tema.FuenteTexto;
+            Tema.Grilla(dgvMateriales);
+            materiales.AutoSize = false;
+            materiales.CellBorderStyle = TableLayoutPanelCellBorderStyle.None;
+            materiales.Dock = DockStyle.Fill;
+            materiales.BackColor = Tema.Fondo;
+            materiales.ForeColor = Tema.Texto;
+            materiales.Padding = new Padding(28, 4, 28, 20);
+            materiales.RowStyles.Clear();
+            materiales.RowStyles.Add(new RowStyle(SizeType.Absolute, 52F));
+            materiales.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+
+            label9.Text = "Buscar:";
+            label9.Font = Tema.FuenteTexto;
+            label9.ForeColor = Tema.TextoSecundario;
+            label9.Anchor = AnchorStyles.Left;
+            label9.Margin = new Padding(0, 0, 12, 0);
+
+            txtFiltroMaterial.Dock = DockStyle.None;
+            txtFiltroMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtFiltroMaterial.Height = Tema.AltoControl;
+            txtFiltroMaterial.Margin = new Padding(0, 0, 8, 0);
+            txtFiltroMaterial.PlaceholderText = "Filtrar por nombre...";
+            Tema.Input(txtFiltroMaterial);
+
+            filtrarMaterial.Text = "Filtros";
+            filtrarMaterial.ImageAlign = HorizontalAlignment.Left;
+            filtrarMaterial.ImageSize = new Size(18, 18);
+            filtrarMaterial.TextAlign = HorizontalAlignment.Center;
+            filtrarMaterial.Size = new Size(104, Tema.AltoControl);
+            filtrarMaterial.Anchor = AnchorStyles.Left;
+            filtrarMaterial.Margin = new Padding(0, 0, 8, 0);
+            Tema.Boton(filtrarMaterial, Variante.Secundario);
+
+            btnExportarPDF.Size = new Size(84, Tema.AltoControl);
+            btnExportarPDF.Anchor = AnchorStyles.Left;
+            btnExportarPDF.Margin = new Padding(0, 0, 8, 0);
+            Tema.Boton(btnExportarPDF, Variante.Secundario);
+            btnExportarExcel.Size = new Size(84, Tema.AltoControl);
+            btnExportarExcel.Anchor = AnchorStyles.Left;
+            btnExportarExcel.Margin = new Padding(0, 0, 8, 0);
+            Tema.Boton(btnExportarExcel, Variante.Primario);
+
+            lblSoloStockBajo.Text = "Solo stock bajo:";
+            lblSoloStockBajo.Font = Tema.FuenteTexto;
+            lblSoloStockBajo.ForeColor = Tema.TextoSecundario;
+            lblSoloStockBajo.Margin = new Padding(16, 0, 8, 0);
+            toggleStockBajo.Size = new Size(46, 24);
+            toggleStockBajo.Margin = new Padding(0);
+            Tema.Toggle(toggleStockBajo);
+
+            materiales.BringToFront();
+            var banda = Tema.TituloVista(this, "Reporte de stock");
+            if (banda != null) banda.SendToBack();
+            ResumeLayout(true);
         }
 
         private void CrearBotonTogglePaneles()
         {
             btnTogglePaneles = new Guna.UI2.WinForms.Guna2Button();
-            btnTogglePaneles.Text = "▼ Mostrar Paneles";
-            btnTogglePaneles.Size = new Size(160, 28);
-            btnTogglePaneles.FillColor = Color.FromArgb(47, 84, 57);
-            btnTogglePaneles.ForeColor = Color.White;
-            btnTogglePaneles.Font = new System.Drawing.Font("Bahnschrift Light", 9.5F);
-            btnTogglePaneles.BorderRadius = 3;
-            btnTogglePaneles.HoverState.FillColor = Color.FromArgb(60, 100, 70);
-            btnTogglePaneles.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnTogglePaneles.Text = "Mostrar resumen";
+            btnTogglePaneles.Size = new Size(150, Tema.AltoControl);
+            btnTogglePaneles.Anchor = AnchorStyles.Right;
+            btnTogglePaneles.Margin = new Padding(8, 0, 0, 0);
+            Tema.Boton(btnTogglePaneles, Variante.Fantasma);
             btnTogglePaneles.Click += BtnTogglePaneles_Click;
-            // Position it to the right of the subtitle panel
             panelAntiParpadeo6.ColumnCount = 2;
             panelAntiParpadeo6.ColumnStyles.Clear();
             panelAntiParpadeo6.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
             panelAntiParpadeo6.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             panelAntiParpadeo6.Controls.Add(btnTogglePaneles, 1, 0);
-            btnTogglePaneles.Anchor = AnchorStyles.Right;
 
             if (esAdmin())
             {
                 btnConfigurarSecciones = new Guna.UI2.WinForms.Guna2Button
                 {
                     Text = "Configurar secciones",
-                    Size = new Size(175, 28),
-                    FillColor = Color.FromArgb(35, 63, 43),
-                    ForeColor = Color.White,
-                    Font = new System.Drawing.Font("Bahnschrift Light", 9.5F),
-                    BorderRadius = 3,
-                    Anchor = AnchorStyles.Right
+                    Size = new Size(170, Tema.AltoControl),
+                    Anchor = AnchorStyles.Right,
+                    Margin = new Padding(8, 0, 0, 0)
                 };
+                Tema.Boton(btnConfigurarSecciones, Variante.Secundario);
                 btnConfigurarSecciones.Click += BtnConfigurarSecciones_Click;
                 panelAntiParpadeo6.ColumnCount = 3;
                 panelAntiParpadeo6.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
@@ -137,19 +228,12 @@ namespace SteeLog.Vistas
 
             if (panelesVisibles)
             {
-                btnTogglePaneles.Text = "▲ Ocultar Paneles";
-                // Restore original position
-                materiales.Top = panelDashboard.Bottom + 6;
+                btnTogglePaneles.Text = "Ocultar resumen";
             }
             else
             {
-                btnTogglePaneles.Text = "▼ Mostrar Paneles";
-                // Move list up into the space freed by hiding the dashboard
-                materiales.Top = panelDashboard.Top;
+                btnTogglePaneles.Text = "Mostrar resumen";
             }
-
-            // Recalculate height to fill to the bottom
-            materiales.Height = this.ClientSize.Height - materiales.Top;
         }
 
         private async void CargarMateriales(string nombre = null, bool soloStockBajo = false, FiltroMaterialParams filtro = null)
@@ -213,7 +297,7 @@ namespace SteeLog.Vistas
             foreach (DataGridViewRow row in dgvMateriales.Rows)
             {
                 if (row.DataBoundItem is Material item)
-                    row.Height = item.esFilaSeparadora ? 38 : 45;
+                    row.Height = item.esFilaSeparadora ? 34 : Tema.AltoFila;
             }
         }
 
@@ -239,53 +323,7 @@ namespace SteeLog.Vistas
             dgvMateriales.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvMateriales.AllowUserToResizeColumns = false;
             dgvMateriales.AllowUserToResizeRows = false;
-            dgvMateriales.EnableHeadersVisualStyles = false;
-            dgvMateriales.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvMateriales.ColumnHeadersHeight = 45;
-            dgvMateriales.RowTemplate.Height = 45;
-
-            // Define Green Colors (matching Kardex)
-            Color headerColor = Color.FromArgb(35, 63, 43);
-            Color rowColor1 = Color.FromArgb(28, 40, 32);
-            Color rowColor2 = Color.FromArgb(35, 50, 40);
-            Color selectionColor = Color.FromArgb(50, 90, 60);
-
-            // Header Style
-            dgvMateriales.ColumnHeadersDefaultCellStyle.BackColor = headerColor;
-            dgvMateriales.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvMateriales.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerColor;
-            dgvMateriales.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvMateriales.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dgvMateriales.ColumnHeadersDefaultCellStyle.Font = new System.Drawing.Font("Bahnschrift", 11, FontStyle.Bold);
-
-            // Row Styles
-            dgvMateriales.BackgroundColor = Color.FromArgb(20, 30, 25);
-
-            dgvMateriales.DefaultCellStyle.BackColor = rowColor1;
-            dgvMateriales.DefaultCellStyle.ForeColor = Color.White;
-            dgvMateriales.DefaultCellStyle.Font = new System.Drawing.Font("Bahnschrift Light", 11);
-            dgvMateriales.DefaultCellStyle.SelectionBackColor = selectionColor;
-            dgvMateriales.DefaultCellStyle.SelectionForeColor = Color.White;
-            dgvMateriales.DefaultCellStyle.Padding = new Padding(5);
-            dgvMateriales.GridColor = Color.FromArgb(40, 60, 50);
-
-            dgvMateriales.AlternatingRowsDefaultCellStyle.BackColor = rowColor2;
-            dgvMateriales.AlternatingRowsDefaultCellStyle.ForeColor = Color.White;
-            dgvMateriales.AlternatingRowsDefaultCellStyle.SelectionBackColor = selectionColor;
-            dgvMateriales.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
-
-            // Theme properties for Guna Grid
-            dgvMateriales.ThemeStyle.BackColor = Color.FromArgb(20, 30, 25);
-            dgvMateriales.ThemeStyle.GridColor = Color.FromArgb(40, 60, 50);
-            dgvMateriales.ThemeStyle.HeaderStyle.BackColor = headerColor;
-            dgvMateriales.ThemeStyle.HeaderStyle.ForeColor = Color.White;
-            dgvMateriales.ThemeStyle.HeaderStyle.Height = 45;
-            dgvMateriales.ThemeStyle.RowsStyle.BackColor = rowColor1;
-            dgvMateriales.ThemeStyle.RowsStyle.ForeColor = Color.White;
-            dgvMateriales.ThemeStyle.RowsStyle.SelectionBackColor = selectionColor;
-            dgvMateriales.ThemeStyle.RowsStyle.SelectionForeColor = Color.White;
-            dgvMateriales.ThemeStyle.RowsStyle.Height = 45;
-            dgvMateriales.ThemeStyle.AlternatingRowsStyle.BackColor = rowColor2;
+            Tema.Grilla(dgvMateriales);
 
             // Columns Configuration
             if (dgvMateriales.Columns["id"] != null) dgvMateriales.Columns["id"].Visible = false;
@@ -335,7 +373,7 @@ namespace SteeLog.Vistas
                 dgvMateriales.Columns["precioUnitario"].HeaderText = "Precio Unitario";
                 dgvMateriales.Columns["precioUnitario"].DefaultCellStyle.Format = "C2";
                 dgvMateriales.Columns["precioUnitario"].FillWeight = 12;
-                dgvMateriales.Columns["precioUnitario"].MinimumWidth = 120;
+                dgvMateriales.Columns["precioUnitario"].MinimumWidth = 150;
                 dgvMateriales.Columns["precioUnitario"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
                 dgvMateriales.Columns["precioUnitario"].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
                 if (mostrarPrecios) dgvMateriales.Columns["precioUnitario"].DisplayIndex = 4;
@@ -347,7 +385,7 @@ namespace SteeLog.Vistas
                 dgvMateriales.Columns["valorTotal"].HeaderText = "Valor Total";
                 dgvMateriales.Columns["valorTotal"].DefaultCellStyle.Format = "C2";
                 dgvMateriales.Columns["valorTotal"].FillWeight = 12;
-                dgvMateriales.Columns["valorTotal"].MinimumWidth = 120;
+                dgvMateriales.Columns["valorTotal"].MinimumWidth = 150;
                 dgvMateriales.Columns["valorTotal"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleRight;
                 dgvMateriales.Columns["valorTotal"].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleRight;
                 if (mostrarPrecios) dgvMateriales.Columns["valorTotal"].DisplayIndex = 5;
@@ -361,7 +399,7 @@ namespace SteeLog.Vistas
                 dgvMateriales.Columns["stockActual"].MinimumWidth = 110;
                 dgvMateriales.Columns["stockActual"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
                 dgvMateriales.Columns["stockActual"].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-                dgvMateriales.Columns["stockActual"].DefaultCellStyle.Font = new System.Drawing.Font("Bahnschrift", 11, FontStyle.Bold);
+                dgvMateriales.Columns["stockActual"].DefaultCellStyle.Font = Tema.Fuente(10.5f, true);
                 dgvMateriales.Columns["stockActual"].DisplayIndex = 2;
             }
 
@@ -387,11 +425,11 @@ namespace SteeLog.Vistas
                 {
                     if (item.esFilaSeparadora)
                     {
-                        e.CellStyle.BackColor = Color.FromArgb(24, 74, 53);
-                        e.CellStyle.SelectionBackColor = Color.FromArgb(24, 74, 53);
-                        e.CellStyle.ForeColor = Color.FromArgb(218, 239, 227);
-                        e.CellStyle.SelectionForeColor = Color.FromArgb(218, 239, 227);
-                        e.CellStyle.Font = new System.Drawing.Font("Bahnschrift SemiBold", 11F, FontStyle.Bold);
+                        e.CellStyle.BackColor = ColorSeccion;
+                        e.CellStyle.SelectionBackColor = ColorSeccion;
+                        e.CellStyle.ForeColor = Tema.Texto;
+                        e.CellStyle.SelectionForeColor = Tema.Texto;
+                        e.CellStyle.Font = Tema.Fuente(10.5f, true);
 
                         if (dgvMateriales.Columns[e.ColumnIndex].Name != "nombre")
                             e.Value = string.Empty;
@@ -409,24 +447,24 @@ namespace SteeLog.Vistas
                     if (item.stockMinimo > 0 && item.stockActual <= item.stockMinimo)
                     {
                         // Balanced vibrant red: brighter than pure red but with enough saturation to look like a warning
-                        e.CellStyle.ForeColor = Color.FromArgb(255, 70, 70); 
-                        e.CellStyle.SelectionForeColor = Color.FromArgb(255, 120, 120); 
-                        e.CellStyle.Font = new System.Drawing.Font(e.CellStyle.Font, FontStyle.Bold);
+                        e.CellStyle.ForeColor = Color.FromArgb(240, 110, 100); 
+                        e.CellStyle.SelectionForeColor = Color.FromArgb(255, 140, 130); 
+                        e.CellStyle.Font = Tema.Fuente(10.5f, true);
                     }
                     else
                     {
-                        e.CellStyle.ForeColor = Color.White;
+                        e.CellStyle.ForeColor = Tema.Texto;
                         e.CellStyle.SelectionForeColor = Color.White;
                     }
 
                     if (dgvMateriales.Columns[e.ColumnIndex].Name == "reporteSeccionCabecera"
                         && !string.IsNullOrWhiteSpace(item.reporteSeccionCabecera))
                     {
-                        e.CellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                        e.CellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                        e.CellStyle.ForeColor = Color.FromArgb(230, 245, 236);
-                        e.CellStyle.SelectionForeColor = Color.FromArgb(230, 245, 236);
-                        e.CellStyle.Font = new System.Drawing.Font("Bahnschrift", 10.5F, FontStyle.Bold);
+                        e.CellStyle.BackColor = Tema.Banda;
+                        e.CellStyle.SelectionBackColor = Tema.Banda;
+                        e.CellStyle.ForeColor = Tema.Texto;
+                        e.CellStyle.SelectionForeColor = Tema.Texto;
+                        e.CellStyle.Font = Tema.Fuente(10.5f, true);
                     }
                 }
             }
@@ -443,7 +481,7 @@ namespace SteeLog.Vistas
             e.Handled = true;
             e.PaintBackground(e.CellBounds, false);
 
-            using (var fondo = new SolidBrush(Color.FromArgb(24, 74, 53)))
+            using (var fondo = new SolidBrush(ColorSeccion))
             {
                 e.Graphics.FillRectangle(fondo, e.CellBounds);
             }
@@ -464,12 +502,12 @@ namespace SteeLog.Vistas
                 TextRenderer.DrawText(
                     e.Graphics,
                     item.tituloSeparador?.ToUpperInvariant() ?? string.Empty,
-                    new System.Drawing.Font("Bahnschrift SemiBold", 11F, FontStyle.Bold),
+                    Tema.Fuente(10.5f, true),
                     rectTexto,
-                    Color.FromArgb(235, 247, 239),
+                    Tema.Texto,
                     TextFormatFlags.VerticalCenter | TextFormatFlags.Left | TextFormatFlags.EndEllipsis);
 
-                using (var lapiz = new Pen(Color.FromArgb(71, 122, 94), 1))
+                using (var lapiz = new Pen(Tema.Borde, 1))
                 {
                     e.Graphics.DrawLine(lapiz, e.CellBounds.Left, e.CellBounds.Bottom - 1, e.CellBounds.Left + anchoFila, e.CellBounds.Bottom - 1);
                 }

@@ -184,6 +184,11 @@
     <Compile Include="Modelos\Recorte.cs" />
     <Compile Include="Modelos\HistorialMovimiento.cs" />
     <Compile Include="Modelos\ReporteOrdenPendienteItem.cs" />
+    <Compile Include="UI\Tema.cs" />
+    <Compile Include="UI\Dialogo.cs" />
+    <Compile Include="UI\GestionUi.cs" />
+    <Compile Include="UI\UiVista.cs" />
+    <Compile Include="UI\Controles.cs" />
     <Compile Include="IRefrescable.cs" />
     <Compile Include="IRecargaCatalogos.cs" />
     <Compile Include="MovimientoDraftService.cs" />

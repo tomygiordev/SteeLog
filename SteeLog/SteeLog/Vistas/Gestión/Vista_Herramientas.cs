@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -26,7 +27,7 @@ namespace SteeLog.Vistas
         private List<Obra> obras = new List<Obra>();
         private List<HerramientaMovimiento> historial = new List<HerramientaMovimiento>();
         private bool ocupada, leyendo, inicializada, obrasCargadas;
-        private Func<string, string, MessageBoxIcon, bool> confirmar = (mensaje, titulo, icono) => MessageBox.Show(mensaje, titulo, MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        private Func<string, string, MessageBoxIcon, bool> confirmar = (mensaje, titulo, icono) => GestionUi.Confirmar(mensaje, titulo, icono);
         private Action<string> avisar = mensaje => ToastNotification.ShowError(mensaje);
         private int contexto;
         public void SetOcupada(bool valor) { ocupada=valor; ActualizarControles(); }
@@ -48,13 +49,20 @@ namespace SteeLog.Vistas
         }
         private void CerrarCargas() { cargas.Cerrar(); if(!cierre.IsCancellationRequested) cierre.Cancel(); }
         private PrintDocument printDocument1;
-        private Color tabActiveColor = Color.FromArgb(25, 135, 84);
-        private Color tabInactiveColor = Color.FromArgb(47, 84, 57);
+        // Los combos del historial se rellenan con DataSource: durante el llenado los SelectedIndexChanged no deben recargar la grilla
+        // (se dispara un repintado con el combo a medio enlazar y WinForms lo marca con la X roja). Se recarga una vez al terminar.
+        private bool poblandoFiltros;
         private bool vistaHistorialActiva = false;
 
         public Vista_Herramientas()
         {
             InitializeComponent();
+            GestionUi.Abm(this, panelTitulo, lblTitulo, new[] { panelEntrada, panelEntrada2 }, btnGuardar, btnEliminar, btnPDF);
+            GestionUi.Tabs(panelTabs, btnVerHerramientas, btnVerHistorial);
+            GestionUi.Tab(btnVerHerramientas, true);
+            GestionUi.Tab(btnVerHistorial, false);
+            GestionUi.Filtros(panelFiltro);
+            panelGrid.Dock = DockStyle.Fill; panelGridHistorial.Dock = DockStyle.Fill;
             btnEliminar.Enabled = false;
             btnGuardar.Enabled = false;
             btnVerHerramientas.Enabled = false;
@@ -107,37 +115,61 @@ namespace SteeLog.Vistas
 
         private void CargarComboObras()
         {
-            cboObra.Items.Clear();
-            cboObra.DataSource = null;
+            cboObra.BeginUpdate(); // sin repintado mientras el combo queda a medio enlazar
+            try
+            {
+                cboObra.Items.Clear();
+                cboObra.DataSource = null;
 
 
-            var listaObras = new List<Obra>();
-            listaObras.Add(new Obra { id = 0, nombre = "Galpón" });
-            listaObras.AddRange(obras);
+                var listaObras = new List<Obra>();
+                listaObras.Add(new Obra { id = 0, nombre = "Galpón" });
+                listaObras.AddRange(obras);
 
-            cboObra.DataSource = listaObras;
-            cboObra.DisplayMember = "nombre";
-            cboObra.ValueMember = "id";
-            cboObra.SelectedIndex = 0;
+                cboObra.DataSource = listaObras;
+                cboObra.DisplayMember = "nombre";
+                cboObra.ValueMember = "id";
+                cboObra.SelectedIndex = 0;
+            }
+            finally { cboObra.EndUpdate(); }
         }
 
         private void CargarComboFiltroHerramienta()
         {
-            cboFiltroHerramienta.DataSource = null;
+            poblandoFiltros = true;
+            try { CargarComboFiltroHerramientaCore(); }
+            finally { poblandoFiltros = false; }
+        }
+
+        private void CargarComboFiltroHerramientaCore()
+        {
+            cboFiltroHerramienta.BeginUpdate(); // sin repintado mientras el combo queda a medio enlazar
+            try
+            {
+                cboFiltroHerramienta.DataSource = null;
 
 
-            var lista = new List<Herramienta>();
-            lista.Add(new Herramienta { id = 0, nombre = "— Todas —" });
-            foreach (var h in herramientas)
-                lista.Add(h);
+                var lista = new List<Herramienta>();
+                lista.Add(new Herramienta { id = 0, nombre = "— Todas —" });
+                foreach (var h in herramientas)
+                    lista.Add(h);
 
-            cboFiltroHerramienta.DataSource = lista;
-            cboFiltroHerramienta.DisplayMember = "nombre";
-            cboFiltroHerramienta.ValueMember = "id";
-            cboFiltroHerramienta.SelectedIndex = 0;
+                cboFiltroHerramienta.DataSource = lista;
+                cboFiltroHerramienta.DisplayMember = "nombre";
+                cboFiltroHerramienta.ValueMember = "id";
+                cboFiltroHerramienta.SelectedIndex = 0;
+            }
+            finally { cboFiltroHerramienta.EndUpdate(); }
         }
 
         private void CargarFiltrosHistorial()
+        {
+            poblandoFiltros = true;
+            try { CargarFiltrosHistorialCore(); }
+            finally { poblandoFiltros = false; }
+        }
+
+        private void CargarFiltrosHistorialCore()
         {
             // Cargar estados para el filtro
             cboFiltroEstado.Items.Clear();
@@ -148,17 +180,22 @@ namespace SteeLog.Vistas
             cboFiltroEstado.SelectedIndex = 0;
 
             // Cargar obras para el filtro
-            cboFiltroObra.DataSource = null;
+            cboFiltroObra.BeginUpdate(); // sin repintado mientras el combo queda a medio enlazar
+            try
+            {
+                cboFiltroObra.DataSource = null;
 
-            var listaObras = new List<Obra>();
-            listaObras.Add(new Obra { id = 0, nombre = "Todas" });
-            listaObras.Add(new Obra { id = -1, nombre = "Galpón" });
-            listaObras.AddRange(obras);
+                var listaObras = new List<Obra>();
+                listaObras.Add(new Obra { id = 0, nombre = "Todas" });
+                listaObras.Add(new Obra { id = -1, nombre = "Galpón" });
+                listaObras.AddRange(obras);
             
-            cboFiltroObra.DataSource = listaObras;
-            cboFiltroObra.DisplayMember = "nombre";
-            cboFiltroObra.ValueMember = "id";
-            cboFiltroObra.SelectedIndex = 0;
+                cboFiltroObra.DataSource = listaObras;
+                cboFiltroObra.DisplayMember = "nombre";
+                cboFiltroObra.ValueMember = "id";
+                cboFiltroObra.SelectedIndex = 0;
+            }
+            finally { cboFiltroObra.EndUpdate(); }
         }
 
         // ===================== GRILLA HERRAMIENTAS =====================
@@ -196,21 +233,11 @@ namespace SteeLog.Vistas
                 dgvHerramientas.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvHerramientas.RowHeadersVisible = false;
                 dgvHerramientas.AllowUserToResizeRows = false;
-                dgvHerramientas.ColumnHeadersHeight = 35;
                 dgvHerramientas.MultiSelect = false;
                 dgvHerramientas.ReadOnly = true;
                 dgvHerramientas.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
                 dgvHerramientas.AllowUserToResizeColumns = false;
                 dgvHerramientas.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
-
-                dgvHerramientas.EnableHeadersVisualStyles = false;
-                dgvHerramientas.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvHerramientas.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                dgvHerramientas.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                dgvHerramientas.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                dgvHerramientas.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-                dgvHerramientas.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
                 if (dgvHerramientas.Columns["id"] != null)
                     dgvHerramientas.Columns["id"].Visible = false;
@@ -241,6 +268,7 @@ namespace SteeLog.Vistas
                     dgvHerramientas.Columns["observaciones"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                     dgvHerramientas.Columns["observaciones"].FillWeight = 25;
                 }
+                GestionUi.AjustarColumnas(dgvHerramientas);
             }
             catch (OperationCanceledException) { }
             catch (Exception ex) { if(Vigente(revision)) MostrarError(ex); }
@@ -293,21 +321,11 @@ namespace SteeLog.Vistas
                 dgvHistorial.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
                 dgvHistorial.RowHeadersVisible = false;
                 dgvHistorial.AllowUserToResizeRows = false;
-                dgvHistorial.ColumnHeadersHeight = 35;
                 dgvHistorial.MultiSelect = false;
                 dgvHistorial.ReadOnly = true;
                 dgvHistorial.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
                 dgvHistorial.AllowUserToResizeColumns = false;
                 dgvHistorial.ScrollBars = ScrollBars.Vertical;
-
-                dgvHistorial.EnableHeadersVisualStyles = false;
-                dgvHistorial.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvHistorial.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-                dgvHistorial.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-                dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-                dgvHistorial.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-                dgvHistorial.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
 
                 if (dgvHistorial.Columns["id"] != null)
                     dgvHistorial.Columns["id"].Visible = false;
@@ -349,6 +367,7 @@ namespace SteeLog.Vistas
                     dgvHistorial.Columns["fecha"].DefaultCellStyle.Format = "dd/MM/yyyy HH:mm";
                     dgvHistorial.Columns["fecha"].DisplayIndex = 4;
                 }
+                GestionUi.AjustarColumnas(dgvHistorial);
             }
             catch (Exception ex)
             {
@@ -360,7 +379,7 @@ namespace SteeLog.Vistas
 
         private void cboFiltroHerramienta_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (vistaHistorialActiva)
+            if (vistaHistorialActiva && !poblandoFiltros)
                 CargarHistorial();
         }
 
@@ -372,13 +391,13 @@ namespace SteeLog.Vistas
 
         private void cboFiltroEstado_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (vistaHistorialActiva)
+            if (vistaHistorialActiva && !poblandoFiltros)
                 CargarHistorial();
         }
 
         private void cboFiltroObra_SelectedIndexChanged(object sender, EventArgs e)
         {
-            if (vistaHistorialActiva)
+            if (vistaHistorialActiva && !poblandoFiltros)
                 CargarHistorial();
         }
 
@@ -391,8 +410,8 @@ namespace SteeLog.Vistas
             panelGrid.Visible = true;
             panelGridHistorial.Visible = false;
             panelFiltro.Visible = false;
-            btnVerHerramientas.FillColor = tabActiveColor;
-            btnVerHistorial.FillColor = tabInactiveColor;
+            GestionUi.Tab(btnVerHerramientas, true);
+            GestionUi.Tab(btnVerHistorial, false);
             await CargarHerramientas();
         }
 
@@ -403,8 +422,8 @@ namespace SteeLog.Vistas
             panelGrid.Visible = false;
             panelGridHistorial.Visible = true;
             panelFiltro.Visible = true;
-            btnVerHerramientas.FillColor = tabInactiveColor;
-            btnVerHistorial.FillColor = tabActiveColor;
+            GestionUi.Tab(btnVerHerramientas, false);
+            GestionUi.Tab(btnVerHistorial, true);
             int revision=cargas.Iniciar(); leyendo=true; ActualizarControles();
             try
             {

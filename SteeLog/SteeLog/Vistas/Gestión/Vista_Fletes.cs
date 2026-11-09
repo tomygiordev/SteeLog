@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -22,11 +23,12 @@ namespace SteeLog.Vistas
         private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
         public Vista_Fletes()
         {
             InitializeComponent();
+            GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarFleteBoton);
             txtFlete.MaxLength = Flete.MaxNombre;
             dgvFletes.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
             dgvFletes.SelectionChanged += dgvFletes_SelectionChanged;
@@ -85,20 +87,13 @@ namespace SteeLog.Vistas
             dgvFletes.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvFletes.RowHeadersVisible = false;
             dgvFletes.AllowUserToResizeRows = false;
-            dgvFletes.ColumnHeadersHeight = 35;
             dgvFletes.MultiSelect = false;
             dgvFletes.ReadOnly = true;
             dgvFletes.AllowUserToResizeColumns = false;
-            dgvFletes.EnableHeadersVisualStyles = false;
-            dgvFletes.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvFletes.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvFletes.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvFletes.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvFletes.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvFletes.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             if (dgvFletes.Columns["Id"] != null) dgvFletes.Columns["Id"].Visible = false;
             if (dgvFletes.Columns["Nombre"] != null) { dgvFletes.Columns["Nombre"].HeaderText = "Nombre de flete"; dgvFletes.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
             if (dgvFletes.Columns["Activo"] != null) { dgvFletes.Columns["Activo"].HeaderText = "Activo"; dgvFletes.Columns["Activo"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; dgvFletes.Columns["Activo"].FillWeight = 25; }
+            GestionUi.AjustarColumnas(dgvFletes);
         }
         private void LimpiarSeleccion()
         {

@@ -19,6 +19,7 @@ using SteeLog.Modelos;
 using SteeLog.Reportes;
 using SteeLog.Servicios;
 using System.IO;
+using SteeLog.UI;
 // using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace SteeLog.Vistas.Movimientos
@@ -36,7 +37,7 @@ namespace SteeLog.Vistas.Movimientos
         private decimal _medidaRecorteSeleccionado = 0;
         private decimal _anchoRecorteSeleccionado = 0;
         private decimal _alturaRecorteSeleccionado = 0;
-        internal Func<DialogResult> ConfirmarGuardado = () => MessageBox.Show(
+        internal Func<DialogResult> ConfirmarGuardado = () => Dialogo.Mostrar(
             "¿Estás seguro que querés guardar este remito?", "Confirmar guardado",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2);
         internal Action<string> NotificarGuardado = mensaje => ToastNotification.ShowSuccess(mensaje);
@@ -79,7 +80,7 @@ namespace SteeLog.Vistas.Movimientos
         private bool PreguntarReenvioIncierto(string remito)
         {
             if (ConfirmarReenvioIncierto != null) return ConfirmarReenvioIncierto(remito);
-            return MessageBox.Show(this,
+            return Dialogo.Mostrar(this,
                 "El movimiento anterior (remito " + remito + ") pudo haberse guardado.\n\n" +
                 "¿Verificó en Historial que NO está registrado?\n\n" +
                 "Sí: habilitar el reenvío.\nNo: descartar el carrito.",
@@ -159,6 +160,7 @@ namespace SteeLog.Vistas.Movimientos
         public Vista_Movimientos()
         {
             InitializeComponent();
+            Tema.SinEscala(this);
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             guna2DateTimePicker1.Value = DateTime.Now;
             
@@ -221,6 +223,8 @@ namespace SteeLog.Vistas.Movimientos
             _timerDraft.Tick += (s, ev) => GuardarBorrador();
             _timerDraft.Start();
 
+            // El AutoScale (Font) de WinForms corre justo antes de Load: el tema se aplica despues para que los tamaños sean reales.
+            Load += (s, ev) => AplicarTemaMovimientos();
             Load += async (s, ev) => {
                 await CargarCatalogosAsync();
                 if (!IsDisposed && catalogosListos && _idMovimientoAEditar <= 0) IntentarRecuperarBorrador();
@@ -335,8 +339,8 @@ namespace SteeLog.Vistas.Movimientos
                 bool anteriorProgramatico = isProgrammaticChange; isProgrammaticChange = true;
                 try
                 {
-                    cmbMovimientos.DataSource=tipos; cmbMovimientos.DisplayMember="nombre"; cmbMovimientos.ValueMember="id_tipomovimiento"; cmbMovimientos.SelectedIndex=-1;
-                    cmbObras.DataSource=obras; cmbObras.DisplayMember="nombre"; cmbObras.ValueMember="id"; cmbObras.SelectedIndex=-1;
+                    UiVista.AsignarDatos(cmbMovimientos, tipos, "nombre", "id_tipomovimiento"); cmbMovimientos.SelectedIndex=-1;
+                    UiVista.AsignarDatos(cmbObras, obras, "nombre", "id"); cmbObras.SelectedIndex=-1;
                     EstablecerFletes(fleteSeleccionado); CargarOrigen(); CargarDestino();
                     if (tipoSeleccionado.HasValue) cmbMovimientos.SelectedValue=tipoSeleccionado.Value;
                     if (obraSeleccionada.HasValue) cmbObras.SelectedValue=obraSeleccionada.Value;
@@ -353,7 +357,7 @@ namespace SteeLog.Vistas.Movimientos
         {
             var fletes=catalogos.Fletes.Where(x => x.Activo || x.Id==incluirId).Select(x => new Flete { id=x.Id,nombre=x.Nombre,activo=x.Activo }).ToList();
             fletes.Insert(0,new Flete { id=0,nombre="-" });
-            cmbFlete.DataSource=fletes; cmbFlete.DisplayMember="nombre"; cmbFlete.ValueMember="id"; cmbFlete.SelectedValue=incluirId ?? 0;
+            UiVista.AsignarDatos(cmbFlete, fletes, "nombre", "id"); cmbFlete.SelectedValue=incluirId ?? 0;
         }
 
         public void SetEditMode(int idMovimiento)
@@ -454,8 +458,8 @@ namespace SteeLog.Vistas.Movimientos
         private void InitializeUI()
         {
             Panel pnlContenedorMateriales = new Panel();
-            pnlContenedorMateriales.BackColor = Color.FromArgb(40, 60, 50);
-            pnlContenedorMateriales.Margin = new Padding(28, 0, 28, 0);
+            pnlContenedorMateriales.BackColor = Tema.Superficie;
+            pnlContenedorMateriales.Margin = new Padding(14, 0, 14, 8);
             pnlContenedorMateriales.Dock = DockStyle.Fill;
 
             flpMateriales = new FlowLayoutPanel();
@@ -467,6 +471,20 @@ namespace SteeLog.Vistas.Movimientos
             flpMateriales.Padding = new Padding(0, 0, 0, 30);
 
             pnlContenedorMateriales.Controls.Add(flpMateriales);
+
+            lblCarritoVacio = new Label
+            {
+                Text = "Todavía no agregaste materiales.\nBuscá un material, indicá la cantidad y presioná \"Agregar material\".",
+                Dock = DockStyle.Fill,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoApagado,
+                BackColor = Color.Transparent
+            };
+            pnlContenedorMateriales.Controls.Add(lblCarritoVacio);
+            flpMateriales.ControlAdded += (s, e) => ActualizarCarritoVacio();
+            flpMateriales.ControlRemoved += (s, e) => ActualizarCarritoVacio();
+            ActualizarCarritoVacio();
 
             panelAntiParpadeo4.Controls.Add(pnlContenedorMateriales, 0, 1);
             panelAntiParpadeo4.SetColumnSpan(pnlContenedorMateriales, 11);
@@ -481,6 +499,129 @@ namespace SteeLog.Vistas.Movimientos
             };
         }
 
+        private Label lblCarritoVacio;
+        private void ActualizarCarritoVacio()
+        {
+            if (lblCarritoVacio == null || flpMateriales == null) return;
+            bool vacio = flpMateriales.Controls.Count == 0;
+            lblCarritoVacio.Visible = vacio;
+            flpMateriales.Visible = !vacio;
+        }
+
+        private void AplicarTemaMovimientos()
+        {
+            BackColor = Tema.Fondo;
+            // Banda de titulo
+            panelAntiParpadeo1.BackColor = Tema.Banda;
+            panelAntiParpadeo1.Height = Tema.AltoBanda;
+            label1.Font = Tema.FuenteTitulo;
+            label1.ForeColor = Color.White;
+            label1.Text = label1.Text.ToUpper(CultureInfo.CurrentCulture);
+            label1.Padding = new Padding(11, 0, 0, 0);
+
+            // Labels
+            foreach (var lbl in new Label[] { label2, label3, label4, label5, label6, label7, label8, label10, lblFlete, label12, label13, lblEventualHeader, lblPrecioMaterial, lblPrecioGeneral })
+            {
+                if (lbl == null) continue;
+                lbl.Font = Tema.FuenteTexto;
+                lbl.ForeColor = Tema.TextoSecundario;
+            }
+            label11.Font = Tema.FuenteSubtitulo;
+            label11.ForeColor = Tema.TextoSecundario;
+            label11.Text = "SELECCIONAR MATERIAL";
+            panelAntiParpadeo3.BackColor = Tema.Fondo;
+
+            // Combos / inputs / fecha a 36
+            foreach (var c in new Guna.UI2.WinForms.Guna2ComboBox[] { cmbMovimientos, cmbObras, cmbOrigen, cmbDestino, cmbFlete })
+            {
+                Tema.Combo(c);
+                c.ItemHeight = 28;
+                c.Height = Tema.AltoControl;
+            }
+            foreach (var t in new Guna.UI2.WinForms.Guna2TextBox[] { nroRemitoTxt, costoFleteTxt, txtBuscadorMaterial, cantMatMov, txtPrecioMaterial, txtPrecioGeneral })
+            {
+                Tema.Input(t);
+                t.Height = Tema.AltoControl;
+            }
+            Tema.Input(txtCategoria);
+            Tema.Fecha(guna2DateTimePicker1);
+            guna2DateTimePicker1.Height = Tema.AltoControl;
+            costoFleteTxt.Width = 220;
+            txtBuscadorMaterial.Dock = DockStyle.None;
+            txtBuscadorMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtBuscadorMaterial.Margin = new Padding(3, 5, 8, 5);
+            cantMatMov.Margin = new Padding(3, 5, 3, 5);
+
+            // Filas del formulario
+            var rows = panelAntiParpadeo2.RowStyles;
+            for (int i = 0; i < 5; i++) rows[i] = new RowStyle(SizeType.Absolute, 46F);
+            rows[5] = new RowStyle(SizeType.Absolute, 68F);
+            panelAntiParpadeo2.Height = 5 * 46 + 68 + panelAntiParpadeo2.Padding.Vertical;
+            txtCategoria.Height = 56;
+            panelAntiParpadeo2.ColumnStyles[0] = new ColumnStyle(SizeType.Absolute, 190F);
+            panelAntiParpadeo2.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 120F);
+
+            // Flete: botones icono consistentes
+            panelFleteContenedor.ColumnStyles[1] = new ColumnStyle(SizeType.Absolute, 44F);
+            panelFleteContenedor.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 44F);
+            var tip = new ToolTip();
+            foreach (var b in new Guna.UI2.WinForms.Guna2Button[] { btnAgregarFlete, btnEliminarFlete })
+            {
+                // "+" acción primaria discreta (verde acento), "−" destructiva suave (contorno rojo).
+                Tema.Boton(b, b == btnAgregarFlete ? Variante.Primario : Variante.PeligroSuave);
+                b.Font = Tema.Fuente(14f, true);
+                b.Size = new Size(36, 36);
+            }
+            btnEliminarFlete.Text = "−";
+            tip.SetToolTip(btnAgregarFlete, "Agregar flete");
+            tip.SetToolTip(btnEliminarFlete, "Eliminar flete seleccionado");
+
+            // Fila de material
+            panelAntiParpadeo4.RowStyles[0] = new RowStyle(SizeType.Absolute, 48F);
+            panelAntiParpadeo4.ColumnStyles[0] = new ColumnStyle(SizeType.Absolute, 100F);
+            panelAntiParpadeo4.ColumnStyles[2] = new ColumnStyle(SizeType.Absolute, 68F);
+            panelAntiParpadeo4.ColumnStyles[3] = new ColumnStyle(SizeType.Absolute, 80F);
+            panelAntiParpadeo4.ColumnStyles[4] = new ColumnStyle(SizeType.Absolute, 92F);
+            panelAntiParpadeo4.ColumnStyles[5] = new ColumnStyle(SizeType.Absolute, 34F);
+            panelAntiParpadeo4.ColumnStyles[8] = new ColumnStyle(SizeType.Absolute, 44F);
+            panelAntiParpadeo4.ColumnStyles[9] = new ColumnStyle(SizeType.Absolute, 44F);
+            panelAntiParpadeo4.ColumnStyles[10] = new ColumnStyle(SizeType.Absolute, 150F);
+            panelAntiParpadeo4.Padding = new Padding(0, 4, 16, 4);
+            panelAntiParpadeo2.Padding = new Padding(0, 6, 16, 4);
+            panelAntiParpadeo4.Dock = DockStyle.Fill;
+            panelAntiParpadeo4.AutoScroll = false;
+            panelAntiParpadeo4.BringToFront();
+            Tema.Check(chkCompraEventual);
+            chkCompraEventual.Size = new Size(22, 22);
+            foreach (var b in new Guna.UI2.WinForms.Guna2Button[] { btnRecorte, btnInsumo })
+            {
+                Tema.Boton(b, Variante.Secundario);
+                b.Size = new Size(36, 36);
+            }
+            btnInsumo.Font = Tema.Fuente(14f, true);
+            tip.SetToolTip(btnRecorte, "Seleccionar un recorte");
+            tip.SetToolTip(btnInsumo, "Agregar insumo");
+            Tema.Boton(guna2Button1, Variante.Primario);
+            guna2Button1.Height = Tema.AltoControl;
+            guna2Button1.Margin = new Padding(8, 5, 3, 5);
+
+            // Acciones
+            Tema.Boton(guna2Button2, Variante.Primario);
+            guna2Button2.Size = new Size(200, Tema.AltoBotonPrincipal);
+            guna2Button2.Margin = new Padding(4, 3, 14, 3);
+            Tema.Boton(btnCancelarEdicion, Variante.Secundario);
+            btnCancelarEdicion.Size = new Size(160, Tema.AltoBotonPrincipal);
+            btnCancelarEdicion.Margin = new Padding(4, 3, 4, 3);
+            var glifo = eliminarMaterial.Font;
+            Tema.Boton(eliminarMaterial, Variante.Peligro);
+            eliminarMaterial.Font = glifo;
+            eliminarMaterial.Size = new Size(44, Tema.AltoControl);
+            tip.SetToolTip(eliminarMaterial, "Quitar el material seleccionado");
+            panelAntiParpadeo4.RowStyles[2] = new RowStyle(SizeType.Absolute, 52F);
+            ActualizarModoEdicion();
+            if (panelSeleccionado == null) guna2Button1.Text = "Agregar material";
+        }
+
         private void ConfigurarPreciosUI()
         {
             bool esAdmin = SessionManager.Role == UserRole.Admin;
@@ -489,7 +630,7 @@ namespace SteeLog.Vistas.Movimientos
             lblPrecioMaterial = new Label
             {
                 Text = "Precio U.:",
-                Font = new Font("Bahnschrift Light", 10F),
+                Font = Tema.FuenteTexto,
                 ForeColor = Color.FromArgb(155, 185, 165),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleRight,
@@ -504,7 +645,7 @@ namespace SteeLog.Vistas.Movimientos
                 BorderColor = Color.FromArgb(55, 75, 62),
                 Cursor = Cursors.IBeam,
                 FillColor = Color.FromArgb(35, 50, 40),
-                Font = new Font("Segoe UI", 10.5F),
+                Font = Tema.FuenteTexto,
                 ForeColor = Color.FromArgb(225, 225, 225),
                 PlaceholderText = "0",
                 Size = new Size(60, 30),
@@ -534,7 +675,7 @@ namespace SteeLog.Vistas.Movimientos
             lblPrecioGeneral = new Label
             {
                 Text = "Precio total:",
-                Font = new Font("Bahnschrift Light", 10.5F),
+                Font = Tema.FuenteTexto,
                 ForeColor = Color.FromArgb(155, 185, 165),
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -549,7 +690,7 @@ namespace SteeLog.Vistas.Movimientos
                 BorderColor = Color.FromArgb(55, 75, 62),
                 Cursor = Cursors.IBeam,
                 FillColor = Color.FromArgb(35, 50, 40),
-                Font = new Font("Segoe UI", 10.5F),
+                Font = Tema.FuenteTexto,
                 ForeColor = Color.FromArgb(225, 225, 225),
                 PlaceholderText = "0,00",
                 Size = new Size(200, 30),
@@ -623,14 +764,14 @@ namespace SteeLog.Vistas.Movimientos
 
             btnCancelarEdicion = new Guna.UI2.WinForms.Guna2Button
             {
-                Text = "CANCELAR EDICIÓN",
+                Text = "Cancelar edición",
                 Width = 150,
                 Height = 34,
                 Anchor = AnchorStyles.None,
                 Margin = new Padding(4, 5, 4, 5),
                 FillColor = Color.FromArgb(90, 90, 90),
                 ForeColor = Color.White,
-                Font = new Font("Bahnschrift Light", 11F),
+                Font = Tema.FuenteBoton,
                 Visible = false
             };
             btnCancelarEdicion.HoverState.FillColor = Color.FromArgb(115, 115, 115);
@@ -645,7 +786,7 @@ namespace SteeLog.Vistas.Movimientos
         private void ActualizarModoEdicion()
         {
             bool editando = _idMovimientoAEditar > 0;
-            guna2Button2.Text = editando ? "ACTUALIZAR MOVIMIENTO" : "GUARDAR MOVIMIENTO";
+            guna2Button2.Text = editando ? "Actualizar movimiento" : "Guardar movimiento";
             if (btnCancelarEdicion != null)
                 btnCancelarEdicion.Visible = editando;
         }
@@ -696,11 +837,11 @@ namespace SteeLog.Vistas.Movimientos
         private List<ItemCombo> OpcionesDestino() => catalogos.Destinos.Select(x => new ItemCombo { TextoDisplay=x.Nombre, IdReal=x.Id, Tipo=x.Tipo }).ToList();
         public void CargarOrigen()
         {
-            cmbOrigen.DataSource=OpcionesDestino(); cmbOrigen.DisplayMember="TextoDisplay"; cmbOrigen.ValueMember="IdReal"; cmbOrigen.SelectedIndex=-1;
+            UiVista.AsignarDatos(cmbOrigen, OpcionesDestino(), "TextoDisplay", "IdReal"); cmbOrigen.SelectedIndex=-1;
         }
         public void CargarDestino()
         {
-            cmbDestino.DataSource=OpcionesDestino(); cmbDestino.DisplayMember="TextoDisplay"; cmbDestino.ValueMember="IdReal"; cmbDestino.SelectedIndex=-1;
+            UiVista.AsignarDatos(cmbDestino, OpcionesDestino(), "TextoDisplay", "IdReal"); cmbDestino.SelectedIndex=-1;
         }
 
         private void CmbObras_SelectedIndexChanged(object sender, EventArgs e)
@@ -1350,7 +1491,7 @@ namespace SteeLog.Vistas.Movimientos
             string nombreFlete = cmbFlete.Text;
 
             string msg = $"¿Está seguro de que desea eliminar el flete '{nombreFlete}'?\nSe realizará un borrado lógico (no se mostrará más para nuevos registros, pero se mantendrá el historial).";
-            if (MessageBox.Show(msg, "Confirmar Eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Question) == DialogResult.Yes)
+            if (Dialogo.Confirmar(msg, "Confirmar eliminación", true, this))
             {
                 try
                 {

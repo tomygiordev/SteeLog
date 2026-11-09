@@ -19,6 +19,7 @@ using SteeLog.Modelos;
 using SteeLog.Reportes;
 using SteeLog.Servicios;
 using System.IO;
+using SteeLog.UI;
 // using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace SteeLog.Vistas.Movimientos
@@ -30,7 +31,7 @@ namespace SteeLog.Vistas.Movimientos
             _panelResultados = new Panel
             {
                 Size = new Size(516, 0),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = Tema.Superficie,
                 Visible = false,
                 AutoScroll = true
             };
@@ -153,7 +154,7 @@ namespace SteeLog.Vistas.Movimientos
                     Mat = m,
                     NombreMostrar = m.nombre,
                     InfoMostrar = infoStockMaterial,
-                    ColorAcento = Color.FromArgb(39, 174, 96),
+                    ColorAcento = Tema.Acento,
                     Icono = "📦"
                 });
 
@@ -168,7 +169,7 @@ namespace SteeLog.Vistas.Movimientos
                             Rec = r,
                             NombreMostrar = $"{r.nombre_material} (Recorte: {r.ancho}x{r.altura})",
                             InfoMostrar = $"Recorte • Cantidad disponible: {r.cantidad:N0}",
-                            ColorAcento = Color.Orange,
+                            ColorAcento = Tema.Advertencia,
                             Icono = "✂️"
                         });
                     }
@@ -198,8 +199,8 @@ namespace SteeLog.Vistas.Movimientos
                 var lblNoResults = new Label
                 {
                     Text = mensaje,
-                    Font = new Font("Bahnschrift Light", 10f),
-                    ForeColor = Color.FromArgb(120, 120, 120),
+                    Font = Tema.FuenteTexto,
+                    ForeColor = Tema.TextoApagado,
                     Size = new Size(516, 45),
                     TextAlign = ContentAlignment.MiddleCenter,
                     BackColor = Color.Transparent,
@@ -241,7 +242,7 @@ namespace SteeLog.Vistas.Movimientos
             var panel = new PanelResultado
             {
                 Size = new Size(496, 48),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = Tema.Superficie,
                 Dock = DockStyle.Top,
                 Cursor = Cursors.Hand,
                 Padding = new Padding(10, 0, 10, 0),
@@ -271,7 +272,7 @@ namespace SteeLog.Vistas.Movimientos
             var lblIcon = new Label
             {
                 Text = item.Icono,
-                Font = new Font("Segoe UI", 14f),
+                Font = new Font("Segoe UI Emoji", 13f),
                 Size = new Size(35, 48),
                 Location = new Point(15, 0),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -281,8 +282,8 @@ namespace SteeLog.Vistas.Movimientos
             var lblName = new Label
             {
                 Text = item.NombreMostrar,
-                Font = new Font("Bahnschrift", 11f),
-                ForeColor = Color.FromArgb(220, 220, 220),
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.Texto,
                 Size = new Size(400, 28),
                 Location = new Point(55, 3),
                 TextAlign = ContentAlignment.BottomLeft,
@@ -293,7 +294,7 @@ namespace SteeLog.Vistas.Movimientos
             var lblType = new Label
             {
                 Text = item.InfoMostrar,
-                Font = new Font("Bahnschrift Light", 8.5f),
+                Font = Tema.Fuente(9f),
                 ForeColor = item.ColorAcento,
                 Size = new Size(400, 18),
                 Location = new Point(55, 28),
@@ -304,8 +305,8 @@ namespace SteeLog.Vistas.Movimientos
             var allControls = new Control[] { panel, lblIcon, lblName, lblType, accentBar };
             foreach (var ctrl in allControls)
             {
-                ctrl.MouseEnter += (s, e) => panel.BackColor = Color.FromArgb(35, 45, 40);
-                ctrl.MouseLeave += (s, e) => panel.BackColor = Color.FromArgb(25, 30, 28);
+                ctrl.MouseEnter += (s, e) => panel.BackColor = Tema.Seleccion;
+                ctrl.MouseLeave += (s, e) => panel.BackColor = Tema.Superficie;
                 ctrl.Click += (s, e) => ItemClicked(item);
             }
 

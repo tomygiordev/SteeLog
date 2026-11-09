@@ -37,13 +37,13 @@
             this.label6 = new System.Windows.Forms.Label();
             this.label5 = new System.Windows.Forms.Label();
             this.label3 = new System.Windows.Forms.Label();
-            this.flCategoria = new System.Windows.Forms.CheckedListBox();
+            this.flCategoria = new SteeLog.UI.ListaChecksTema();
             this.panelAntiParpadeo2 = new SteeLog.PanelAntiParpadeo();
             this.label8 = new System.Windows.Forms.Label();
             this.sionoBajo = new Guna.UI2.WinForms.Guna2ToggleSwitch();
             this.AplicarFiltros = new Guna.UI2.WinForms.Guna2Button();
             this.label9 = new System.Windows.Forms.Label();
-            this.clbProveedoresFiltro = new System.Windows.Forms.CheckedListBox();
+            this.clbProveedoresFiltro = new SteeLog.UI.ListaChecksTema();
             this.panelAntiParpadeo1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.hastaCantidadFiltro)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.desdeCantidadFiltro)).BeginInit();
@@ -382,13 +382,13 @@
         private Guna.UI2.WinForms.Guna2NumericUpDown desdeCantidadFiltro;
         private Guna.UI2.WinForms.Guna2ControlBox guna2ControlBox1;
         private System.Windows.Forms.Label label7;
-        private System.Windows.Forms.CheckedListBox flCategoria;
+        private SteeLog.UI.ListaChecksTema flCategoria;
         private PanelAntiParpadeo panelAntiParpadeo2;
         private System.Windows.Forms.Label label8;
         private Guna.UI2.WinForms.Guna2ToggleSwitch sionoBajo;
         private Guna.UI2.WinForms.Guna2Button LimpiarFiltros;
         private Guna.UI2.WinForms.Guna2Button AplicarFiltros;
         private System.Windows.Forms.Label label9;
-        private System.Windows.Forms.CheckedListBox clbProveedoresFiltro;
+        private SteeLog.UI.ListaChecksTema clbProveedoresFiltro;
     }
 }

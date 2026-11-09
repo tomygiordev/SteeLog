@@ -9,6 +9,8 @@ using SteeLog.Presentation;
 using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using SteeLog;
+using System.Drawing;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos
 {
@@ -26,6 +28,7 @@ namespace SteeLog.Vistas.Movimientos
         public ModalRecortes(int idMaterial, string nombreMaterial)
         {
             InitializeComponent();
+            AplicarTema();
             _idMaterial = idMaterial;
             _nombreMaterial = nombreMaterial;
             lblMaterial.Text = $"Material: {_nombreMaterial}";
@@ -40,6 +43,40 @@ namespace SteeLog.Vistas.Movimientos
             txtCantidad.KeyPress += TxtDimension_KeyPress;
             txtCantidad.Text = "1";
             dgvRecortesDisponibles.SelectionChanged += DgvRecortesDisponibles_SelectionChanged;
+        }
+
+        private void AplicarTema()
+        {
+            foreach (var lbl in new Label[] { lblFiltro, lblAncho, lblAltura, lblX, lblInfo, label2 })
+            {
+                lbl.Font = Tema.FuenteTexto;
+                lbl.ForeColor = Tema.TextoSecundario;
+            }
+            lblMaterial.Font = Tema.Fuente(12f, true);
+            lblMaterial.ForeColor = Tema.Texto;
+            lblFiltro.Font = Tema.FuenteSubtitulo;
+            foreach (var t in new Guna.UI2.WinForms.Guna2TextBox[] { txtAnchoBuscado, txtAlturaBuscada, txtCantidad })
+            {
+                Tema.Input(t);
+                t.Height = Tema.AltoControl;
+            }
+            Tema.Grilla(dgvRecortesDisponibles);
+            Tema.Boton(btnCrearNuevo, Variante.Primario);
+            btnCrearNuevo.Text = "Crear y usar";
+            btnCrearNuevo.Size = new Size(190, Tema.AltoControl);
+            Tema.Boton(btnSumarTodo, Variante.Secundario);
+            btnSumarTodo.Text = "Cargar stock completo";
+            Tema.Boton(btnCancelar, Variante.Secundario);
+            btnCancelar.Text = "Cancelar";
+            btnCancelar.Size = new Size(270, Tema.AltoBotonPrincipal);
+            Tema.Boton(btnSeleccionarRecorte, Variante.Primario);
+            btnSeleccionarRecorte.Text = "Usar recorte";
+            btnSeleccionarRecorte.Size = new Size(270, Tema.AltoBotonPrincipal);
+            btnCancelar.Location = new Point(20, 516);
+            btnSeleccionarRecorte.Location = new Point(310, 516);
+            pnlCantidad.BackColor = Tema.Superficie;
+            CancelButton = btnCancelar;
+            Tema.ChromeModal(this, "Selección de recorte");
         }
 
         private async void CargarRecortes(decimal? ancho = null, decimal? altura = null)
@@ -75,9 +112,16 @@ namespace SteeLog.Vistas.Movimientos
                 dgvRecortesDisponibles.Columns["altura"].HeaderText = "Altura (m)";
                 dgvRecortesDisponibles.Columns["altura"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }
+            if (dgvRecortesDisponibles.Columns["medida"] != null)
+            {
+                dgvRecortesDisponibles.Columns["medida"].HeaderText = "Medida (m)";
+                dgvRecortesDisponibles.Columns["medida"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
+                dgvRecortesDisponibles.Columns["medida"].FillWeight = 20;
+            }
             if (dgvRecortesDisponibles.Columns["cantidad"] != null)
             {
-                dgvRecortesDisponibles.Columns["cantidad"].HeaderText = "Stock Disponible";
+                dgvRecortesDisponibles.Columns["cantidad"].FillWeight = 30;
+                dgvRecortesDisponibles.Columns["cantidad"].HeaderText = "Stock disponible";
                 dgvRecortesDisponibles.Columns["cantidad"].DefaultCellStyle.Format = "G29";
                 dgvRecortesDisponibles.Columns["cantidad"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
             }

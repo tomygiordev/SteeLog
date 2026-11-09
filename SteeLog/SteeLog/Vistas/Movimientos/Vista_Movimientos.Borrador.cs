@@ -1,3 +1,4 @@
+using SteeLog.UI;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
@@ -105,7 +106,7 @@ namespace SteeLog.Vistas.Movimientos
             else
                 hace = $"hace {(int)edad.TotalHours}h";
 
-            var resultado = ConfirmarRecuperacion != null ? (ConfirmarRecuperacion(draft) ? DialogResult.Yes : DialogResult.No) : MessageBox.Show(
+            var resultado = ConfirmarRecuperacion != null ? (ConfirmarRecuperacion(draft) ? DialogResult.Yes : DialogResult.No) : Dialogo.Mostrar(
                 this,
                 $"Se encontró un movimiento sin guardar ({hace}).\n\n" +
                 $"Tipo: {draft.NombreTipoMovimiento}\n" +

@@ -7,7 +7,6 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 using Guna.UI2.WinForms;
-using Microsoft.VisualBasic;
 using System.Threading;
 using System.Threading.Tasks;
 using Timer = System.Windows.Forms.Timer;
@@ -18,6 +17,7 @@ using SteeLog.Presentation;
 
 
 using SteeLog.Servicios;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Inventario
 {
@@ -38,17 +38,6 @@ namespace SteeLog.Vistas.Inventario
         private ConteoLectura _conteoActual;
         private ConteoLectura _conteoSeleccionadoHistorial;
         private MaterialInventarioLectura _materialSeleccionado;
-
-        private readonly Color colorFondo = Color.FromArgb(29, 38, 35);
-        private readonly Color colorPanelOscuro = Color.FromArgb(20, 30, 25);
-        private readonly Color colorVerdeAccent = Color.FromArgb(25, 135, 84);
-        private readonly Color colorVerdeOscuro = Color.FromArgb(35, 63, 43);
-        private readonly Color colorVerdeBoton = Color.FromArgb(47, 84, 57);
-        private readonly Color colorFilaAlt = Color.FromArgb(35, 50, 40);
-        private readonly Color colorFila = Color.FromArgb(28, 40, 32);
-        private readonly Color colorSeleccion = Color.FromArgb(50, 90, 60);
-        private readonly Color colorTexto = Color.White;
-        private readonly Color colorBorde = Color.FromArgb(60, 60, 65);
 
         private Guna2Button btnTabEntrada;
         private Guna2Button btnTabHistorial;
@@ -92,6 +81,7 @@ namespace SteeLog.Vistas.Inventario
             if (executor != null) presenter = new ConteosPresenter(executor);
             pdf = renderer;
             InitializeComponent();
+            Tema.SinEscala(this);
             CrearInterfaz(); ActualizarEstadoEntrada();
             Shown += async (s, e) => {
                 if (presenter == null) presenter = new ConteosPresenter(LocalServices.Current.Executor);
@@ -149,73 +139,38 @@ namespace SteeLog.Vistas.Inventario
 
         private void CrearInterfaz()
         {
-            BackColor = colorFondo;
-            Font = new Font("Bahnschrift", 9.5F);
+            BackColor = Tema.Fondo;
+            Font = Tema.FuenteTexto;
 
-            var panelTitulo = new PanelAntiParpadeo
+            var panelTabs = new FlowLayoutPanel
             {
                 Dock = DockStyle.Top,
-                Height = 50,
-                ColumnCount = 1,
-                Padding = new Padding(40, 0, 40, 0)
+                Height = 58,
+                BackColor = Tema.Fondo,
+                Padding = new Padding(28, 14, 28, 0),
+                WrapContents = false
             };
-            panelTitulo.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panelTitulo.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            var lblTitulo = new Label
-            {
-                Text = "CONTEO FISICO DE INVENTARIO",
-                Font = new Font("Bahnschrift SemiBold", 21F, FontStyle.Bold),
-                ForeColor = colorTexto,
-                Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.MiddleCenter
-            };
-            panelTitulo.Controls.Add(lblTitulo, 0, 0);
-
-            var panelTabs = new PanelAntiParpadeo
-            {
-                Dock = DockStyle.Top,
-                Height = 42,
-                ColumnCount = 2,
-                Padding = new Padding(40, 0, 40, 0)
-            };
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50));
-            panelTabs.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-
-            btnTabEntrada = CrearBotonTab("Entrada");
-            btnTabHistorial = CrearBotonTab("Historial");
+            btnTabEntrada = UiVista.BotonTab("Entrada");
+            btnTabHistorial = UiVista.BotonTab("Historial");
             btnTabEntrada.Click += (s, e) => CambiarTab("entrada");
             btnTabHistorial.Click += (s, e) => CambiarTab("historial");
-            panelTabs.Controls.Add(btnTabEntrada, 0, 0);
-            panelTabs.Controls.Add(btnTabHistorial, 1, 0);
+            panelTabs.Controls.Add(btnTabEntrada);
+            panelTabs.Controls.Add(btnTabHistorial);
 
             panelContenido = new Panel
             {
                 Dock = DockStyle.Fill,
-                BackColor = colorFondo
+                BackColor = Tema.Fondo
             };
 
             Controls.Add(panelContenido);
             Controls.Add(panelTabs);
-            Controls.Add(panelTitulo);
+            var banda = Tema.TituloVista(this, "Conteo físico de inventario");
+            if (banda != null) banda.SendToBack();
 
             ActualizarTabs();
             ConstruirEntrada();
-        }
-
-        private Guna2Button CrearBotonTab(string texto)
-        {
-            return new Guna2Button
-            {
-                Text = texto,
-                Font = new Font("Bahnschrift Light", 11F),
-                FillColor = colorVerdeOscuro,
-                ForeColor = colorTexto,
-                BorderRadius = 0,
-                Dock = DockStyle.Fill,
-                Cursor = Cursors.Hand
-            };
         }
 
         private async void CambiarTab(string tab, int continuarId = 0)
@@ -241,8 +196,8 @@ namespace SteeLog.Vistas.Inventario
         private void ActualizarTabs()
         {
             if (btnTabEntrada == null || btnTabHistorial == null) return;
-            btnTabEntrada.FillColor = _tabActual == "entrada" ? colorVerdeAccent : colorVerdeOscuro;
-            btnTabHistorial.FillColor = _tabActual == "historial" ? colorVerdeAccent : colorVerdeOscuro;
+            Tema.Boton(btnTabEntrada, _tabActual == "entrada" ? Variante.TabActiva : Variante.Tab);
+            Tema.Boton(btnTabHistorial, _tabActual == "historial" ? Variante.TabActiva : Variante.Tab);
         }
 
         private void ConstruirEntrada()
@@ -254,14 +209,14 @@ namespace SteeLog.Vistas.Inventario
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 4,
-                BackColor = colorFondo,
-                Padding = new Padding(40, 10, 40, 12)
+                BackColor = Tema.Fondo,
+                Padding = new Padding(28, 12, 28, 8)
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 64));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
 
             root.Controls.Add(CrearPanelEstadoEntrada(), 0, 0);
             root.Controls.Add(CrearPanelCargaEntrada(), 0, 1);
@@ -277,37 +232,37 @@ namespace SteeLog.Vistas.Inventario
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 4,
-                BackColor = colorPanelOscuro,
-                Padding = new Padding(12, 8, 12, 8),
+                BackColor = Tema.Superficie,
+                Padding = new Padding(20, 8, 12, 8),
                 Margin = new Padding(0, 0, 0, 8)
             };
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 55));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 25));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 260));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             lblEstadoConteo = new Label
             {
                 Text = "Sin conteo abierto",
-                Font = new Font("Bahnschrift SemiBold", 12F, FontStyle.Bold),
-                ForeColor = colorTexto,
+                Font = Tema.Fuente(12f, true),
+                ForeColor = Tema.Texto,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoEllipsis = true
             };
             lblResumenConteo = new Label
             {
-                Text = "Inicia un conteo para cargar materiales.",
-                Font = new Font("Bahnschrift Light", 10F),
-                ForeColor = Color.FromArgb(175, 200, 180),
+                Text = "Iniciá un conteo para cargar materiales.",
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoSecundario,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
                 AutoEllipsis = true
             };
-            btnIniciarConteo = CrearBotonAccion("INICIAR CONTEO", colorVerdeAccent);
+            btnIniciarConteo = CrearBotonAccion("Iniciar conteo", Variante.Primario);
             btnIniciarConteo.Click += BtnIniciarConteo_Click;
-            btnFinalizarConteo = CrearBotonAccion("FINALIZAR", colorVerdeAccent);
+            btnFinalizarConteo = CrearBotonAccion("Finalizar", Variante.Primario);
             btnFinalizarConteo.Click += BtnFinalizar_Click;
 
             panel.Controls.Add(lblEstadoConteo, 0, 0);
@@ -323,20 +278,21 @@ namespace SteeLog.Vistas.Inventario
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 6,
-                BackColor = colorFondo,
-                Padding = new Padding(0, 4, 0, 8),
+                BackColor = Tema.Fondo,
+                Padding = new Padding(0, 4, 0, 4),
                 Margin = new Padding(0)
             };
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 82));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 78));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 56));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 110));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 120));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
             var lblMaterial = CrearEtiquetaCampo("Material:");
-            var lblCantidad = CrearEtiquetaCampo("Cant.:");
+            var lblCantidad = CrearEtiquetaCampo("Cantidad:");
+            lblCantidad.Padding = new Padding(12, 0, 0, 0);
 
             txtBuscadorMaterial = CrearTextBox("Buscar material...");
             txtCantidad = CrearTextBox("0");
@@ -344,12 +300,12 @@ namespace SteeLog.Vistas.Inventario
             txtCantidad.KeyPress += SoloDecimal_KeyPress;
             txtCantidad.KeyDown += TxtCantidad_KeyDown;
             txtCantidad.Click += (s, e) => txtCantidad.SelectAll();
-            txtCantidad.Margin = new Padding(3, 4, 8, 4);
+            txtCantidad.Margin = new Padding(0, 0, 8, 0);
 
-            btnAgregar = CrearBotonAccion("AGREGAR", colorVerdeBoton);
-            btnAgregar.Click += BtnAgregar_Click;
-            btnCancelarConteo = CrearBotonAccion("CANCELAR", Color.FromArgb(150, 55, 55));
+            btnAgregar = CrearBotonAccion("Agregar", Variante.Primario);
+            btnCancelarConteo = CrearBotonAccion("Cancelar conteo", Variante.Secundario);
             btnCancelarConteo.Click += BtnCancelarConteo_Click;
+            btnAgregar.Click += BtnAgregar_Click;
 
             panel.Controls.Add(lblMaterial, 0, 0);
             panel.Controls.Add(txtBuscadorMaterial, 1, 0);
@@ -365,22 +321,54 @@ namespace SteeLog.Vistas.Inventario
 
         private Control CrearGridEntrada()
         {
-            dgvEntrada = CrearGridBase(40);
+            dgvEntrada = CrearGridBase(Tema.AltoFila);
             dgvEntrada.AutoGenerateColumns = false;
             dgvEntrada.Columns.Clear();
             dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colMaterial", HeaderText = "Material", DataPropertyName = "Nombre", FillWeight = 48 });
-            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCategoria", HeaderText = "Categoria", DataPropertyName = "Categoria", FillWeight = 24 });
+            dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCategoria", HeaderText = "Categoría", DataPropertyName = "Categoria", FillWeight = 24 });
             dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colCantidad", HeaderText = "Contado", DataPropertyName = "Cantidad", FillWeight = 12 });
             dgvEntrada.Columns.Add(new DataGridViewTextBoxColumn { Name = "colHora", HeaderText = "Hora", DataPropertyName = "FechaCarga", FillWeight = 10 });
-            dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colEditar", HeaderText = "", Text = "Editar", UseColumnTextForButtonValue = true, FillWeight = 9 });
-            dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colQuitar", HeaderText = "", Text = "Quitar", UseColumnTextForButtonValue = true, FillWeight = 9 });
+            dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colEditar", HeaderText = "", Text = "Editar", UseColumnTextForButtonValue = true, FillWeight = 9, Tag = Variante.Secundario });
+            dgvEntrada.Columns.Add(new DataGridViewButtonColumn { Name = "colQuitar", HeaderText = "", Text = "Quitar", UseColumnTextForButtonValue = true, FillWeight = 9, Tag = Variante.Peligro });
             dgvEntrada.Columns["colCantidad"].DefaultCellStyle.Format = "N2";
             dgvEntrada.Columns["colCantidad"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvEntrada.Columns["colHora"].DefaultCellStyle.Format = "HH:mm";
             dgvEntrada.Columns["colHora"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvEntrada.CellContentClick += DgvEntrada_CellContentClick;
             dgvEntrada.CellFormatting += DgvEntrada_CellFormatting;
+
+            lblVacioEntrada = new Label
+            {
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoApagado,
+                BackColor = Tema.Fondo,
+                Height = 70,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Location = new Point(0, Tema.AltoHeader + 36)
+            };
+            dgvEntrada.Controls.Add(lblVacioEntrada);
+            lblVacioEntrada.Width = Math.Max(100, dgvEntrada.ClientSize.Width);
+            dgvEntrada.DataSourceChanged += (s, e) => ActualizarVacioEntrada();
+            dgvEntrada.RowsAdded += (s, e) => ActualizarVacioEntrada();
+            dgvEntrada.RowsRemoved += (s, e) => ActualizarVacioEntrada();
             return dgvEntrada;
+        }
+
+        private Label lblVacioEntrada;
+
+        private void ActualizarVacioEntrada()
+        {
+            if (lblVacioEntrada == null || dgvEntrada == null || lblVacioEntrada.IsDisposed) return;
+            bool vacio = dgvEntrada.Rows.Count == 0;
+            lblVacioEntrada.Visible = vacio;
+            if (vacio)
+            {
+                lblVacioEntrada.Text = _conteoActual != null && entradaLista
+                    ? "Todavía no cargaste materiales.\nBuscá un material, ingresá la cantidad contada y presioná Agregar."
+                    : "No hay un conteo abierto.\nIniciá un conteo para empezar a cargar materiales.";
+            }
         }
 
         private Control CrearPanelAccionesEntrada()
@@ -389,10 +377,9 @@ namespace SteeLog.Vistas.Inventario
             {
                 Dock = DockStyle.Fill,
                 Text = "El stock del sistema se oculta durante la carga. Las diferencias se calculan al finalizar.",
-                Font = new Font("Bahnschrift Light", 10F),
-                ForeColor = Color.FromArgb(155, 180, 160),
-                TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(4, 0, 0, 0)
+                Font = Tema.Fuente(10f),
+                ForeColor = Tema.TextoApagado,
+                TextAlign = ContentAlignment.MiddleLeft
             };
             return panel;
         }
@@ -441,7 +428,7 @@ namespace SteeLog.Vistas.Inventario
             panelResultados = new Panel
             {
                 Visible = false,
-                BackColor = Color.FromArgb(18, 28, 22),
+                BackColor = Tema.FondoInput,
                 BorderStyle = BorderStyle.FixedSingle,
                 AutoScroll = true,
                 Width = 520,
@@ -458,7 +445,7 @@ namespace SteeLog.Vistas.Inventario
 
             if (query.Length < 2)
             {
-                AgregarMensajeBusqueda("Escribi al menos 2 letras para buscar materiales.");
+                AgregarMensajeBusqueda("Escribí al menos 2 letras para buscar materiales.");
                 return;
             }
 
@@ -495,9 +482,9 @@ namespace SteeLog.Vistas.Inventario
                 Text = texto,
                 Dock = DockStyle.Top,
                 Height = 42,
-                ForeColor = Color.FromArgb(150, 170, 155),
+                ForeColor = Tema.TextoApagado,
                 TextAlign = ContentAlignment.MiddleCenter,
-                Font = new Font("Bahnschrift Light", 10F)
+                Font = Tema.FuenteTexto
             };
             panelResultados.Controls.Add(lbl);
             PosicionarPanelResultados();
@@ -511,7 +498,7 @@ namespace SteeLog.Vistas.Inventario
             {
                 Dock = DockStyle.Top,
                 Height = 46,
-                BackColor = Color.FromArgb(24, 36, 29),
+                BackColor = Tema.FondoInput,
                 Cursor = Cursors.Hand,
                 Padding = new Padding(12, 2, 12, 2)
             };
@@ -520,8 +507,8 @@ namespace SteeLog.Vistas.Inventario
                 Text = material.Nombre,
                 Dock = DockStyle.Top,
                 Height = 24,
-                ForeColor = colorTexto,
-                Font = new Font("Bahnschrift", 10.5F, FontStyle.Bold),
+                ForeColor = Tema.Texto,
+                Font = Tema.Fuente(10.5f, true),
                 AutoEllipsis = true
             };
             var categoria = new Label
@@ -529,8 +516,8 @@ namespace SteeLog.Vistas.Inventario
                 Text = string.IsNullOrWhiteSpace(material.Categoria) ? "Material" : material.Categoria,
                 Dock = DockStyle.Top,
                 Height = 18,
-                ForeColor = Color.FromArgb(135, 190, 150),
-                Font = new Font("Bahnschrift Light", 8.8F),
+                ForeColor = Tema.TextoSecundario,
+                Font = Tema.Fuente(9f),
                 AutoEllipsis = true
             };
 
@@ -539,8 +526,8 @@ namespace SteeLog.Vistas.Inventario
 
             foreach (Control c in new Control[] { panel, nombre, categoria })
             {
-                c.MouseEnter += (s, e) => panel.BackColor = Color.FromArgb(35, 52, 42);
-                c.MouseLeave += (s, e) => panel.BackColor = Color.FromArgb(24, 36, 29);
+                c.MouseEnter += (s, e) => panel.BackColor = Tema.Seleccion;
+                c.MouseLeave += (s, e) => panel.BackColor = Tema.FondoInput;
                 c.Click += (s, e) => SeleccionarMaterial(material);
             }
             return panel;
@@ -601,9 +588,10 @@ namespace SteeLog.Vistas.Inventario
             {
                 lblResumenConteo.Text = activo
                     ? $"Usuario: {MostrarUsuario(_conteoActual.UsuarioInicio)}  |  Inicio: {_conteoActual.Inicio:dd/MM/yyyy HH:mm}"
-                    : "Presiona Iniciar Conteo para habilitar la carga.";
+                    : "Presioná Iniciar conteo para habilitar la carga.";
             }
 
+            ActualizarVacioEntrada();
             if (btnIniciarConteo != null) btnIniciarConteo.Enabled = entradaLista && !ocupada && !activo;
             if (btnFinalizarConteo != null) btnFinalizarConteo.Enabled = !ocupada && activo;
             if (btnCancelarConteo != null) btnCancelarConteo.Enabled = !ocupada && activo;
@@ -645,8 +633,8 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnAgregar_Click(object sender, EventArgs e)
         {
             if (!entradaLista) return;
-            if (_conteoActual == null || _materialSeleccionado == null) { ToastNotification.ShowWarning("Inicia un conteo y selecciona un material."); return; }
-            if (!TryParseCantidad(txtCantidad.Text, out decimal cantidad)) { ToastNotification.ShowWarning("Ingresa una cantidad valida mayor o igual a cero."); return; }
+            if (_conteoActual == null || _materialSeleccionado == null) { ToastNotification.ShowWarning("Iniciá un conteo y seleccioná un material."); return; }
+            if (!TryParseCantidad(txtCantidad.Text, out decimal cantidad)) { ToastNotification.ShowWarning("Ingresá una cantidad válida mayor o igual a cero."); return; }
             if (!Comenzar()) return; int id = _conteoActual.Id, material = _materialSeleccionado.Id; int version = versionEntrada;
             try { await presenter.CargarAsync(id, material, cantidad, cierre.Token);
                 if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
@@ -662,9 +650,9 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnFinalizar_Click(object sender, EventArgs e)
         {
             if (!entradaLista || _conteoActual == null || ocupada) return;
-            string obs = Interaction.InputBox("Observaciones (opcional):", "Finalizar conteo", "");
+            string obs = Dialogo.Pedir("Observaciones (opcional):", "Finalizar conteo", "", this) ?? ""; // InputBox devolvía "" al cancelar; la confirmación posterior sigue siendo la salida.
             int id = _conteoActual.Id;
-            if (MessageBox.Show($"Finalizar conteo #{id}?\n\nSe calcularan las diferencias contra el stock actual.", "Confirmar finalizacion", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes || !Comenzar()) return;
+            if (!Dialogo.Confirmar($"¿Finalizar el conteo #{id}?\n\nSe calcularán las diferencias contra el stock actual.", "Confirmar finalización") || !Comenzar()) return;
             int version = versionEntrada;
             try { await presenter.FinalizarAsync(id, obs, cierre.Token); if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
                 _conteoActual = null; ToastNotification.ShowSuccess("Conteo finalizado."); CambiarTab("historial", id);
@@ -674,7 +662,7 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnCancelarConteo_Click(object sender, EventArgs e)
         {
             if (!entradaLista || _conteoActual == null || ocupada) return; int id = _conteoActual.Id;
-            if (MessageBox.Show($"Cancelar conteo #{id}?", "Confirmar cancelacion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            if (!Dialogo.Confirmar($"¿Cancelar el conteo #{id}?\n\nLos materiales cargados hasta ahora no se tendrán en cuenta.", "Confirmar cancelación", true) || !Comenzar()) return;
             int version = versionEntrada;
             try { await presenter.CancelarAsync(id, cierre.Token); if (!Vigente || _tabActual != "entrada" || _conteoActual?.Id != id || version != versionEntrada) return;
                 _conteoActual = null; ActualizarEstadoEntrada(); await CargarDetallesEntrada(); ToastNotification.ShowSuccess("Conteo cancelado.");
@@ -705,8 +693,8 @@ namespace SteeLog.Vistas.Inventario
 
         private async void EditarDetalle(DetalleConteoLectura det)
         {
-            if (!entradaLista || ocupada) return; string input = Interaction.InputBox($"Nueva cantidad contada para:\n\n{det.Nombre}", "Editar cantidad", det.Cantidad.ToString("0.##", CultureInfo.CurrentCulture));
-            if (string.IsNullOrWhiteSpace(input)) return; if (!TryParseCantidad(input, out decimal cantidad)) { ToastNotification.ShowWarning("Cantidad invalida."); return; }
+            if (!entradaLista || ocupada) return; string input = Dialogo.Pedir($"Nueva cantidad contada para:\n\n{det.Nombre}", "Editar cantidad", det.Cantidad.ToString("0.##", CultureInfo.CurrentCulture), this);
+            if (string.IsNullOrWhiteSpace(input)) return; if (!TryParseCantidad(input, out decimal cantidad)) { ToastNotification.ShowWarning("Cantidad inválida."); return; }
             int id = det.ConteoId; if (_conteoActual?.Id != id || !Comenzar()) return; int version = versionEntrada;
             try { await presenter.CorregirAsync(id, det.MaterialId, cantidad, cierre.Token); if (Vigente && _tabActual == "entrada" && _conteoActual?.Id == id && version == versionEntrada) await CargarDetallesEntrada(); }
             catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo editar: " + ex.Message); } finally { Terminar(); }
@@ -714,7 +702,7 @@ namespace SteeLog.Vistas.Inventario
 
         private async void QuitarDetalle(DetalleConteoLectura det)
         {
-            if (!entradaLista || ocupada || MessageBox.Show($"Quitar {det.Nombre} del conteo?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!entradaLista || ocupada || !Dialogo.Confirmar($"¿Quitar {det.Nombre} del conteo?", "Quitar material", true)) return;
             int id = det.ConteoId; if (_conteoActual?.Id != id || !Comenzar()) return; int version = versionEntrada;
             try { await presenter.QuitarAsync(id, det.Id, cierre.Token); if (Vigente && _tabActual == "entrada" && _conteoActual?.Id == id && version == versionEntrada) await CargarDetallesEntrada(); }
             catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo quitar: " + ex.Message); } finally { Terminar(); }
@@ -729,13 +717,13 @@ namespace SteeLog.Vistas.Inventario
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 4,
-                BackColor = colorFondo,
-                Padding = new Padding(40, 10, 40, 12)
+                BackColor = Tema.Fondo,
+                Padding = new Padding(28, 12, 28, 8)
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 48));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 48));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 40));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 52));
 
             root.Controls.Add(CrearPanelFiltrosHistorial(), 0, 0);
@@ -744,10 +732,10 @@ namespace SteeLog.Vistas.Inventario
             lblDetalleHistorial = new Label
             {
                 Text = "Detalle del conteo seleccionado",
-                Font = new Font("Bahnschrift SemiBold", 11F, FontStyle.Bold),
-                ForeColor = colorTexto,
+                Font = Tema.Fuente(11f, true),
+                ForeColor = Tema.Texto,
                 Dock = DockStyle.Fill,
-                TextAlign = ContentAlignment.BottomLeft
+                TextAlign = ContentAlignment.MiddleLeft
             };
             root.Controls.Add(lblDetalleHistorial, 0, 2);
             root.Controls.Add(CrearDetalleHistorial(), 0, 3);
@@ -760,29 +748,30 @@ namespace SteeLog.Vistas.Inventario
             var panel = new PanelAntiParpadeo
             {
                 Dock = DockStyle.Fill,
-                ColumnCount = 7,
-                BackColor = Color.FromArgb(26, 34, 30),
-                Padding = new Padding(0, 4, 0, 6)
+                ColumnCount = 6,
+                BackColor = Tema.Fondo,
+                Padding = new Padding(0, 4, 0, 8)
             };
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
             panel.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 240));
-            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 4));
+            panel.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 280));
             panel.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            chkDesde = CrearCheck("Desde:");
-            chkHasta = CrearCheck("Hasta:");
+            chkDesde = CrearCheck("Desde");
+            chkHasta = CrearCheck("Hasta");
+            chkHasta.Margin = new Padding(20, 0, 8, 0);
             dtpDesde = CrearFecha(false);
             dtpHasta = CrearFecha(false);
             dtpDesde.Value = DateTime.Now.AddMonths(-1);
             dtpHasta.Value = DateTime.Now;
             txtBuscarHistorial = CrearTextBox("Buscar usuario o material...");
+            txtBuscarHistorial.Margin = new Padding(0);
 
-            chkDesde.CheckedChanged += (s, e) => { dtpDesde.Enabled = chkDesde.Checked; _ = CargarHistorial(); };
-            chkHasta.CheckedChanged += (s, e) => { dtpHasta.Enabled = chkHasta.Checked; _ = CargarHistorial(); };
+            chkDesde.CheckedChanged += (s, e) => { UiVista.AtenuarFecha(dtpDesde, chkDesde.Checked); _ = CargarHistorial(); };
+            chkHasta.CheckedChanged += (s, e) => { UiVista.AtenuarFecha(dtpHasta, chkHasta.Checked); _ = CargarHistorial(); };
             dtpDesde.ValueChanged += (s, e) => _ = CargarHistorial();
             dtpHasta.ValueChanged += (s, e) => _ = CargarHistorial();
             txtBuscarHistorial.TextChanged += (s, e) => _ = CargarHistorial();
@@ -791,21 +780,20 @@ namespace SteeLog.Vistas.Inventario
             panel.Controls.Add(dtpDesde, 1, 0);
             panel.Controls.Add(chkHasta, 2, 0);
             panel.Controls.Add(dtpHasta, 3, 0);
-            panel.Controls.Add(new Panel { BackColor = Color.FromArgb(26, 34, 30) }, 4, 0);
             panel.Controls.Add(txtBuscarHistorial, 5, 0);
             return panel;
         }
 
         private Control CrearGridHistorial()
         {
-            dgvHistorial = CrearGridBase(38);
+            dgvHistorial = CrearGridBase(Tema.AltoFila);
             dgvHistorial.AutoGenerateColumns = false;
             dgvHistorial.Columns.Clear();
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colId", HeaderText = "ID", DataPropertyName = "Id", FillWeight = 6 });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colFecha", HeaderText = "Fecha inicio", DataPropertyName = "Inicio", FillWeight = 16 });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colUsuario", HeaderText = "Usuario", DataPropertyName = "UsuarioInicio", FillWeight = 16 });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colEstado", HeaderText = "Estado", DataPropertyName = "Estado", FillWeight = 12 });
-            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colItems", HeaderText = "Items", DataPropertyName = "Materiales", FillWeight = 8 });
+            dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colItems", HeaderText = "Ítems", DataPropertyName = "Materiales", FillWeight = 8 });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDif", HeaderText = "Diferencias", DataPropertyName = "Diferencias", FillWeight = 10 });
             dgvHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colObs", HeaderText = "Observaciones", DataPropertyName = "Observaciones", FillWeight = 28 });
             dgvHistorial.Columns["colFecha"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
@@ -814,6 +802,7 @@ namespace SteeLog.Vistas.Inventario
             if (SessionManager.DebeOcultarCantidadesStockMateriales)
                 dgvHistorial.Columns["colDif"].Visible = false;
             dgvHistorial.CellFormatting += DgvHistorial_CellFormatting;
+            dgvHistorial.CellPainting += DgvHistorial_CellPainting;
             dgvHistorial.SelectionChanged += DgvHistorial_SelectionChanged;
             return dgvHistorial;
         }
@@ -825,17 +814,17 @@ namespace SteeLog.Vistas.Inventario
                 Dock = DockStyle.Fill,
                 ColumnCount = 1,
                 RowCount = 2,
-                BackColor = colorFondo
+                BackColor = Tema.Fondo
             };
             root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, 52));
 
-            dgvDetalleHistorial = CrearGridBase(36);
+            dgvDetalleHistorial = CrearGridBase(Tema.AltoFila);
             dgvDetalleHistorial.AutoGenerateColumns = false;
             dgvDetalleHistorial.Columns.Clear();
             dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDMat", HeaderText = "Material", DataPropertyName = "Nombre", FillWeight = 42 });
-            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCat", HeaderText = "Categoria", DataPropertyName = "Categoria", FillWeight = 20 });
+            dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCat", HeaderText = "Categoría", DataPropertyName = "Categoria", FillWeight = 20 });
             dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDCont", HeaderText = "Contado", DataPropertyName = "Cantidad", FillWeight = 12 });
             dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDStk", HeaderText = "Stock sistema", DataPropertyName = "Stock", FillWeight = 14 });
             dgvDetalleHistorial.Columns.Add(new DataGridViewTextBoxColumn { Name = "colDDif", HeaderText = "Diferencia", DataPropertyName = "Diferencia", FillWeight = 12 });
@@ -849,32 +838,31 @@ namespace SteeLog.Vistas.Inventario
                 dgvDetalleHistorial.Columns["colDDif"].Visible = false;
                 dgvDetalleHistorial.Columns["colDEst"].Visible = false;
             }
-            dgvDetalleHistorial.CellFormatting += DgvDetalleHistorial_CellFormatting;
+            dgvDetalleHistorial.CellPainting += DgvDetalleHistorial_CellPainting;
 
             var botones = new PanelAntiParpadeo
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 5,
-                BackColor = colorFondo,
-                Padding = new Padding(0, 8, 0, 0)
+                BackColor = Tema.Fondo,
+                Padding = new Padding(0, 8, 0, 4)
             };
             botones.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
-            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
+            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 160));
+            botones.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 140));
             botones.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
 
-            btnImprimir = CrearBotonAccion("IMPRIMIR", Color.FromArgb(80, 130, 90));
-            btnContinuar = CrearBotonAccion("CONTINUAR", Color.FromArgb(60, 120, 180));
-            btnCancelarHistorial = CrearBotonAccion("CANCELAR", Color.FromArgb(150, 55, 55));
-            btnEliminar = CrearBotonAccion("ELIMINAR", Color.FromArgb(180, 60, 60));
+            btnImprimir = CrearBotonAccion("Imprimir", Variante.Secundario);
+            btnContinuar = CrearBotonAccion("Continuar", Variante.Primario);
+            btnCancelarHistorial = CrearBotonAccion("Cancelar conteo", Variante.Secundario);
+            btnEliminar = CrearBotonAccion("Eliminar", Variante.Peligro);
             btnImprimir.Click += BtnImprimir_Click;
             btnContinuar.Click += BtnContinuar_Click;
             btnCancelarHistorial.Click += BtnCancelarHistorial_Click;
             btnEliminar.Click += BtnEliminarHistorial_Click;
 
-            botones.Controls.Add(new Panel { BackColor = colorFondo }, 0, 0);
             botones.Controls.Add(btnImprimir, 1, 0);
             botones.Controls.Add(btnContinuar, 2, 0);
             botones.Controls.Add(btnCancelarHistorial, 3, 0);
@@ -992,7 +980,7 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnCancelarHistorial_Click(object sender, EventArgs e)
         {
             if (_conteoSeleccionadoHistorial == null || ocupada) return; int id = _conteoSeleccionadoHistorial.Id;
-            if (MessageBox.Show($"Cancelar conteo #{id}?", "Confirmar cancelacion", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            if (!Dialogo.Confirmar($"¿Cancelar el conteo #{id}?", "Confirmar cancelación", true) || !Comenzar()) return;
             int version = versionHistorial;
             try { await presenter.CancelarAsync(id, cierre.Token); if (Vigente && _tabActual == "historial" && version == versionHistorial && _conteoSeleccionadoHistorial?.Id == id) await CargarHistorial(); }
             catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo cancelar: " + ex.Message); } finally { Terminar(); }
@@ -1015,7 +1003,7 @@ namespace SteeLog.Vistas.Inventario
         {
             var conteo = _conteoSeleccionadoHistorial; if (conteo == null || ocupada) return;
             if (SessionManager.Role != UserRole.Admin) { ToastNotification.ShowWarning("Solo los administradores pueden eliminar conteos."); return; }
-            int id = conteo.Id; if (MessageBox.Show($"Eliminar definitivamente el conteo #{id}?\n\nSe borrarán la cabecera y todos los detalles asociados.", "Confirmar eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes || !Comenzar()) return;
+            int id = conteo.Id; if (!Dialogo.Confirmar($"¿Eliminar definitivamente el conteo #{id}?\n\nSe borrarán la cabecera y todos los detalles asociados.", "Confirmar eliminación", true) || !Comenzar()) return;
             int version = versionHistorial;
             try { await presenter.EliminarAsync(id, cierre.Token); if (Vigente && _tabActual == "historial" && version == versionHistorial && _conteoSeleccionadoHistorial?.Id == id) await CargarHistorial(); }
             catch (OperationCanceledException) { } catch (Exception ex) { if (Vigente) ToastNotification.ShowError("No se pudo eliminar: " + ex.Message); } finally { Terminar(); }
@@ -1038,28 +1026,22 @@ namespace SteeLog.Vistas.Inventario
                 e.Value = conteo.Inicio.ToString("dd/MM/yyyy HH:mm");
                 e.FormattingApplied = true;
             }
-            else if (col == "colEstado")
-            {
-                string estado = (conteo.Estado ?? "").ToLower();
-                if (estado == "abierto") e.CellStyle.ForeColor = Color.FromArgb(255, 200, 100);
-                else if (estado == "finalizado") e.CellStyle.ForeColor = Color.FromArgb(115, 210, 130);
-                else if (estado == "cancelado") e.CellStyle.ForeColor = Color.FromArgb(230, 110, 100);
-                e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
-            }
         }
 
-        private void DgvDetalleHistorial_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        private void DgvHistorial_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
         {
-            if (e.RowIndex < 0 || !(dgvDetalleHistorial.Rows[e.RowIndex].DataBoundItem is DetalleConteoLectura det)) return;
-            string col = dgvDetalleHistorial.Columns[e.ColumnIndex].Name;
-            if (col == "colDEst")
-            {
-                string estado = det.EstadoDiferencia;
-                if (estado == "Sobrante") e.CellStyle.ForeColor = Color.FromArgb(255, 200, 100);
-                else if (estado == "Faltante") e.CellStyle.ForeColor = Color.FromArgb(255, 100, 100);
-                else e.CellStyle.ForeColor = Color.FromArgb(170, 185, 175);
-                e.CellStyle.SelectionForeColor = e.CellStyle.ForeColor;
-            }
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || dgvHistorial.Columns[e.ColumnIndex].Name != "colEstado") return;
+            string estado = Convert.ToString(e.Value);
+            if (string.IsNullOrWhiteSpace(estado)) return;
+            UiVista.PintarPildora(e, UiVista.TextoEstado(estado), UiVista.ColorEstado(estado));
+        }
+
+        private void DgvDetalleHistorial_CellPainting(object sender, DataGridViewCellPaintingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || dgvDetalleHistorial.Columns[e.ColumnIndex].Name != "colDEst") return;
+            string estado = Convert.ToString(e.Value);
+            if (string.IsNullOrWhiteSpace(estado)) return;
+            UiVista.PintarPildora(e, estado, UiVista.ColorEstado(estado));
         }
 
         private Guna2DataGridView CrearGridBase(int altoFila)
@@ -1074,68 +1056,36 @@ namespace SteeLog.Vistas.Inventario
                 RowHeadersVisible = false,
                 SelectionMode = DataGridViewSelectionMode.FullRowSelect,
                 MultiSelect = false,
-                BorderStyle = BorderStyle.None,
-                CellBorderStyle = DataGridViewCellBorderStyle.SingleHorizontal,
-                ColumnHeadersBorderStyle = DataGridViewHeaderBorderStyle.None,
-                ColumnHeadersHeight = 40,
-                ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing,
-                RowTemplate = { Height = altoFila },
-                EnableHeadersVisualStyles = false,
-                BackgroundColor = colorPanelOscuro,
-                GridColor = Color.FromArgb(40, 60, 50),
                 AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill
             };
-            grid.ThemeStyle.BackColor = colorPanelOscuro;
-            grid.ThemeStyle.GridColor = Color.FromArgb(40, 60, 50);
-            grid.ThemeStyle.HeaderStyle.BackColor = colorVerdeOscuro;
-            grid.ThemeStyle.HeaderStyle.ForeColor = colorTexto;
-            grid.ThemeStyle.HeaderStyle.Font = new Font("Bahnschrift", 10.5F, FontStyle.Bold);
-            grid.ThemeStyle.HeaderStyle.Height = 40;
-            grid.ThemeStyle.RowsStyle.BackColor = colorFila;
-            grid.ThemeStyle.RowsStyle.ForeColor = colorTexto;
-            grid.ThemeStyle.RowsStyle.Font = new Font("Bahnschrift Light", 10F);
-            grid.ThemeStyle.RowsStyle.Height = altoFila;
-            grid.ThemeStyle.RowsStyle.SelectionBackColor = colorSeleccion;
-            grid.ThemeStyle.RowsStyle.SelectionForeColor = colorTexto;
-            grid.ThemeStyle.AlternatingRowsStyle.BackColor = colorFilaAlt;
-            grid.ThemeStyle.AlternatingRowsStyle.ForeColor = colorTexto;
-            grid.ThemeStyle.AlternatingRowsStyle.SelectionBackColor = colorSeleccion;
-            grid.ThemeStyle.AlternatingRowsStyle.SelectionForeColor = colorTexto;
-            grid.ColumnHeadersDefaultCellStyle.SelectionBackColor = colorVerdeOscuro;
-            grid.ColumnHeadersDefaultCellStyle.SelectionForeColor = colorTexto;
+            Tema.Grilla(grid);
             return grid;
         }
 
         private Guna2TextBox CrearTextBox(string placeholder)
         {
-            return new Guna2TextBox
+            var t = new Guna2TextBox
             {
                 PlaceholderText = placeholder,
-                Font = new Font("Segoe UI", 10.5F),
-                ForeColor = Color.FromArgb(230, 230, 230),
-                FillColor = Color.FromArgb(35, 50, 40),
-                BorderColor = Color.FromArgb(55, 75, 62),
-                BorderRadius = 0,
-                Dock = DockStyle.Fill,
-                Margin = new Padding(0, 4, 8, 4),
-                FocusedState = { BorderColor = Color.FromArgb(39, 174, 96) },
-                HoverState = { BorderColor = Color.FromArgb(60, 120, 80) }
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Height = Tema.AltoControl,
+                Margin = new Padding(0, 0, 8, 0)
             };
+            Tema.Input(t);
+            return t;
         }
 
-        private Guna2Button CrearBotonAccion(string texto, Color color)
+        private Guna2Button CrearBotonAccion(string texto, Variante variante)
         {
-            return new Guna2Button
+            var b = new Guna2Button
             {
                 Text = texto,
-                Font = new Font("Bahnschrift Light", 11F),
-                FillColor = color,
-                ForeColor = colorTexto,
-                BorderRadius = 0,
-                Dock = DockStyle.Fill,
-                Margin = new Padding(4),
-                Cursor = Cursors.Hand
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Height = Tema.AltoControl,
+                Margin = new Padding(8, 0, 0, 0)
             };
+            Tema.Boton(b, variante);
+            return b;
         }
 
         private Label CrearEtiquetaCampo(string texto)
@@ -1144,10 +1094,10 @@ namespace SteeLog.Vistas.Inventario
             {
                 Text = texto,
                 Dock = DockStyle.Fill,
-                Font = new Font("Bahnschrift Light", 10.5F),
-                ForeColor = Color.FromArgb(155, 185, 165),
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoSecundario,
                 TextAlign = ContentAlignment.MiddleLeft,
-                Padding = new Padding(14, 0, 6, 0)
+                UseCompatibleTextRendering = false
             };
         }
 
@@ -1156,45 +1106,44 @@ namespace SteeLog.Vistas.Inventario
             return new Guna2CheckBox
             {
                 Text = texto,
-                Font = new Font("Bahnschrift Light", 10.5F),
-                ForeColor = Color.FromArgb(155, 185, 165),
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoSecundario,
                 AutoSize = true,
                 Anchor = AnchorStyles.Left,
+                Margin = new Padding(0, 0, 8, 0),
+                Cursor = Cursors.Hand,
                 CheckedState =
                 {
-                    BorderColor = Color.FromArgb(39, 174, 96),
-                    BorderRadius = 0,
+                    BorderColor = Tema.Acento,
+                    BorderRadius = Tema.Radio,
                     BorderThickness = 0,
-                    FillColor = Color.FromArgb(39, 174, 96)
+                    FillColor = Tema.Acento
                 },
                 UncheckedState =
                 {
-                    BorderColor = Color.FromArgb(80, 100, 90),
-                    BorderRadius = 0,
+                    BorderColor = Color.FromArgb(95, 125, 106),
+                    BorderRadius = Tema.Radio,
                     BorderThickness = 2,
-                    FillColor = Color.FromArgb(35, 50, 40)
+                    FillColor = Color.Transparent
                 }
             };
         }
 
         private Guna2DateTimePicker CrearFecha(bool enabled)
         {
-            return new Guna2DateTimePicker
+            var d = new Guna2DateTimePicker
             {
-                BorderColor = Color.FromArgb(55, 75, 62),
                 Checked = true,
-                FillColor = Color.FromArgb(35, 50, 40),
-                Font = new Font("Segoe UI", 10F),
-                ForeColor = colorTexto,
                 Format = DateTimePickerFormat.Short,
-                HoverState = { BorderColor = Color.FromArgb(39, 174, 96) },
-                FocusedColor = Color.FromArgb(39, 174, 96),
                 MaxDate = new DateTime(9998, 12, 31, 0, 0, 0, 0),
                 MinDate = new DateTime(1753, 1, 1, 0, 0, 0, 0),
-                Enabled = enabled,
-                Dock = DockStyle.Fill,
-                Margin = new Padding(4)
+                
+                Anchor = AnchorStyles.Left | AnchorStyles.Right,
+                Height = Tema.AltoControl,
+                Margin = new Padding(0)
             };
+            Tema.Fecha(d); UiVista.AtenuarFecha(d, enabled);
+            return d;
         }
 
         private void SoloDecimal_KeyPress(object sender, KeyPressEventArgs e)

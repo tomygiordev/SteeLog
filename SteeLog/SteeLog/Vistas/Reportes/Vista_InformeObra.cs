@@ -18,6 +18,8 @@ using SteeLog.Modelos;
 using SteeLog.Reportes;
 using SteeLog.Servicios;
 using SteeLog;
+using SteeLog.UI;
+using SteeLog.Vistas.Inventario;
 
 namespace SteeLog.Vistas.Reportes
 {
@@ -68,18 +70,29 @@ namespace SteeLog.Vistas.Reportes
         public Vista_InformeObra()
         {
             InitializeComponent();
+            Tema.SinEscala(this);
             ConfigurarResumenUI();
+            AplicarEstiloUI();
             InicializarMenuHerramientas();
             dgvDatos.CellContentClick += dgvDatos_CellContentClick;
             Load += (s, e) => CargarObras();
         }
 
+        private TarjetaKpi kpiRemitos, kpiMateriales, kpiHerramientas, kpiInsumos;
+        private Label lblVacio;
+
         private void ConfigurarResumenUI()
         {
             lblMateriales = CrearLabelResumen("Materiales: —");
 
+            kpiRemitos = new TarjetaKpi { Etiqueta = "Remitos", Dock = DockStyle.Fill, Margin = new Padding(0, 0, 8, 0) };
+            kpiMateriales = new TarjetaKpi { Etiqueta = "Materiales", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            kpiHerramientas = new TarjetaKpi { Etiqueta = "Herramientas", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 8, 0) };
+            kpiInsumos = new TarjetaKpi { Etiqueta = "Insumos", Dock = DockStyle.Fill, Margin = new Padding(8, 0, 0, 0) };
+
             panelResumen.SuspendLayout();
             panelResumen.Controls.Clear();
+            panelResumen.BackColor = Tema.Fondo;
             panelResumen.ColumnCount = 4;
             panelResumen.ColumnStyles.Clear();
             for (int i = 0; i < 4; i++)
@@ -87,20 +100,34 @@ namespace SteeLog.Vistas.Reportes
 
             panelResumen.RowCount = 2;
             panelResumen.RowStyles.Clear();
-            panelResumen.RowStyles.Add(new RowStyle(SizeType.Absolute, 46F));
+            panelResumen.RowStyles.Add(new RowStyle(SizeType.Absolute, TarjetaKpi.AltoTarjeta));
             panelResumen.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            panelResumen.Height = 74;
+            panelResumen.Padding = new Padding(28, 12, 28, 0);
+            panelResumen.Height = 12 + TarjetaKpi.AltoTarjeta + 28;
 
-            panelResumen.Controls.Add(lblRemitos, 0, 0);
-            panelResumen.Controls.Add(lblMateriales, 1, 0);
-            panelResumen.Controls.Add(lblHerramientas, 2, 0);
-            panelResumen.Controls.Add(lblInsumos, 3, 0);
+            panelResumen.Controls.Add(kpiRemitos, 0, 0);
+            panelResumen.Controls.Add(kpiMateriales, 1, 0);
+            panelResumen.Controls.Add(kpiHerramientas, 2, 0);
+            panelResumen.Controls.Add(kpiInsumos, 3, 0);
             panelResumen.Controls.Add(lblEstado, 0, 1);
             panelResumen.SetColumnSpan(lblEstado, 4);
 
-            lblEstado.Font = new Font("Bahnschrift Light", 9.5F);
+            lblEstado.Font = Tema.Fuente(10f);
+            lblEstado.ForeColor = Tema.TextoSecundario;
+            lblEstado.TextAlign = ContentAlignment.MiddleLeft;
+            lblEstado.Padding = new Padding(2, 0, 0, 0);
             lblEstado.Dock = DockStyle.Fill;
             panelResumen.ResumeLayout();
+        }
+
+        private void ActualizarKpis(string remitos, string materiales, string herramientas, string insumos, string detalleHerr = "", string detalleIns = "")
+        {
+            kpiRemitos.Valor = remitos;
+            kpiMateriales.Valor = materiales;
+            kpiHerramientas.Valor = herramientas;
+            kpiHerramientas.Detalle = detalleHerr;
+            kpiInsumos.Valor = insumos;
+            kpiInsumos.Detalle = detalleIns;
         }
 
         private static Label CrearLabelResumen(string texto)
@@ -108,11 +135,121 @@ namespace SteeLog.Vistas.Reportes
             return new Label
             {
                 Text = texto,
-                Font = new Font("Bahnschrift Light", 10F),
-                ForeColor = Color.FromArgb(25, 135, 84),
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.TextoSecundario,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleCenter
             };
+        }
+
+        private void AplicarEstiloUI()
+        {
+            BackColor = Tema.Fondo;
+            SuspendLayout();
+
+            // Título: banda unificada en lugar del título centrado del diseñador.
+            panelTitulo.Visible = false;
+
+            // Filtros: Obra + combo + descarga
+            panelFiltros.BackColor = Tema.Fondo;
+            panelFiltros.Height = 60;
+            panelFiltros.Padding = new Padding(28, 12, 28, 12);
+            panelFiltros.ColumnStyles.Clear();
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
+            label2.AutoSize = true;
+            label2.Text = "Obra:";
+            label2.Font = Tema.FuenteTexto;
+            label2.ForeColor = Tema.TextoSecundario;
+            label2.Anchor = AnchorStyles.Left;
+            label2.Margin = new Padding(0, 0, 12, 0);
+            cmbObras.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            cmbObras.Margin = new Padding(0, 0, 12, 0);
+            cmbObras.Height = Tema.AltoControl;
+            Tema.Combo(cmbObras);
+            cmbObras.ItemHeight = 30;
+            btnDescargar.Text = "Descargar informe PDF";
+            btnDescargar.Anchor = AnchorStyles.Right;
+            btnDescargar.Margin = new Padding(0);
+            btnDescargar.Size = new Size(210, Tema.AltoControl);
+            Tema.Boton(btnDescargar, Variante.Primario);
+
+            // Pestañas
+            panelTabs.BackColor = Tema.Fondo;
+            panelTabs.Height = 58;
+            panelTabs.Padding = new Padding(28, 12, 28, 0);
+            panelTabs.ColumnStyles.Clear();
+            panelTabs.ColumnCount = 6;
+            for (int i = 0; i < 6; i++) panelTabs.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 16.6667F));
+            var textos = new[] { "Movimientos", "Herramientas", "Insumos", "Materiales", "Eventuales", "Canaletas" };
+            var tabs = new[] { btnTabMovimientos, btnTabHerramientas, btnTabInsumos, btnTabMateriales, btnTabEventuales, btnTabCanaletasPlegados };
+            for (int i = 0; i < tabs.Length; i++)
+            {
+                tabs[i].Text = textos[i];
+                tabs[i].Anchor = AnchorStyles.Left | AnchorStyles.Right;
+                tabs[i].Margin = new Padding(0, 0, 8, 0);
+                tabs[i].Height = Tema.AltoControl;
+            }
+            ActualizarEstiloTabs();
+
+            // Grilla en panel con márgenes
+            dgvDatos.RowTemplate.DefaultCellStyle.Font = Tema.FuenteTexto;
+            Tema.Grilla(dgvDatos);
+            dgvDatos.AllowUserToAddRows = false;
+            dgvDatos.AllowUserToResizeRows = false;
+            var panelGrilla = new Panel { Dock = DockStyle.Fill, BackColor = Tema.Fondo, Padding = new Padding(28, 4, 28, 20) };
+            Controls.Remove(dgvDatos);
+            panelGrilla.Controls.Add(dgvDatos);
+            Controls.Add(panelGrilla);
+            panelGrilla.BringToFront();
+
+            lblVacio = new Label
+            {
+                AutoSize = false,
+                TextAlign = ContentAlignment.MiddleCenter,
+                Font = Tema.Fuente(11f),
+                ForeColor = Tema.TextoApagado,
+                BackColor = Tema.Fondo,
+                Height = 90,
+                Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
+                Location = new Point(0, Tema.AltoHeader + 60)
+            };
+            dgvDatos.Controls.Add(lblVacio);
+            lblVacio.Width = Math.Max(100, dgvDatos.ClientSize.Width);
+            dgvDatos.DataSourceChanged += (s, e) => ActualizarVacio();
+            dgvDatos.RowsAdded += (s, e) => ActualizarVacio();
+            dgvDatos.RowsRemoved += (s, e) => ActualizarVacio();
+
+            var banda = Tema.TituloVista(this, "Informe de obra");
+            if (banda != null) banda.SendToBack();
+            ResumeLayout(true);
+            ActualizarVacio();
+        }
+
+        private static string NombrePestania(string tab)
+        {
+            switch (tab)
+            {
+                case "herramientas": return "herramientas";
+                case "insumos": return "insumos";
+                case "materiales": return "materiales";
+                case "eventuales": return "eventuales";
+                case "canaletas_plegados": return "canaletas y plegados";
+                default: return "movimientos";
+            }
+        }
+
+        private void ActualizarVacio()
+        {
+            if (lblVacio == null || dgvDatos == null || lblVacio.IsDisposed) return;
+            bool sinObra = cmbObras == null || cmbObras.SelectedIndex < 0;
+            bool vacio = sinObra || dgvDatos.Rows.Count == 0;
+            lblVacio.Visible = vacio;
+            if (vacio)
+                lblVacio.Text = sinObra
+                    ? "Seleccioná una obra para ver su informe.\nElegila en la lista de arriba."
+                    : "Esta obra no tiene registros en " + NombrePestania(tabActual) + ".";
         }
 
         public void Refrescar() { CargarObras(); }
@@ -194,12 +331,11 @@ namespace SteeLog.Vistas.Reportes
                 InformeObraResumenPdf resumen = ConsultarInformeObra.Resumir(movimientosActuales, mostrarValorizacionActual, totalCanaletasPendientes);
 
                 // Actualizar resumen
-                lblRemitos.Text = "Remitos: " + resumen.CantRemitos;
-                lblMateriales.Text = "Materiales: " + resumen.TotalMateriales;
-                lblHerramientas.Text = "Herramientas: " + herramientasActuales.Count;
-                lblInsumos.Text = "Insumos: " + insumosActuales.Count;
+                ActualizarKpis(Convert.ToString(resumen.CantRemitos), Convert.ToString(resumen.TotalMateriales),
+                    herramientasActuales.Count.ToString(), insumosActuales.Count.ToString(),
+                    herramientasActuales.Count(h => h.en_obra) + " en obra", insumosActuales.Count(i => i.en_obra) + " en obra");
                 lblEstado.Text = resumen.CantMovimientos + " movimientos y " + canaletasPlegadosActuales.Count + " canaletas/plegados";
-                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
+                lblEstado.ForeColor = Tema.TextoSecundario;
 
                 // Cargar la tab activa
                 CargarTab(tabActual);
@@ -208,7 +344,7 @@ namespace SteeLog.Vistas.Reportes
             catch (Exception ex)
             {
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
-                lblEstado.ForeColor = Color.FromArgb(220, 53, 69);
+                lblEstado.ForeColor = Color.FromArgb(226, 96, 86);
                 lblEstado.Text = "Error al cargar datos";
                 ToastNotification.ShowError("Error al cargar datos de la obra:\n" + ex.Message);
             }
@@ -221,13 +357,11 @@ namespace SteeLog.Vistas.Reportes
             insumosActuales.Clear();
             canaletasPlegadosActuales.Clear();
             dgvDatos.DataSource = null;
-            lblRemitos.Text = "Remitos: —";
-            lblMateriales.Text = "Materiales: —";
-            lblHerramientas.Text = "Herramientas: —";
-            lblInsumos.Text = "Insumos: —";
-            lblEstado.Text = "Seleccione una obra";
-            lblEstado.ForeColor = Color.FromArgb(150, 150, 150);
+            ActualizarKpis("—", "—", "—", "—");
+            lblEstado.Text = "";
+            lblEstado.ForeColor = Tema.TextoSecundario;
             mostrarValorizacionActual = false;
+            ActualizarVacio();
         }
 
         // ======================== TABS ========================
@@ -288,22 +422,22 @@ namespace SteeLog.Vistas.Reportes
                     MostrarCanaletasPlegados();
                     break;
             }
+            ActualizarVacio();
         }
 
         private void ActualizarEstiloTabs()
         {
-            Color activo = Color.FromArgb(25, 135, 84);
-            Color inactivo = Color.FromArgb(35, 63, 43);
-
-            btnTabMovimientos.FillColor  = tabActual == "movimientos"  ? activo : inactivo;
-            btnTabHerramientas.FillColor = tabActual == "herramientas" ? activo : inactivo;
-            btnTabInsumos.FillColor      = tabActual == "insumos"      ? activo : inactivo;
-            if (btnTabMateriales != null)
-                btnTabMateriales.FillColor = tabActual == "materiales" ? activo : inactivo;
-            if (btnTabEventuales != null)
-                btnTabEventuales.FillColor = tabActual == "eventuales" ? activo : inactivo;
-            if (btnTabCanaletasPlegados != null)
-                btnTabCanaletasPlegados.FillColor = tabActual == "canaletas_plegados" ? activo : inactivo;
+            Action<Guna.UI2.WinForms.Guna2Button, string> estilo = (b, tab) =>
+            {
+                if (b == null) return;
+                Tema.Boton(b, tabActual == tab ? Variante.TabActiva : Variante.Tab);
+            };
+            estilo(btnTabMovimientos, "movimientos");
+            estilo(btnTabHerramientas, "herramientas");
+            estilo(btnTabInsumos, "insumos");
+            estilo(btnTabMateriales, "materiales");
+            estilo(btnTabEventuales, "eventuales");
+            estilo(btnTabCanaletasPlegados, "canaletas_plegados");
         }
 
         // ======================== GRILLAS ========================
@@ -435,7 +569,6 @@ namespace SteeLog.Vistas.Reportes
             if (dgvDatos.Columns["Herramienta"] != null)
             {
                 dgvDatos.Columns["Herramienta"].FillWeight = 35;
-                dgvDatos.Columns["Herramienta"].DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
             }
             if (dgvDatos.Columns["Estado"] != null)
             {
@@ -482,7 +615,6 @@ namespace SteeLog.Vistas.Reportes
             if (dgvDatos.Columns["Insumo"] != null)
             {
                 dgvDatos.Columns["Insumo"].FillWeight = 35;
-                dgvDatos.Columns["Insumo"].DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
             }
             if (dgvDatos.Columns["Estado"] != null)
             {
@@ -554,21 +686,20 @@ namespace SteeLog.Vistas.Reportes
             if (dgvDatos.Columns["Material"] != null)
             {
                 dgvDatos.Columns["Material"].FillWeight = mostrarValorizacionActual ? 34 : 45;
-                dgvDatos.Columns["Material"].DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
             }
             if (dgvDatos.Columns["Total Enviado"] != null)  { dgvDatos.Columns["Total Enviado"].FillWeight = 13; dgvDatos.Columns["Total Enviado"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; }
             if (dgvDatos.Columns["Total Devuelto"] != null) { dgvDatos.Columns["Total Devuelto"].FillWeight = 13; dgvDatos.Columns["Total Devuelto"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; }
-            if (dgvDatos.Columns["Neto en Obra"] != null)   { dgvDatos.Columns["Neto en Obra"].FillWeight = 13; dgvDatos.Columns["Neto en Obra"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; dgvDatos.Columns["Neto en Obra"].DefaultCellStyle.Font = new Font("Bahnschrift", 11, FontStyle.Bold); }
+            if (dgvDatos.Columns["Neto en Obra"] != null)   { dgvDatos.Columns["Neto en Obra"].FillWeight = 13; dgvDatos.Columns["Neto en Obra"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter; dgvDatos.Columns["Neto en Obra"].DefaultCellStyle.Font = Tema.Fuente(10.5f, true); }
             ConfigurarColumnaMoneda("Precio Unit.", 13);
             ConfigurarColumnaMoneda("Valor Neto", 14);
 
             if (mostrarValorizacionActual && dgvDatos.Rows.Count > 0)
             {
                 DataGridViewRow filaTotal = dgvDatos.Rows[dgvDatos.Rows.Count - 1];
-                filaTotal.DefaultCellStyle.Font = new Font("Bahnschrift", 11, FontStyle.Bold);
-                filaTotal.DefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
+                filaTotal.DefaultCellStyle.Font = Tema.Fuente(10.5f, true);
+                filaTotal.DefaultCellStyle.BackColor = Tema.Banda;
                 filaTotal.DefaultCellStyle.ForeColor = Color.White;
-                filaTotal.DefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
+                filaTotal.DefaultCellStyle.SelectionBackColor = Tema.Banda;
             }
         }
 
@@ -621,7 +752,6 @@ namespace SteeLog.Vistas.Reportes
             if (dgvDatos.Columns["Material / Descripción"] != null)
             {
                 dgvDatos.Columns["Material / Descripción"].FillWeight = 45;
-                dgvDatos.Columns["Material / Descripción"].DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
             }
             if (dgvDatos.Columns["Tipo"] != null)
             {
@@ -697,7 +827,6 @@ namespace SteeLog.Vistas.Reportes
             if (dgvDatos.Columns["Descripción"] != null)
             {
                 dgvDatos.Columns["Descripción"].FillWeight = mostrarValorizacionActual ? 44 : 60;
-                dgvDatos.Columns["Descripción"].DefaultCellStyle.Padding = new Padding(10, 0, 0, 0);
             }
 
             if (dgvDatos.Columns["Pagado"] != null)
@@ -735,10 +864,10 @@ namespace SteeLog.Vistas.Reportes
             if (mostrarValorizacionActual && dgvDatos.Rows.Count > 0)
             {
                 DataGridViewRow filaTotal = dgvDatos.Rows[dgvDatos.Rows.Count - 1];
-                filaTotal.DefaultCellStyle.Font = new Font("Bahnschrift", 11, FontStyle.Bold);
-                filaTotal.DefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
+                filaTotal.DefaultCellStyle.Font = Tema.Fuente(10.5f, true);
+                filaTotal.DefaultCellStyle.BackColor = Tema.Banda;
                 filaTotal.DefaultCellStyle.ForeColor = Color.White;
-                filaTotal.DefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
+                filaTotal.DefaultCellStyle.SelectionBackColor = Tema.Banda;
             }
         }
 
@@ -889,13 +1018,7 @@ namespace SteeLog.Vistas.Reportes
                 return;
 
             string nombreHerramienta = row.Cells["Herramienta"]?.Value?.ToString() ?? "la herramienta seleccionada";
-            DialogResult confirmacion = MessageBox.Show(
-                $"¿Enviar \"{nombreHerramienta}\" al galpón?",
-                "Confirmar retorno",
-                MessageBoxButtons.YesNo,
-                MessageBoxIcon.Question);
-
-            if (confirmacion != DialogResult.Yes)
+            if (!Dialogo.Confirmar($"¿Enviar \"{nombreHerramienta}\" al galpón?", "Confirmar retorno", false, this))
                 return;
 
             await RetornarHerramientaAsync(idHerramienta);
@@ -985,7 +1108,7 @@ namespace SteeLog.Vistas.Reportes
                 btnCerrar.Dock = DockStyle.Bottom;
                 btnCerrar.Height = 38;
                 btnCerrar.Text = "Cerrar";
-                btnCerrar.BackColor = Color.FromArgb(35, 63, 43);
+                btnCerrar.BackColor = Tema.Banda;
                 btnCerrar.ForeColor = Color.White;
                 btnCerrar.FlatStyle = FlatStyle.Flat;
                 btnCerrar.FlatAppearance.BorderColor = Color.FromArgb(55, 85, 65);

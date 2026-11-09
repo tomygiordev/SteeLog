@@ -7,6 +7,8 @@ using SteeLog;
 using SteeLog.Presentation;
 using SteeLog.CompositionRoot;
 using System.Threading;
+using System.Drawing;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos
 {
@@ -25,11 +27,38 @@ namespace SteeLog.Vistas.Movimientos
         public ModalInsumos()
         {
             InitializeComponent();
+            AplicarTema();
             Load += async (s, e) => await CargarInsumos();
             FormClosed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
             Disposed += (s, e) => { cargas.Cerrar(); cierre.Cancel(); };
             btnConfirmar.Enabled = false;
             txtBuscar.TextChanged += TxtBuscar_TextChanged;
+        }
+
+        private void AplicarTema()
+        {
+            lblTitulo.Visible = false;
+            lblBuscar.Font = Tema.FuenteTexto;
+            lblBuscar.ForeColor = Tema.TextoSecundario;
+            lblBuscar.AutoSize = false;
+            lblBuscar.TextAlign = ContentAlignment.MiddleLeft;
+            lblBuscar.Location = new Point(16, 16);
+            lblBuscar.Size = new Size(70, Tema.AltoControl);
+            Tema.Input(txtBuscar);
+            txtBuscar.Location = new Point(92, 16);
+            txtBuscar.Size = new Size(422, Tema.AltoControl);
+            Tema.Grilla(dgvInsumos);
+            dgvInsumos.Location = new Point(16, 64);
+            dgvInsumos.Size = new Size(498, 290);
+            Tema.Boton(btnConfirmar, Variante.Primario);
+            Tema.Boton(btnCancelar, Variante.Secundario);
+            btnConfirmar.Size = new Size(130, Tema.AltoControl);
+            btnCancelar.Size = new Size(130, Tema.AltoControl);
+            panelBotones.Location = new Point(16, 366);
+            panelBotones.Size = new Size(498, 42);
+            ClientSize = new Size(530, 424);
+            CancelButton = btnCancelar;
+            Tema.ChromeModal(this, "Seleccionar insumo");
         }
 
         private async System.Threading.Tasks.Task CargarInsumos()
@@ -87,12 +116,6 @@ namespace SteeLog.Vistas.Movimientos
             dgvInsumos.ReadOnly = true;
             dgvInsumos.MultiSelect = false;
             dgvInsumos.AllowUserToResizeRows = false;
-            dgvInsumos.ColumnHeadersHeight = 35;
-            dgvInsumos.EnableHeadersVisualStyles = false;
-            dgvInsumos.ColumnHeadersDefaultCellStyle.BackColor = System.Drawing.Color.FromArgb(35, 63, 43);
-            dgvInsumos.ColumnHeadersDefaultCellStyle.ForeColor = System.Drawing.Color.White;
-            dgvInsumos.ColumnHeadersDefaultCellStyle.SelectionBackColor = System.Drawing.Color.FromArgb(35, 63, 43);
-            dgvInsumos.ColumnHeadersDefaultCellStyle.SelectionForeColor = System.Drawing.Color.White;
         }
 
         private void TxtBuscar_TextChanged(object sender, EventArgs e)

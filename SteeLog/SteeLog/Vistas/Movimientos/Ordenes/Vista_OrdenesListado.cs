@@ -12,6 +12,7 @@ using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
@@ -36,7 +37,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private bool _actualizandoPreview;
         private bool _resultadoIncierto;
         internal Action<string> AdvertirResultadoIncierto = mensaje => ToastNotification.ShowWarning(mensaje);
-        internal Func<string, bool> ConfirmarEliminacion = mensaje => MessageBox.Show(mensaje, "Eliminar orden", MessageBoxButtons.YesNo, MessageBoxIcon.Question, MessageBoxDefaultButton.Button2) == DialogResult.Yes;
+        internal Func<string, bool> ConfirmarEliminacion = mensaje => Dialogo.Confirmar(mensaje, "Eliminar orden", true);
 
         public Vista_OrdenesListado(
             bool soloRecepcion = false,
@@ -66,7 +67,12 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             dgvOrdenes.Columns["colEditar"].Visible = _rolActual == UserRole.Admin;
             dgvOrdenes.Columns["colEliminar"].Visible = _rolActual == UserRole.Admin;
             dgvPreviewMateriales.Parent.Visible = MostrarPreviewMateriales();
-            ((TableLayoutPanel)dgvOrdenes.Parent).RowStyles[3].Height = MostrarPreviewMateriales() ? 190F : 0F;
+            {
+                var layout = (TableLayoutPanel)dgvOrdenes.Parent;
+                bool conPreview = MostrarPreviewMateriales();
+                layout.RowStyles[1] = new RowStyle(SizeType.Percent, conPreview ? 58F : 100F);
+                layout.RowStyles[2] = conPreview ? new RowStyle(SizeType.Percent, 42F) : new RowStyle(SizeType.Absolute, 0F);
+            }
             CargarEstados();
             _presenter = LocalServices.Current.CrearOrdenesPresenter(this);
             await CargarOrdenes();
@@ -98,58 +104,57 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             var root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
-            root.RowCount = 4;
+            root.RowCount = 3;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74F));
+            root.Margin = new Padding(0);
+            root.Padding = new Padding(0);
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 60F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
             root.RowStyles.Add(new RowStyle(SizeType.Absolute, MostrarPreviewMateriales() ? 190F : 0F));
             Controls.Add(root);
 
-            var header = new Panel();
-            header.Dock = DockStyle.Fill;
-            header.Padding = new Padding(18, 18, 18, 6);
-            var lblTitulo = new Label();
-            lblTitulo.Text = _soloHistorial ? "Historial de Órdenes" : "Órdenes de Compra";
-            lblTitulo.Font = new Font("Bahnschrift SemiBold", 17F, FontStyle.Bold);
-            lblTitulo.ForeColor = Color.White;
-            lblTitulo.Dock = DockStyle.Fill;
-            header.Controls.Add(lblTitulo);
-            root.Controls.Add(header, 0, 0);
-
+            // Barra de filtros: una sola linea, controles de alto 36.
             var filtros = new Panel();
             filtros.Dock = DockStyle.Fill;
-            filtros.Padding = new Padding(18, 0, 18, 10);
-            filtros.BackColor = OrdenesUi.FondoPanel;
-            root.Controls.Add(filtros, 0, 1);
+            filtros.BackColor = Tema.Fondo;
+            filtros.Margin = new Padding(0);
+            root.Controls.Add(filtros, 0, 0);
 
             var lblEstado = OrdenesUi.CrearLabel("Estado");
-            lblEstado.Location = new Point(14, 8);
+            lblEstado.AutoSize = false;
+            lblEstado.Size = new Size(56, Tema.AltoControl);
+            lblEstado.TextAlign = ContentAlignment.MiddleLeft;
+            lblEstado.Margin = new Padding(0);
+            lblEstado.Location = new Point(28, 12);
             filtros.Controls.Add(lblEstado);
 
             cmbEstado = OrdenesUi.CrearCombo();
-            cmbEstado.Location = new Point(18, 32);
-            cmbEstado.Size = new Size(260, 36);
+            cmbEstado.Location = new Point(88, 12);
+            cmbEstado.Size = new Size(220, Tema.AltoControl);
             cmbEstado.SelectedIndexChanged += (s, e) => { if (_presenter != null) _ = CargarOrdenes(); };
             filtros.Controls.Add(cmbEstado);
 
             var btnRefrescar = OrdenesUi.CrearBoton("Actualizar");
-            btnRefrescar.Location = new Point(294, 32);
+            btnRefrescar.Location = new Point(322, 12);
+            btnRefrescar.Width = 120;
             btnRefrescar.Click += (s, e) => { if (_presenter != null) _ = CargarOrdenes(); };
             filtros.Controls.Add(btnRefrescar);
 
-            var btnImprimirPendientes = OrdenesUi.CrearBoton("Imprimir Pendientes");
-            btnImprimirPendientes.Location = new Point(484, 32);
+            var btnImprimirPendientes = OrdenesUi.CrearBoton("Imprimir pendientes");
+            btnImprimirPendientes.Location = new Point(454, 12);
             btnImprimirPendientes.Width = 180;
             btnImprimirPendientes.Click += BtnImprimirPendientes_Click;
             btnImprimirPendientes.Visible = !_soloHistorial;
             filtros.Controls.Add(btnImprimirPendientes);
 
-            btnNuevaOrden = OrdenesUi.CrearBoton("Nueva Orden", true);
-            btnNuevaOrden.Location = new Point(822, 32);
+            btnNuevaOrden = OrdenesUi.CrearBoton("Nueva orden", true);
+            btnNuevaOrden.Width = 150;
+            btnNuevaOrden.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnNuevaOrden.Location = new Point(filtros.Width - 28 - btnNuevaOrden.Width, 12);
             btnNuevaOrden.Click += BtnNuevaOrden_Click;
             btnNuevaOrden.Visible = _rolActual == UserRole.Admin && _mostrarNuevaOrden && !_soloRecepcion;
             filtros.Controls.Add(btnNuevaOrden);
+            filtros.Resize += (s, e) => btnNuevaOrden.Left = filtros.Width - 28 - btnNuevaOrden.Width;
 
             dgvOrdenes = new Guna2DataGridView();
             dgvOrdenes.Dock = DockStyle.Fill;
@@ -159,6 +164,14 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             dgvOrdenes.DataBindingComplete += DgvOrdenes_DataBindingComplete;
             dgvOrdenes.SelectionChanged += DgvOrdenes_SelectionChanged;
             OrdenesUi.AplicarEstiloGrid(dgvOrdenes);
+            // Tema pinta toda celda de una columna de boton como pastilla: las acciones no disponibles (celda de texto vacia) se limpian.
+            dgvOrdenes.CellPainting += (s, e) =>
+            {
+                if (e.RowIndex < 0 || e.ColumnIndex < 0 || !(dgvOrdenes.Columns[e.ColumnIndex] is DataGridViewButtonColumn)) return;
+                if (dgvOrdenes.Rows[e.RowIndex].Cells[e.ColumnIndex] is DataGridViewButtonCell) return;
+                e.Paint(e.CellBounds, DataGridViewPaintParts.Background | DataGridViewPaintParts.Border);
+                e.Handled = true;
+            };
 
             dgvOrdenes.Columns.Add(new DataGridViewTextBoxColumn { Name = "colNroOrden", HeaderText = "Nro. Orden", DataPropertyName = "nro_orden", FillWeight = 16 });
             dgvOrdenes.Columns.Add(new DataGridViewTextBoxColumn { Name = "colFecha", HeaderText = "Fecha", DataPropertyName = "fecha", FillWeight = 12, DefaultCellStyle = new DataGridViewCellStyle { Format = "dd/MM/yyyy" } });
@@ -168,38 +181,25 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             dgvOrdenes.Columns.Add(new DataGridViewTextBoxColumn { Name = "colPedida", HeaderText = "Pedida", DataPropertyName = "total_cantidad_pedida", FillWeight = 10, DefaultCellStyle = CrearEstiloCantidad() });
             dgvOrdenes.Columns.Add(new DataGridViewTextBoxColumn { Name = "colRecibida", HeaderText = "Recibida", DataPropertyName = "total_cantidad_recibida", FillWeight = 10, DefaultCellStyle = CrearEstiloCantidad() });
 
-            var colAbrir = CrearColumnaAccion(
-                "colAbrir",
-                12,
-                Color.FromArgb(31, 84, 58),
-                Color.FromArgb(112, 212, 159),
-                Color.FromArgb(42, 120, 81));
+            var colAbrir = CrearColumnaAccion("colAbrir", 12, Variante.Primario);
             colAbrir.Visible = _soloRecepcion || _rolActual == UserRole.Galpon || _rolActual == UserRole.Admin;
             dgvOrdenes.Columns.Add(colAbrir);
 
-            var colEditar = CrearColumnaAccion(
-                "colEditar",
-                10,
-                Color.FromArgb(84, 71, 31),
-                Color.FromArgb(244, 213, 128),
-                Color.FromArgb(120, 102, 45));
+            var colEditar = CrearColumnaAccion("colEditar", 10, Variante.Secundario);
             colEditar.Visible = _rolActual == UserRole.Admin;
             dgvOrdenes.Columns.Add(colEditar);
 
-            var colEliminar = CrearColumnaAccion(
-                "colEliminar",
-                10,
-                Color.FromArgb(92, 40, 40),
-                Color.FromArgb(255, 191, 191),
-                Color.FromArgb(130, 58, 58));
+            var colEliminar = CrearColumnaAccion("colEliminar", 11, Variante.Peligro);
             colEliminar.Visible = _rolActual == UserRole.Admin;
             dgvOrdenes.Columns.Add(colEliminar);
 
-            root.Controls.Add(dgvOrdenes, 0, 2);
+            dgvOrdenes.Margin = new Padding(28, 0, 28, 12);
+            dgvOrdenes.BorderStyle = BorderStyle.None;
+            root.Controls.Add(dgvOrdenes, 0, 1);
 
             var preview = CrearPreviewMateriales();
             preview.Visible = MostrarPreviewMateriales();
-            root.Controls.Add(preview, 0, 3);
+            root.Controls.Add(preview, 0, 2);
             ResumeLayout(false);
         }
 
@@ -222,15 +222,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         {
             var panel = new Panel();
             panel.Dock = DockStyle.Fill;
-            panel.Padding = new Padding(18, 8, 18, 12);
-            panel.BackColor = OrdenesUi.FondoPanel;
+            panel.Padding = new Padding(28, 4, 28, 16);
+            panel.BackColor = Tema.Fondo;
 
             lblPreviewMateriales = new Label();
             lblPreviewMateriales.Dock = DockStyle.Top;
-            lblPreviewMateriales.Height = 24;
+            lblPreviewMateriales.Height = 32;
+            lblPreviewMateriales.Padding = new Padding(0);
+            lblPreviewMateriales.TextAlign = ContentAlignment.MiddleLeft;
             lblPreviewMateriales.Text = "Materiales de la orden seleccionada";
-            lblPreviewMateriales.Font = new Font("Bahnschrift SemiBold", 10.5F, FontStyle.Bold);
-            lblPreviewMateriales.ForeColor = Color.White;
+            lblPreviewMateriales.Font = Tema.FuenteSubtitulo;
+            lblPreviewMateriales.ForeColor = Tema.TextoSecundario;
 
             dgvPreviewMateriales = new Guna2DataGridView();
             dgvPreviewMateriales.Dock = DockStyle.Fill;
@@ -323,8 +325,6 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             {
                 if (!(celda is DataGridViewButtonCell)) { celda.Value = ""; return; }
                 var vacia = new DataGridViewTextBoxCell { Value = "" };
-                vacia.Style.BackColor = dgvOrdenes.DefaultCellStyle.BackColor;
-                vacia.Style.SelectionBackColor = dgvOrdenes.DefaultCellStyle.SelectionBackColor;
                 row.Cells[indice] = vacia;
                 return;
             }
@@ -379,7 +379,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             }
         }
 
-        private DataGridViewButtonColumn CrearColumnaAccion(string name, float fillWeight, Color backColor, Color foreColor, Color selectionColor)
+        private DataGridViewButtonColumn CrearColumnaAccion(string name, float fillWeight, Variante variante)
         {
             return new DataGridViewButtonColumn
             {
@@ -387,16 +387,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 HeaderText = "",
                 FillWeight = fillWeight,
                 FlatStyle = FlatStyle.Flat,
-                DefaultCellStyle = new DataGridViewCellStyle
-                {
-                    BackColor = backColor,
-                    ForeColor = foreColor,
-                    SelectionBackColor = selectionColor,
-                    SelectionForeColor = Color.White,
-                    Alignment = DataGridViewContentAlignment.MiddleCenter,
-                    Padding = new Padding(6, 3, 6, 3),
-                    Font = new Font("Bahnschrift SemiBold", 9.25F, FontStyle.Bold)
-                }
+                Tag = variante,
+                DefaultCellStyle = new DataGridViewCellStyle { Alignment = DataGridViewContentAlignment.MiddleCenter }
             };
         }
 

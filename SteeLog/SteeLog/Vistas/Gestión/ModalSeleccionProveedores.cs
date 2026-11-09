@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Drawing;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using SteeLog.CompositionRoot;
 using SteeLog.Presentation;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas
 {
@@ -32,12 +34,37 @@ namespace SteeLog.Vistas
         internal ModalSeleccionProveedores(List<int> idsIniciales, MaterialesPresenter presenter)
         {
             InitializeComponent();
+            AplicarEstilo();
             _idsIniciales = idsIniciales != null ? new HashSet<int>(idsIniciales) : new HashSet<int>();
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             _presenter = presenter ?? new MaterialesPresenter(LocalServices.Current.Executor);
             FormClosed += (_, __) => _cierre.Cancel();
             Disposed += (_, __) => _cierre.Dispose();
             Shown += ModalSeleccionProveedores_Shown;
+        }
+
+        /// <summary>Chrome de modal propio (adiós a la barra nativa con mojibake) y controles del tema.</summary>
+        private void AplicarEstilo()
+        {
+            Tema.SinEscala(this);
+            const int margen = 24;
+            label1.Text = "Elegí los proveedores del material";
+            label1.Font = Tema.Fuente(10.5f); label1.ForeColor = Tema.TextoSecundario;
+            label1.Location = new Point(margen, 16);
+            clbProveedores.Location = new Point(margen, 46);
+            clbProveedores.Size = new Size(ClientSize.Width - 2 * margen, 250);
+            GestionUi.ListaChecks(clbProveedores);
+            btnAceptar.Size = new Size(140, Tema.AltoBotonPrincipal);
+            btnCancelar.Size = new Size(140, Tema.AltoBotonPrincipal);
+            btnAceptar.Location = new Point(ClientSize.Width - margen - 140, 312);
+            btnCancelar.Location = new Point(btnAceptar.Left - 8 - 140, 312);
+            Tema.Boton(btnAceptar, Variante.Primario);
+            Tema.Boton(btnCancelar, Variante.Secundario);
+            btnAceptar.Text = "Aceptar"; btnCancelar.Text = "Cancelar";
+            ClientSize = new Size(ClientSize.Width, 312 + Tema.AltoBotonPrincipal + 20);
+            AcceptButton = btnAceptar; CancelButton = btnCancelar;
+            Tema.ChromeModal(this, "Selección de proveedores");
+            Padding = new Padding(1);
         }
 
         private async void ModalSeleccionProveedores_Shown(object sender, EventArgs e)
@@ -64,7 +91,7 @@ namespace SteeLog.Vistas
             catch (Exception ex)
             {
                 if (!IsDisposed)
-                    MessageBox.Show("Error al cargar la lista de proveedores: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Dialogo.Error("Error al cargar la lista de proveedores: " + ex.Message, "Error", this);
             }
         }
 

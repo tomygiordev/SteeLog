@@ -3,14 +3,12 @@ using System;
 using System.Drawing;
 using System.Windows.Forms;
 using SteeLog.Servicios;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
     public class Vista_OrdenesModulo : Form, IRecargaCatalogos
     {
-        private readonly Color _tabActiveColor = Color.FromArgb(25, 135, 84);
-        private readonly Color _tabInactiveColor = Color.FromArgb(47, 84, 57);
-
         private Guna2Button btnTabListado;
         private Guna2Button btnTabNueva;
         private Guna2Button btnTabRecepcion;
@@ -42,44 +40,40 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private void InitializeComponent()
         {
             SuspendLayout();
-            BackColor = OrdenesUi.FondoForm;
+            BackColor = Tema.Fondo;
+
+            // Banda de titulo estandar de la app (la vista ya no repite "Ordenes de Compra" debajo).
+            Tema.TituloVista(this, "Órdenes");
 
             var root = new TableLayoutPanel();
             root.Dock = DockStyle.Fill;
-            root.RowCount = 3;
+            root.RowCount = 2;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 62F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 56F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.Margin = new Padding(0);
+            root.Padding = new Padding(0);
             Controls.Add(root);
+            root.BringToFront();
 
-            var header = new Panel();
-            header.Dock = DockStyle.Fill;
-            header.Padding = new Padding(18, 18, 18, 6);
-            var lblTitulo = new Label
-            {
-                Text = "Órdenes",
-                Font = new Font("Bahnschrift SemiBold", 17F, FontStyle.Bold),
-                ForeColor = Color.White,
-                Dock = DockStyle.Fill
-            };
-            header.Controls.Add(lblTitulo);
-
-            var tabs = new Panel();
+            var tabs = new FlowLayoutPanel();
             tabs.Dock = DockStyle.Fill;
-            tabs.Padding = new Padding(18, 0, 18, 8);
+            tabs.FlowDirection = FlowDirection.LeftToRight;
+            tabs.WrapContents = false;
+            tabs.Padding = new Padding(28, 10, 28, 0);
+            tabs.BackColor = Tema.Fondo;
 
-            btnTabListado = CrearTab("Listado", 18);
+            btnTabListado = UiVista.BotonTab("Listado", 168);
             btnTabListado.Click += (s, e) => MostrarListado();
 
-            btnTabNueva = CrearTab("Nueva orden", 216);
+            btnTabNueva = UiVista.BotonTab("Nueva orden", 168);
             btnTabNueva.Visible = false;
             btnTabNueva.Click += (s, e) => MostrarAlta();
 
-            btnTabRecepcion = CrearTab("Recepción", 414);
+            btnTabRecepcion = UiVista.BotonTab("Recepción", 168);
             btnTabRecepcion.Click += (s, e) => MostrarRecepcion();
 
-            btnTabHistorial = CrearTab("Historial", 612);
+            btnTabHistorial = UiVista.BotonTab("Historial", 168);
             btnTabHistorial.Click += (s, e) => MostrarHistorial();
 
             tabs.Controls.Add(btnTabListado);
@@ -91,20 +85,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             panelHost.Dock = DockStyle.Fill;
             panelHost.BackColor = OrdenesUi.FondoForm;
 
-            root.Controls.Add(header, 0, 0);
-            root.Controls.Add(tabs, 0, 1);
-            root.Controls.Add(panelHost, 0, 2);
+            root.Controls.Add(tabs, 0, 0);
+            root.Controls.Add(panelHost, 0, 1);
             ResumeLayout(false);
-        }
-
-        private Guna2Button CrearTab(string texto, int x)
-        {
-            var btn = OrdenesUi.CrearBoton(texto);
-            btn.Location = new Point(x, 10);
-            btn.Size = new Size(180, 36);
-            btn.FillColor = _tabInactiveColor;
-            btn.HoverState.FillColor = _tabActiveColor;
-            return btn;
         }
 
         private void InicializarVistas()
@@ -246,13 +229,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
         private void ActivarTab(Guna2Button activo)
         {
-            btnTabListado.FillColor = _tabInactiveColor;
-            btnTabRecepcion.FillColor = _tabInactiveColor;
-            btnTabHistorial.FillColor = _tabInactiveColor;
-            if (btnTabNueva.Visible)
-                btnTabNueva.FillColor = _tabInactiveColor;
-
-            activo.FillColor = _tabActiveColor;
+            foreach (var tab in new[] { btnTabListado, btnTabNueva, btnTabRecepcion, btnTabHistorial })
+                Tema.Boton(tab, tab == activo ? Variante.TabActiva : Variante.Tab);
         }
 
         private void RefrescarListas()

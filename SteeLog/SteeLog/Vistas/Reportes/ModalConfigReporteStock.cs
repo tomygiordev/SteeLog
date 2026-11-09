@@ -9,6 +9,7 @@ using SteeLog.Presentation;
 using SteeLog.Core.Application.Reportes;
 using System.Threading;
 using SteeLog.Modelos;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Reportes
 {
@@ -88,11 +89,10 @@ namespace SteeLog.Vistas.Reportes
             this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             Text = "Configurar secciones del reporte de stock";
             StartPosition = FormStartPosition.CenterParent;
-            Size = new Size(1100, 720);
-            MinimumSize = new Size(980, 620);
-            BackColor = Color.FromArgb(29, 38, 35);
-            ForeColor = Color.White;
-            Font = new Font("Bahnschrift Light", 10F);
+            ClientSize = new Size(1100, 660);
+            BackColor = Tema.Fondo;
+            ForeColor = Tema.Texto;
+            Font = Tema.FuenteTexto;
 
             CrearInterfaz();
             Load += (s, e) => CargarDatos();
@@ -113,8 +113,8 @@ namespace SteeLog.Vistas.Reportes
             {
                 Dock = DockStyle.Fill,
                 ColumnCount = 2,
-                BackColor = Color.FromArgb(29, 38, 35),
-                Padding = new Padding(14)
+                BackColor = Tema.Fondo,
+                Padding = new Padding(24, 20, 24, 20)
             };
             panelPrincipal.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 320F));
             panelPrincipal.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
@@ -123,7 +123,12 @@ namespace SteeLog.Vistas.Reportes
             panelPrincipal.Controls.Add(CrearPanelMateriales(), 1, 0);
 
             Controls.Add(panelPrincipal);
+            EstilizarLista(lstSecciones);
+            EstilizarLista(lstResultadosMateriales);
+            EstilizarLista(lstMaterialesSeccion);
             ActualizarEstadoEdicion();
+            Tema.ChromeModal(this, "Configurar secciones del reporte de stock");
+            panelPrincipal.BringToFront();
         }
 
         private Control CrearPanelSecciones()
@@ -140,18 +145,13 @@ namespace SteeLog.Vistas.Reportes
             var lblAyuda = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 38,
-                ForeColor = Color.FromArgb(170, 195, 180),
+                Height = 54,
+                ForeColor = Tema.TextoApagado,
                 Text = "Cada sección se muestra como cabecera en el reporte. Podés ordenarlas con subir y bajar.",
                 Padding = new Padding(0, 4, 0, 6)
             };
 
             lstSecciones.Dock = DockStyle.Fill;
-            lstSecciones.BorderStyle = BorderStyle.None;
-            lstSecciones.BackColor = Color.FromArgb(35, 50, 40);
-            lstSecciones.ForeColor = Color.White;
-            lstSecciones.Font = new Font("Bahnschrift SemiBold", 10.5F);
-            lstSecciones.IntegralHeight = false;
             lstSecciones.SelectedIndexChanged += LstSecciones_SelectedIndexChanged;
 
             var pnlEditor = new TableLayoutPanel
@@ -160,8 +160,8 @@ namespace SteeLog.Vistas.Reportes
                 Height = 220,
                 ColumnCount = 2,
                 RowCount = 5,
-                BackColor = Color.FromArgb(24, 32, 29),
-                Padding = new Padding(10)
+                BackColor = Tema.Superficie,
+                Padding = new Padding(12)
             };
             pnlEditor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             pnlEditor.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
@@ -175,23 +175,20 @@ namespace SteeLog.Vistas.Reportes
             {
                 Text = "Nombre de la sección",
                 Dock = DockStyle.Fill,
-                ForeColor = Color.White,
+                ForeColor = Tema.TextoSecundario,
                 TextAlign = ContentAlignment.BottomLeft
             };
             pnlEditor.Controls.Add(lblNombre, 0, 0);
             pnlEditor.SetColumnSpan(lblNombre, 2);
 
-            txtNombreSeccion.Dock = DockStyle.Fill;
-            txtNombreSeccion.BorderStyle = BorderStyle.FixedSingle;
-            txtNombreSeccion.BackColor = Color.FromArgb(35, 50, 40);
-            txtNombreSeccion.ForeColor = Color.White;
             txtNombreSeccion.TextChanged += TxtNombreSeccion_TextChanged;
-            pnlEditor.Controls.Add(txtNombreSeccion, 0, 1);
-            pnlEditor.SetColumnSpan(txtNombreSeccion, 2);
+            var marcoNombre = EnvolverInput(txtNombreSeccion);
+            pnlEditor.Controls.Add(marcoNombre, 0, 1);
+            pnlEditor.SetColumnSpan(marcoNombre, 2);
 
             btnNuevaSeccion = CrearBoton("Nueva sección", (s, e) => NuevaSeccion());
             pnlEditor.Controls.Add(btnNuevaSeccion, 0, 2);
-            btnEliminarSeccion = CrearBoton("Eliminar sección", (s, e) => EliminarSeccionActual(), Color.FromArgb(160, 55, 55));
+            btnEliminarSeccion = CrearBoton("Eliminar sección", (s, e) => EliminarSeccionActual(), Variante.Peligro);
             pnlEditor.Controls.Add(btnEliminarSeccion, 1, 2);
             btnSubirSeccion = CrearBoton("Subir sección", (s, e) => MoverSeccion(-1));
             pnlEditor.Controls.Add(btnSubirSeccion, 0, 3);
@@ -219,8 +216,8 @@ namespace SteeLog.Vistas.Reportes
             var lblAyuda = new Label
             {
                 Dock = DockStyle.Top,
-                Height = 38,
-                ForeColor = Color.FromArgb(170, 195, 180),
+                Height = 54,
+                ForeColor = Tema.TextoApagado,
                 Text = "Buscá materiales, agregalos como carrito y ordenalos con subir y bajar para definir cómo se muestran.",
                 Padding = new Padding(0, 4, 0, 6)
             };
@@ -243,7 +240,7 @@ namespace SteeLog.Vistas.Reportes
             {
                 Text = "Buscar material",
                 Dock = DockStyle.Fill,
-                ForeColor = Color.White,
+                ForeColor = Tema.TextoSecundario,
                 TextAlign = ContentAlignment.BottomLeft
             };
             panelContenido.Controls.Add(lblBuscar, 0, 0);
@@ -252,28 +249,20 @@ namespace SteeLog.Vistas.Reportes
             {
                 Text = "Materiales agregados",
                 Dock = DockStyle.Fill,
-                ForeColor = Color.White,
+                ForeColor = Tema.TextoSecundario,
                 TextAlign = ContentAlignment.BottomLeft
             };
             panelContenido.Controls.Add(lblSeleccionados, 2, 0);
 
-            txtBuscarMaterial.Dock = DockStyle.Fill;
-            txtBuscarMaterial.BorderStyle = BorderStyle.FixedSingle;
-            txtBuscarMaterial.BackColor = Color.FromArgb(35, 50, 40);
-            txtBuscarMaterial.ForeColor = Color.White;
             txtBuscarMaterial.TextChanged += TxtBuscarMaterial_TextChanged;
             txtBuscarMaterial.KeyDown += TxtBuscarMaterial_KeyDown;
-            panelContenido.Controls.Add(txtBuscarMaterial, 0, 1);
+            panelContenido.Controls.Add(EnvolverInput(txtBuscarMaterial), 0, 1);
 
             btnAgregar = CrearBoton("Agregar →", (s, e) => AgregarMaterialSeleccionado());
             btnAgregar.Dock = DockStyle.Fill;
             panelContenido.Controls.Add(btnAgregar, 1, 1);
 
             lstResultadosMateriales.Dock = DockStyle.Fill;
-            lstResultadosMateriales.BorderStyle = BorderStyle.None;
-            lstResultadosMateriales.BackColor = Color.FromArgb(35, 50, 40);
-            lstResultadosMateriales.ForeColor = Color.White;
-            lstResultadosMateriales.IntegralHeight = false;
             lstResultadosMateriales.DoubleClick += (s, e) => AgregarMaterialSeleccionado();
             panelContenido.Controls.Add(lstResultadosMateriales, 0, 2);
 
@@ -288,7 +277,7 @@ namespace SteeLog.Vistas.Reportes
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
             panelBotonesMateriales.RowStyles.Add(new RowStyle(SizeType.Absolute, 38F));
-            btnQuitar = CrearBoton("Quitar", (s, e) => QuitarMaterialSeleccionado(), Color.FromArgb(160, 55, 55));
+            btnQuitar = CrearBoton("Quitar", (s, e) => QuitarMaterialSeleccionado(), Variante.Peligro);
             panelBotonesMateriales.Controls.Add(btnQuitar, 0, 0);
             btnSubirMaterial = CrearBoton("Subir", (s, e) => MoverMaterial(-1));
             panelBotonesMateriales.Controls.Add(btnSubirMaterial, 0, 1);
@@ -297,13 +286,9 @@ namespace SteeLog.Vistas.Reportes
             panelContenido.Controls.Add(panelBotonesMateriales, 1, 2);
 
             lstMaterialesSeccion.Dock = DockStyle.Fill;
-            lstMaterialesSeccion.BorderStyle = BorderStyle.None;
-            lstMaterialesSeccion.BackColor = Color.FromArgb(35, 50, 40);
-            lstMaterialesSeccion.ForeColor = Color.White;
-            lstMaterialesSeccion.IntegralHeight = false;
             panelContenido.Controls.Add(lstMaterialesSeccion, 2, 2);
 
-            btnGuardar = CrearBoton("Guardar cambios", (s, e) => GuardarTodo(), Color.FromArgb(39, 174, 96));
+            btnGuardar = CrearBoton("Guardar cambios", (s, e) => GuardarTodo(), Variante.Primario);
             btnGuardar.Dock = DockStyle.Fill;
             panelContenido.Controls.Add(btnGuardar, 2, 3);
 
@@ -320,24 +305,105 @@ namespace SteeLog.Vistas.Reportes
             {
                 Text = texto,
                 Height = 32,
-                Font = new Font("Bahnschrift SemiBold", 14F),
-                ForeColor = Color.White
+                Font = Tema.FuenteSubtitulo,
+                ForeColor = Tema.TextoSecundario,
+                TextAlign = ContentAlignment.MiddleLeft
             };
         }
 
-        private Button CrearBoton(string texto, EventHandler click, Color? color = null)
+        private Button CrearBoton(string texto, EventHandler click, Variante estilo = Variante.Secundario)
         {
-            var boton = new Button
+            var boton = new BotonTema
             {
                 Text = texto,
                 Dock = DockStyle.Fill,
-                FlatStyle = FlatStyle.Flat,
-                BackColor = color ?? Color.FromArgb(47, 84, 57),
-                ForeColor = Color.White
+                Estilo = estilo,
+                Margin = new Padding(3)
             };
-            boton.FlatAppearance.BorderSize = 0;
             boton.Click += click;
             return boton;
+        }
+
+        /// <summary>Botón nativo (se conserva el tipo Button) pintado con los tokens de Tema.</summary>
+        private sealed class BotonTema : Button
+        {
+            private bool hover, presionado;
+            public Variante Estilo = Variante.Secundario;
+
+            public BotonTema()
+            {
+                SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+                FlatStyle = FlatStyle.Flat;
+                Cursor = Cursors.Hand;
+                Font = Tema.FuenteBoton;
+                TabStop = true;
+            }
+            protected override void OnMouseEnter(EventArgs e) { hover = true; Invalidate(); base.OnMouseEnter(e); }
+            protected override void OnMouseLeave(EventArgs e) { hover = false; presionado = false; Invalidate(); base.OnMouseLeave(e); }
+            protected override void OnMouseDown(MouseEventArgs e) { presionado = true; Invalidate(); base.OnMouseDown(e); }
+            protected override void OnMouseUp(MouseEventArgs e) { presionado = false; Invalidate(); base.OnMouseUp(e); }
+            protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
+
+            protected override void OnPaint(PaintEventArgs e)
+            {
+                var g = e.Graphics;
+                g.Clear(Parent != null && Parent.BackColor.A == 255 ? Parent.BackColor : Tema.Fondo);
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                Color fill, texto = Color.White;
+                switch (Estilo)
+                {
+                    case Variante.Primario: fill = presionado ? Tema.AcentoPressed : hover ? Tema.AcentoHover : Tema.Acento; break;
+                    case Variante.Peligro: fill = hover ? Tema.PeligroHover : Tema.Peligro; break;
+                    default: fill = hover ? Tema.SecundarioHover : Tema.Secundario; texto = Tema.Texto; break;
+                }
+                if (!Enabled) { fill = Tema.DeshabilitadoFill; texto = Tema.DeshabilitadoTexto; }
+                var r = new RectangleF(0.5f, 0.5f, Width - 1, Height - 1);
+                using (var p = Tema.RectRedondeado(r, Tema.Radio))
+                using (var br = new SolidBrush(fill))
+                    g.FillPath(br, p);
+                TextRenderer.DrawText(g, Text, Font, ClientRectangle, texto,
+                    TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            }
+        }
+
+        /// <summary>TextBox nativo dentro de un contenedor con borde 1px y relleno de input.</summary>
+        private static Control EnvolverInput(TextBox txt)
+        {
+            txt.BorderStyle = BorderStyle.None;
+            txt.BackColor = Tema.FondoInput;
+            txt.ForeColor = Tema.Texto;
+            txt.Font = Tema.FuenteTexto;
+            txt.Dock = DockStyle.None;
+            txt.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            var interior = new Panel { Dock = DockStyle.Fill, BackColor = Tema.FondoInput, Padding = new Padding(10, 0, 10, 0) };
+            var marco = new Panel { Dock = DockStyle.Fill, BackColor = Tema.Borde, Padding = new Padding(1), Margin = new Padding(3) };
+            interior.Controls.Add(txt);
+            marco.Controls.Add(interior);
+            interior.Resize += (s, e) => { txt.Width = Math.Max(10, interior.ClientSize.Width - 20); txt.Left = 10; txt.Top = Math.Max(0, (interior.ClientSize.Height - txt.Height) / 2); };
+            txt.Enter += (s, e) => marco.BackColor = Tema.BordeFoco;
+            txt.Leave += (s, e) => marco.BackColor = Tema.Borde;
+            return marco;
+        }
+
+        private static void EstilizarLista(ListBox lst)
+        {
+            lst.BorderStyle = BorderStyle.None;
+            lst.BackColor = Tema.FondoInput;
+            lst.ForeColor = Tema.Texto;
+            lst.Font = Tema.FuenteTexto;
+            lst.IntegralHeight = false;
+            lst.DrawMode = DrawMode.OwnerDrawFixed;
+            lst.ItemHeight = 30;
+            lst.DrawItem += (s, e) =>
+            {
+                var l = (ListBox)s;
+                bool sel = (e.State & DrawItemState.Selected) != 0;
+                using (var br = new SolidBrush(sel ? Tema.Seleccion : Tema.FondoInput)) e.Graphics.FillRectangle(br, e.Bounds);
+                if (e.Index < 0 || e.Index >= l.Items.Count) return;
+                var rect = new Rectangle(e.Bounds.X + 12, e.Bounds.Y, e.Bounds.Width - 20, e.Bounds.Height);
+                TextRenderer.DrawText(e.Graphics, Convert.ToString(l.Items[e.Index]), l.Font, rect, sel ? Color.White : Tema.Texto,
+                    TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
+            };
         }
 
         private async void CargarDatos(int? seleccionarSeccionId = null)
@@ -530,7 +596,7 @@ namespace SteeLog.Vistas.Reportes
             }
 
             if (!cargado || guardando) return;
-            if (MessageBox.Show("¿Eliminar la sección y sus materiales asignados?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes)
+            if (!Dialogo.Confirmar("¿Eliminar la sección y sus materiales asignados?", "Eliminar sección", true, this))
             {
                 return;
             }

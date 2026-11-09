@@ -3,6 +3,8 @@ using System.Threading;
 using System.Windows.Forms;
 using SteeLog.CompositionRoot;
 using SteeLog.Presentation;
+using SteeLog.UI;
+using System.Drawing;
 
 namespace SteeLog.Vistas.Reportes
 {
@@ -16,11 +18,52 @@ namespace SteeLog.Vistas.Reportes
         {
             this.idObra = idObra;
             InitializeComponent();
+            AplicarEstilo();
             dtpHasta.Value = DateTime.Today;
             dtpDesde.Value = DateTime.Today.AddMonths(-1);
             btnAceptar.Enabled = false;
             Shown += CargarPrimeraFecha;
         }
+        private void AplicarEstilo()
+        {
+            ClientSize = new Size(340, 220);
+            labelTitulo.AutoSize = false;
+            labelTitulo.Font = Tema.FuenteSubtitulo;
+            labelTitulo.ForeColor = Tema.TextoSecundario;
+            labelTitulo.Text = "Seleccioná el período del informe";
+            labelTitulo.Location = new Point(24, 18);
+            labelTitulo.Size = new Size(292, 22);
+
+            foreach (var lbl in new[] { lblDesde, lblHasta })
+            {
+                lbl.AutoSize = false;
+                lbl.Font = Tema.FuenteTexto;
+                lbl.ForeColor = Tema.TextoSecundario;
+                lbl.TextAlign = ContentAlignment.MiddleLeft;
+                lbl.Size = new Size(64, Tema.AltoControl);
+            }
+            lblDesde.Location = new Point(24, 54);
+            lblHasta.Location = new Point(24, 104);
+            dtpDesde.Location = new Point(92, 54);
+            dtpHasta.Location = new Point(92, 104);
+            foreach (var dtp in new[] { dtpDesde, dtpHasta })
+            {
+                dtp.Size = new Size(224, Tema.AltoControl);
+                Tema.Fecha(dtp);
+            }
+
+            btnAceptar.Text = "Aceptar";
+            btnAceptar.Location = new Point(24, 160);
+            btnAceptar.Size = new Size(140, Tema.AltoBotonPrincipal);
+            Tema.Boton(btnAceptar, Variante.Primario);
+            btnCancelar.Text = "Cancelar";
+            btnCancelar.Location = new Point(176, 160);
+            btnCancelar.Size = new Size(140, Tema.AltoBotonPrincipal);
+            Tema.Boton(btnCancelar, Variante.Secundario);
+
+            Tema.ChromeModal(this, "Rango de fechas");
+        }
+
         private async void CargarPrimeraFecha(object sender, EventArgs e)
         {
             var token = vida.Token;

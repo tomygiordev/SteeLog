@@ -2,6 +2,7 @@ using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Windows.Forms;
+using SteeLog.UI;
 
 namespace SteeLog
 {
@@ -59,7 +60,7 @@ namespace SteeLog
             this.StartPosition = FormStartPosition.Manual;
             this.Size = new Size(_toastWidth, _toastHeight);
             this.Opacity = 0;
-            this.BackColor = Color.FromArgb(20, 20, 20); // will be drawn over
+            this.BackColor = Tema.Fondo; // will be drawn over
             this.DoubleBuffered = true;
             this.SetStyle(ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.UserPaint, true);
 
@@ -154,19 +155,19 @@ namespace SteeLog
             switch (type)
             {
                 case ToastType.Success:
-                    accentColor = Color.FromArgb(39, 174, 96);
+                    accentColor = Tema.Acento;
                     icon = "✓";
                     break;
                 case ToastType.Error:
-                    accentColor = Color.FromArgb(192, 57, 43);
+                    accentColor = Tema.Peligro;
                     icon = "✕";
                     break;
                 case ToastType.Warning:
-                    accentColor = Color.FromArgb(243, 156, 18);
+                    accentColor = Tema.Advertencia;
                     icon = "⚠";
                     break;
                 default:
-                    accentColor = Color.FromArgb(52, 152, 219);
+                    accentColor = Tema.Info;
                     icon = "ℹ";
                     break;
             }
@@ -187,8 +188,8 @@ namespace SteeLog
             _lblMessage = new Label
             {
                 Text = message,
-                Font = new Font("Bahnschrift Light", _isCenter ? 12f : 11f),
-                ForeColor = Color.FromArgb(230, 230, 230),
+                Font = Tema.Fuente(_isCenter ? 12f : 10.5f),
+                ForeColor = Tema.Texto,
                 BackColor = Color.Transparent,
                 Size = new Size(_toastWidth - (_isCenter ? 90 : 60), _toastHeight),
                 Location = new Point(_isCenter ? 80 : 50, 0),
@@ -231,7 +232,7 @@ namespace SteeLog
             var rect = new Rectangle(0, 0, this.Width - 1, this.Height - 1);
             using (var path = CreateRoundedRect(rect, 10))
             {
-                using (var bgBrush = new SolidBrush(Color.FromArgb(30, 35, 32)))
+                using (var bgBrush = new SolidBrush(Tema.Superficie))
                 {
                     g.FillPath(bgBrush, path);
                 }
@@ -246,7 +247,7 @@ namespace SteeLog
                 }
 
                 // Subtle border
-                using (var borderPen = new Pen(Color.FromArgb(50, 60, 55), 1f))
+                using (var borderPen = new Pen(Tema.Borde, 1f))
                 {
                     g.DrawPath(borderPen, path);
                 }

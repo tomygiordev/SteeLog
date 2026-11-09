@@ -48,7 +48,7 @@ namespace SteeLog.Vistas
             this.cmbObra = new Guna.UI2.WinForms.Guna2ComboBox();
             this.lblPrecio = new System.Windows.Forms.Label();
             this.txtPrecio = new Guna.UI2.WinForms.Guna2TextBox();
-            this.chkPagado = new Guna.UI2.WinForms.Guna2CheckBox();
+            this.chkPagado = new SteeLog.UI.CheckTema();
             this.lblDescripcion = new System.Windows.Forms.Label();
             this.txtDescripcion = new Guna.UI2.WinForms.Guna2TextBox();
             this.btnGuardar = new Guna.UI2.WinForms.Guna2Button();
@@ -587,10 +587,6 @@ namespace SteeLog.Vistas
             this.chkPagado.Anchor = ((System.Windows.Forms.AnchorStyles)(((System.Windows.Forms.AnchorStyles.Top | System.Windows.Forms.AnchorStyles.Bottom) 
             | System.Windows.Forms.AnchorStyles.Left)));
             this.chkPagado.AutoSize = true;
-            this.chkPagado.CheckedState.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
-            this.chkPagado.CheckedState.BorderRadius = 2;
-            this.chkPagado.CheckedState.BorderThickness = 0;
-            this.chkPagado.CheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(39)))), ((int)(((byte)(174)))), ((int)(((byte)(96)))));
             this.chkPagado.Font = new System.Drawing.Font("Segoe UI", 10.5F);
             this.chkPagado.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(210)))), ((int)(((byte)(235)))), ((int)(((byte)(218)))));
             this.chkPagado.Location = new System.Drawing.Point(869, 11);
@@ -598,10 +594,6 @@ namespace SteeLog.Vistas
             this.chkPagado.Size = new System.Drawing.Size(86, 30);
             this.chkPagado.TabIndex = 8;
             this.chkPagado.Text = "   Pagado";
-            this.chkPagado.UncheckedState.BorderColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(120)))), ((int)(((byte)(108)))));
-            this.chkPagado.UncheckedState.BorderRadius = 2;
-            this.chkPagado.UncheckedState.BorderThickness = 0;
-            this.chkPagado.UncheckedState.FillColor = System.Drawing.Color.FromArgb(((int)(((byte)(100)))), ((int)(((byte)(120)))), ((int)(((byte)(108)))));
             this.chkPagado.UseVisualStyleBackColor = true;
             // 
             // lblDescripcion
@@ -749,7 +741,7 @@ namespace SteeLog.Vistas
         private Guna.UI2.WinForms.Guna2TextBox txtDescripcion;
         private System.Windows.Forms.Label lblPrecio;
         private Guna.UI2.WinForms.Guna2TextBox txtPrecio;
-        private Guna.UI2.WinForms.Guna2CheckBox chkPagado;
+        private SteeLog.UI.CheckTema chkPagado;
         private Guna.UI2.WinForms.Guna2Button btnGuardar;
         private Guna.UI2.WinForms.Guna2Button btnEliminar;
         private SteeLog.PanelAntiParpadeo panelAntiParpadeo3;

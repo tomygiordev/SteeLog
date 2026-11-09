@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -22,11 +23,12 @@ namespace SteeLog.Vistas
         private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
         public Vista_Proveedores()
         {
             InitializeComponent();
+            GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarProveedorBoton);
             txtProveedor.MaxLength = Proveedor.MaxNombre;
             dgvProveedores.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
             dgvProveedores.SelectionChanged += dgvProveedores_SelectionChanged;
@@ -85,20 +87,13 @@ namespace SteeLog.Vistas
             dgvProveedores.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvProveedores.RowHeadersVisible = false;
             dgvProveedores.AllowUserToResizeRows = false;
-            dgvProveedores.ColumnHeadersHeight = 35;
             dgvProveedores.MultiSelect = false;
             dgvProveedores.ReadOnly = true;
             dgvProveedores.AllowUserToResizeColumns = false;
-            dgvProveedores.EnableHeadersVisualStyles = false;
-            dgvProveedores.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvProveedores.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvProveedores.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvProveedores.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvProveedores.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvProveedores.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             if (dgvProveedores.Columns["Id"] != null) dgvProveedores.Columns["Id"].Visible = false;
             if (dgvProveedores.Columns["Nombre"] != null) { dgvProveedores.Columns["Nombre"].HeaderText = "Nombre de proveedor"; dgvProveedores.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
 
+            GestionUi.AjustarColumnas(dgvProveedores);
         }
         private void LimpiarSeleccion()
         {

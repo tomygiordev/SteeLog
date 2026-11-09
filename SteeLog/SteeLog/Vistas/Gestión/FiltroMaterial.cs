@@ -10,6 +10,7 @@ using SteeLog.CompositionRoot;
 using SteeLog.Core.Application.Inventario;
 using SteeLog.Modelos;
 using SteeLog.Presentation;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas
 {
@@ -46,18 +47,50 @@ namespace SteeLog.Vistas
         internal FiltroMaterial(MaterialesPresenter presenter)
         {
             InitializeComponent();
-            this.BackColor = Color.FromArgb(20, 30, 25);
-            try
-            {
-                this.Region = System.Drawing.Region.FromHrgn(Guna2ControlHelper.CreateRoundRectRgn(0, 0, this.Width, this.Height, 15, 15));
-            }
-            catch { }
+            AplicarEstilo();
 
             if (LicenseManager.UsageMode == LicenseUsageMode.Designtime) return;
             _presenter = presenter ?? new MaterialesPresenter(LocalServices.Current.Executor);
             FormClosed += (_, __) => _cierre.Cancel();
             Disposed += (_, __) => _cierre.Dispose();
             Shown += FiltroMaterial_Shown;
+        }
+
+        /// <summary>Popup coherente con el resto de modales: barra propia, borde 1px, controles del tema.</summary>
+        private void AplicarEstilo()
+        {
+            Tema.SinEscala(this);
+            Tema.ChromeModal(this, "Filtrar materiales");
+            Padding = new Padding(1);
+            panelAntiParpadeo1.BringToFront(); // el panel Fill debe acoplarse último, tras la barra de título
+            panelAntiParpadeo1.ColumnStyles[1].Width = 150;
+            BackColor = Tema.Borde;
+            panelAntiParpadeo1.BackColor = Tema.Superficie;
+            panelAntiParpadeo1.Padding = new Padding(16, 4, 16, 14);
+            // La X nativa del panel sobra: la barra propia ya la trae.
+            guna2ControlBox1.Visible = false;
+            panelAntiParpadeo1.RowStyles[0].Height = 0;
+            GestionUi.Aplicar(panelAntiParpadeo1);
+            foreach (var titulo in new[] { label3, label7, label9 })
+            {
+                titulo.Font = Tema.FuenteSubtitulo; titulo.ForeColor = Tema.TextoSecundario; titulo.Padding = new Padding(0, 0, 0, 4);
+            }
+            label3.Text = "Rango de stock";
+            foreach (var etiqueta in new[] { label5, label6 })
+            {
+                etiqueta.Font = Tema.Fuente(10.5f); etiqueta.ForeColor = Tema.TextoSecundario; etiqueta.Padding = Padding.Empty;
+            }
+            label8.Font = Tema.Fuente(10.5f); label8.ForeColor = Tema.Texto; label8.Padding = Padding.Empty; label8.Text = "Solo stock bajo";
+            Tema.Toggle(sionoBajo);
+            GestionUi.ListaChecks(flCategoria);
+            GestionUi.ListaChecks(clbProveedoresFiltro);
+            flCategoria.Dock = DockStyle.Fill; clbProveedoresFiltro.Dock = DockStyle.Fill;
+            flCategoria.Margin = new Padding(0, 2, 0, 2); clbProveedoresFiltro.Margin = new Padding(0, 2, 0, 2);
+            Tema.Boton(AplicarFiltros, Variante.Primario);
+            Tema.Boton(LimpiarFiltros, Variante.Secundario);
+            AplicarFiltros.Text = "Aplicar filtros"; LimpiarFiltros.Text = "Borrar filtros";
+            AplicarFiltros.Height = Tema.AltoBotonPrincipal; LimpiarFiltros.Height = Tema.AltoBotonPrincipal;
+            AplicarFiltros.Margin = new Padding(0, 4, 0, 4); LimpiarFiltros.Margin = new Padding(0, 4, 0, 4);
         }
 
         private async void FiltroMaterial_Shown(object sender, EventArgs e)
@@ -93,7 +126,7 @@ namespace SteeLog.Vistas
             catch (Exception ex)
             {
                 if (!IsDisposed)
-                    MessageBox.Show("Error al cargar listas para filtrar: " + ex.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    Dialogo.Error("Error al cargar listas para filtrar: " + ex.Message, "Error", this);
             }
         }
 
@@ -132,7 +165,7 @@ namespace SteeLog.Vistas
         {
             if (desdeCantidadFiltro.Value > 0 && hastaCantidadFiltro.Value > 0 && desdeCantidadFiltro.Value > hastaCantidadFiltro.Value)
             {
-                MessageBox.Show("El stock 'Desde' no puede ser mayor que el stock 'Hasta'.", "Atención", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                Dialogo.Advertencia("El stock 'Desde' no puede ser mayor que el stock 'Hasta'.", "Atención", this);
                 return;
             }
 

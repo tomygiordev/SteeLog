@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
@@ -22,11 +23,12 @@ namespace SteeLog.Vistas
         private int _idAntesDelClic = int.MinValue;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => MessageBox.Show(mensaje, "Confirmar", MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, MessageBoxIcon, bool> Confirmar = (mensaje, icono) => GestionUi.Confirmar(mensaje, "Confirmar", icono);
 
         public Vista_Categorias()
         {
             InitializeComponent();
+            GestionUi.AbmSimple(this, panelAntiParpadeo1, label1, panelAntiParpadeo2, panelAntiParpadeo4, label3, guna2Panel1, guna2Button1, eliminarCategoriaBoton);
             txtCategoria.MaxLength = Categoria.MaxNombre;
             dgvCategorias.CellMouseDown += (s, e) => { if (e.RowIndex >= 0) _idAntesDelClic = idSeleccionado; };
             dgvCategorias.SelectionChanged += dgvCategorias_SelectionChanged;
@@ -45,7 +47,7 @@ namespace SteeLog.Vistas
                 await CargarAsync();
             }
             catch (OperationCanceledException) { }
-            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Error al cargar categorias: " + ex.Message); }
+            catch (Exception ex) { if (Vigente) ToastNotification.ShowError("Error al cargar categorías: " + ex.Message); }
         }
         protected override void OnFormClosed(FormClosedEventArgs e) { CancelarCierre(); base.OnFormClosed(e); }
         private void CancelarCierre() { if (!_cierre.IsCancellationRequested) _cierre.Cancel(); }
@@ -85,20 +87,13 @@ namespace SteeLog.Vistas
             dgvCategorias.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvCategorias.RowHeadersVisible = false;
             dgvCategorias.AllowUserToResizeRows = false;
-            dgvCategorias.ColumnHeadersHeight = 35;
             dgvCategorias.MultiSelect = false;
             dgvCategorias.ReadOnly = true;
             dgvCategorias.AllowUserToResizeColumns = false;
-            dgvCategorias.EnableHeadersVisualStyles = false;
-            dgvCategorias.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvCategorias.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvCategorias.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvCategorias.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvCategorias.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvCategorias.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
             if (dgvCategorias.Columns["Id"] != null) dgvCategorias.Columns["Id"].Visible = false;
             if (dgvCategorias.Columns["Nombre"] != null) { dgvCategorias.Columns["Nombre"].HeaderText = "Nombre de categoría"; dgvCategorias.Columns["Nombre"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; }
             if (dgvCategorias.Columns["Recortable"] != null) { dgvCategorias.Columns["Recortable"].HeaderText = "Recortable"; dgvCategorias.Columns["Recortable"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill; dgvCategorias.Columns["Recortable"].FillWeight = 25; }
+            GestionUi.AjustarColumnas(dgvCategorias);
         }
         private void LimpiarSeleccion()
         {

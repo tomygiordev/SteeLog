@@ -12,6 +12,7 @@ using SteeLog.CompositionRoot;
 using SteeLog.Modelos;
 using EstadosOrden = SteeLog.Domain.OrdenesCompra.EstadosOrden;
 using SteeLog.Servicios;
+using SteeLog.UI;
 
 namespace SteeLog.Vistas.Movimientos.Ordenes
 {
@@ -98,7 +99,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             _idOrdenEdicion = 0;
             _estadoOrdenEdicion = EstadosOrden.Pendiente;
             lblTitulo.Text = "Nueva Orden de Compra";
-            btnGuardar.Text = "Guardar Orden";
+            btnGuardar.Text = "Guardar orden";
             if (txtEstado != null)
                 txtEstado.Text = EstadosOrden.Pendiente;
             dtpFecha.Value = DateTime.Now;
@@ -134,37 +135,35 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             SuspendLayout();
             BackColor = OrdenesUi.FondoForm;
 
-            var scroll = new Panel();
-            scroll.Dock = DockStyle.Fill;
-            scroll.AutoScroll = true;
-            scroll.BackColor = OrdenesUi.FondoForm;
-
-            var root = new FlowLayoutPanel();
-            root.Dock = DockStyle.Top;
-            root.FlowDirection = FlowDirection.TopDown;
-            root.WrapContents = false;
-            root.AutoSize = true;
-            root.Padding = new Padding(18, 18, 18, 24);
+            var root = new TableLayoutPanel();
+            root.Dock = DockStyle.Fill;
+            root.ColumnCount = 1;
+            root.RowCount = 5;
+            root.Margin = new Padding(0);
+            root.Padding = new Padding(0, 8, 0, 4);
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 292F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 112F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58F));
 
             var header = new Panel();
-            header.Width = 1020;
-            header.Height = 58;
-            header.Margin = new Padding(0, 0, 0, 10);
+            header.Dock = DockStyle.Fill;
+            header.Margin = new Padding(28, 0, 28, 0);
 
             lblTitulo = new Label();
             lblTitulo.Text = "Nueva Orden de Compra";
-            lblTitulo.Font = new Font("Bahnschrift SemiBold", 17F, FontStyle.Bold);
-            lblTitulo.ForeColor = Color.White;
+            lblTitulo.Font = Tema.Fuente(12f, true);
+            lblTitulo.ForeColor = Tema.Texto;
             lblTitulo.Dock = DockStyle.Fill;
             lblTitulo.TextAlign = ContentAlignment.MiddleLeft;
             header.Controls.Add(lblTitulo);
 
             var cardCabecera = new Panel();
             cardCabecera.BackColor = OrdenesUi.FondoPanel;
-            cardCabecera.Width = 1020;
-            cardCabecera.Height = 300;
-            cardCabecera.Padding = new Padding(18);
-            cardCabecera.Margin = new Padding(0, 0, 0, 10);
+            cardCabecera.Dock = DockStyle.Fill;
+            cardCabecera.Padding = new Padding(18, 14, 18, 14);
+            cardCabecera.Margin = new Padding(28, 0, 28, 10);
 
             var tlCabecera = new TableLayoutPanel();
             tlCabecera.Dock = DockStyle.Fill;
@@ -188,20 +187,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             cmbProveedor = OrdenesUi.CrearCombo();
             txtBuscadorMaterial = OrdenesUi.CrearTextBox();
             dtpFecha = new Guna2DateTimePicker();
-            dtpFecha.FillColor = OrdenesUi.FondoInput;
-            dtpFecha.BorderColor = OrdenesUi.Borde;
             dtpFecha.Checked = true;
             dtpFecha.Format = DateTimePickerFormat.Short;
-            dtpFecha.Font = new Font("Segoe UI", 10.5F);
-            dtpFecha.ForeColor = Color.White;
             dtpFecha.Dock = DockStyle.Top;
-            dtpFecha.Height = 36;
+            dtpFecha.Height = Tema.AltoControl;
+            Tema.Fecha(dtpFecha);
 
             txtCostoFlete.TextAlign = HorizontalAlignment.Right;
             txtCostoFlete.PlaceholderText = "0,00";
             txtObservaciones.PlaceholderText = "Observaciones generales de la orden";
-            txtObservaciones.ScrollBars = ScrollBars.Vertical;
-            txtObservaciones.Height = 96;
+            txtObservaciones.ScrollBars = ScrollBars.None;
+            txtObservaciones.Height = 80;
             txtNroOrden.PlaceholderText = "Ej. OC-1024";
             txtNroRemito.PlaceholderText = "Opcional";
             cmbProveedor.AutoCompleteSource = AutoCompleteSource.ListItems;
@@ -219,31 +215,37 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             var cardDetalle = new Panel();
             cardDetalle.BackColor = OrdenesUi.FondoPanel;
-            cardDetalle.Width = 1020;
-            cardDetalle.Height = 114;
-            cardDetalle.Padding = new Padding(18);
-            cardDetalle.Margin = new Padding(0, 0, 0, 10);
+            cardDetalle.Dock = DockStyle.Fill;
+            cardDetalle.Padding = new Padding(18, 12, 18, 12);
+            cardDetalle.Margin = new Padding(28, 0, 28, 10);
 
             var tlDetalle = new TableLayoutPanel();
             tlDetalle.Dock = DockStyle.Fill;
             tlDetalle.ColumnCount = 4;
             tlDetalle.RowCount = 2;
-            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 56F));
-            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 115F));
-            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 24F));
+            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
+            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 130F));
+            tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));
             tlDetalle.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 170F));
             tlDetalle.RowStyles.Add(new RowStyle(SizeType.Absolute, 28F));
-            tlDetalle.RowStyles.Add(new RowStyle(SizeType.Absolute, 42F));
+            tlDetalle.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+            txtBuscadorMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtBuscadorMaterial.Margin = new Padding(0, 0, 10, 0);
             cardDetalle.Controls.Add(tlDetalle);
 
             txtCantidad = OrdenesUi.CrearTextBox();
             txtCantidad.PlaceholderText = "0";
             txtCantidad.TextAlign = HorizontalAlignment.Right;
+            txtCantidad.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtCantidad.Margin = new Padding(0, 0, 10, 0);
             txtObservacionItem = OrdenesUi.CrearTextBox();
             txtObservacionItem.PlaceholderText = "Observación opcional por material";
+            txtObservacionItem.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtObservacionItem.Margin = new Padding(0, 0, 10, 0);
 
-            btnAgregar = OrdenesUi.CrearBoton("Agregar Material", true);
-            btnAgregar.Dock = DockStyle.Fill;
+            btnAgregar = OrdenesUi.CrearBoton("Agregar material", true);
+            btnAgregar.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            btnAgregar.Margin = new Padding(0);
             btnAgregar.Click += BtnAgregar_Click;
 
             tlDetalle.Controls.Add(OrdenesUi.CrearLabel("Material"), 0, 0);
@@ -257,10 +259,9 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             var cardGrid = new Panel();
             cardGrid.BackColor = OrdenesUi.FondoPanel;
-            cardGrid.Width = 1020;
-            cardGrid.Height = 340;
+            cardGrid.Dock = DockStyle.Fill;
             cardGrid.Padding = new Padding(18);
-            cardGrid.Margin = new Padding(0, 0, 0, 10);
+            cardGrid.Margin = new Padding(28, 0, 28, 10);
 
             dgvDetalles = new Guna2DataGridView();
             dgvDetalles.Dock = DockStyle.Fill;
@@ -303,7 +304,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 HeaderText = "",
                 Text = "Cambiar",
                 UseColumnTextForButtonValue = true,
-                FillWeight = 12
+                FillWeight = 12,
+                Tag = Variante.Secundario
             });
             dgvDetalles.Columns.Add(new DataGridViewButtonColumn
             {
@@ -311,33 +313,35 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 HeaderText = "",
                 Text = "Quitar",
                 UseColumnTextForButtonValue = true,
-                FillWeight = 12
+                FillWeight = 12,
+                Tag = Variante.Peligro
             });
             cardGrid.Controls.Add(dgvDetalles);
 
             var footer = new Panel();
-            footer.Width = 1020;
-            footer.Height = 46;
-            footer.Margin = new Padding(0);
+            footer.Dock = DockStyle.Fill;
+            footer.Margin = new Padding(28, 0, 28, 0);
 
             btnLimpiar = OrdenesUi.CrearBoton("Limpiar");
-            btnLimpiar.Location = new Point(0, 5);
+            btnLimpiar.Location = new Point(0, 8);
             btnLimpiar.Click += (s, e) => PrepararNuevaOrden();
 
-            btnGuardar = OrdenesUi.CrearBoton("Guardar Orden", true);
-            btnGuardar.Location = new Point(840, 5);
+            btnGuardar = OrdenesUi.CrearBoton("Guardar orden", true);
+            btnGuardar.Height = Tema.AltoBotonPrincipal;
+            btnGuardar.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnGuardar.Location = new Point(footer.Width - btnGuardar.Width, 6);
             btnGuardar.Click += BtnGuardar_Click;
+            footer.Resize += (s, e) => btnGuardar.Left = footer.Width - btnGuardar.Width;
 
             footer.Controls.Add(btnLimpiar);
             footer.Controls.Add(btnGuardar);
 
-            root.Controls.Add(header);
-            root.Controls.Add(cardCabecera);
-            root.Controls.Add(cardDetalle);
-            root.Controls.Add(cardGrid);
-            root.Controls.Add(footer);
-            scroll.Controls.Add(root);
-            Controls.Add(scroll);
+            root.Controls.Add(header, 0, 0);
+            root.Controls.Add(cardCabecera, 0, 1);
+            root.Controls.Add(cardDetalle, 0, 2);
+            root.Controls.Add(cardGrid, 0, 3);
+            root.Controls.Add(footer, 0, 4);
+            Controls.Add(root);
 
             CrearPanelResultados();
             ConfigurarBusquedaMaterial();
@@ -397,9 +401,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 var materiales = await _presenter.MaterialesAsync();
                 if (IsDisposed || Disposing || !materiales.Exitoso) return;
                 var seleccionado = cmbProveedor.SelectedValue;
-                cmbProveedor.DataSource = proveedores.Valor.Select(OrdenesMapeo.Proveedor).ToList();
-                cmbProveedor.DisplayMember = "nombre";
-                cmbProveedor.ValueMember = "id";
+                UiVista.AsignarDatos(cmbProveedor, proveedores.Valor.Select(OrdenesMapeo.Proveedor).ToList(), "nombre", "id");
                 if (seleccionado != null) cmbProveedor.SelectedValue = seleccionado; else cmbProveedor.SelectedIndex = -1;
                 _materiales = materiales.Valor.Select(OrdenesMapeo.Material).ToList();
             }
@@ -410,9 +412,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         {
             var proveedores = await _presenter.ProveedoresAsync();
             if (IsDisposed || Disposing || !proveedores.Exitoso) return false;
-            cmbProveedor.DataSource = proveedores.Valor.Select(OrdenesMapeo.Proveedor).ToList();
-            cmbProveedor.DisplayMember = "nombre";
-            cmbProveedor.ValueMember = "id";
+            UiVista.AsignarDatos(cmbProveedor, proveedores.Valor.Select(OrdenesMapeo.Proveedor).ToList(), "nombre", "id");
             cmbProveedor.SelectedIndex = -1;
 
             var materiales = await _presenter.MaterialesAsync();
@@ -509,7 +509,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                       nuevoMaterial.nombre
                     : "La línea todavía no tiene cantidades recibidas. Solo se cambiará el material de la orden.";
 
-                var confirmar = MessageBox.Show(
+                var confirmar = Dialogo.Mostrar(this,
                     impacto + "\n\n¿Está seguro de corregir este material?",
                     "Cambiar material de orden",
                     MessageBoxButtons.YesNo,
@@ -656,7 +656,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 bool detalleEditable = EstadosOrden.EsEditable(orden.estado);
 
                 lblTitulo.Text = detalleEditable ? "Editar Orden de Compra" : "Editar Cabecera de Orden";
-                btnGuardar.Text = detalleEditable ? "Actualizar Orden" : "Actualizar Cabecera";
+                btnGuardar.Text = detalleEditable ? "Actualizar orden" : "Actualizar cabecera";
                 if (txtEstado != null)
                     txtEstado.Text = orden.estado;
                 dtpFecha.Value = orden.fecha;
@@ -741,7 +741,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             _panelResultados = new Panel
             {
                 Size = new Size(516, 0),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = Tema.Superficie,
                 Visible = false,
                 AutoScroll = true
             };
@@ -857,7 +857,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                     InfoMostrar = SessionManager.DebeOcultarCantidadesStockMateriales
                         ? $"Material • {SessionManager.ObtenerEstadoStockMaterial(m.stockActual)}"
                         : $"Material • Stock: {m.stockActual:N0}",
-                    ColorAcento = Color.FromArgb(39, 174, 96),
+                    ColorAcento = Tema.Acento,
                     Icono = "📦"
                 })
                 .ToList();
@@ -884,8 +884,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 var lblNoResults = new Label
                 {
                     Text = mensaje,
-                    Font = new Font("Bahnschrift Light", 10f),
-                    ForeColor = Color.FromArgb(120, 120, 120),
+                    Font = Tema.FuenteTexto,
+                    ForeColor = Tema.TextoApagado,
                     Size = new Size(panelWidth, 45),
                     TextAlign = ContentAlignment.MiddleCenter,
                     BackColor = Color.Transparent,
@@ -920,7 +920,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var panel = new Panel
             {
                 Size = new Size(panelWidth - 20, 48),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = Tema.Superficie,
                 Dock = DockStyle.Top,
                 Cursor = Cursors.Hand,
                 Padding = new Padding(10, 0, 10, 0),
@@ -937,7 +937,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var lblIcon = new Label
             {
                 Text = item.Icono,
-                Font = new Font("Segoe UI", 14f),
+                Font = new Font("Segoe UI Emoji", 13f),
                 Size = new Size(35, 48),
                 Location = new Point(15, 0),
                 TextAlign = ContentAlignment.MiddleCenter,
@@ -947,8 +947,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var lblName = new Label
             {
                 Text = item.NombreMostrar,
-                Font = new Font("Bahnschrift", 11f),
-                ForeColor = Color.FromArgb(220, 220, 220),
+                Font = Tema.FuenteTexto,
+                ForeColor = Tema.Texto,
                 Size = new Size(panelWidth - 95, 28),
                 Location = new Point(55, 3),
                 TextAlign = ContentAlignment.BottomLeft,
@@ -959,7 +959,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var lblType = new Label
             {
                 Text = item.InfoMostrar,
-                Font = new Font("Bahnschrift Light", 8.5f),
+                Font = Tema.Fuente(9f),
                 ForeColor = item.ColorAcento,
                 Size = new Size(panelWidth - 95, 18),
                 Location = new Point(55, 28),
@@ -984,8 +984,8 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             foreach (var ctrl in new Control[] { panel, lblIcon, lblName, lblType, accentBar })
             {
-                ctrl.MouseEnter += (s, e) => panel.BackColor = Color.FromArgb(35, 45, 40);
-                ctrl.MouseLeave += (s, e) => panel.BackColor = Color.FromArgb(25, 30, 28);
+                ctrl.MouseEnter += (s, e) => panel.BackColor = Tema.Seleccion;
+                ctrl.MouseLeave += (s, e) => panel.BackColor = Tema.Superficie;
                 ctrl.Click += (s, e) => SeleccionarMaterial(item);
             }
 
@@ -1032,7 +1032,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 MinimizeBox = false;
                 ClientSize = new Size(560, 170);
                 BackColor = OrdenesUi.FondoForm;
-                Padding = new Padding(18);
+                Padding = new Padding(0);
 
                 var lbl = OrdenesUi.CrearLabel("Material correcto");
                 lbl.Location = new Point(18, 18);
@@ -1044,9 +1044,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 cmbMateriales.Size = new Size(524, 36);
                 cmbMateriales.AutoCompleteSource = AutoCompleteSource.ListItems;
                 cmbMateriales.AutoCompleteMode = AutoCompleteMode.SuggestAppend;
-                cmbMateriales.DataSource = materiales == null ? new List<Material>() : materiales.ToList();
-                cmbMateriales.DisplayMember = "nombre";
-                cmbMateriales.ValueMember = "id";
+                UiVista.AsignarDatos(cmbMateriales, materiales == null ? new List<Material>() : materiales.ToList(), "nombre", "id");
                 cmbMateriales.SelectedValue = idMaterialActual;
                 Controls.Add(cmbMateriales);
 
@@ -1064,6 +1062,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
                 AcceptButton = btnAceptar;
                 CancelButton = btnCancelar;
+                Tema.ChromeModal(this, "Cambiar material");
             }
 
             private void BtnAceptar_Click(object sender, EventArgs e)

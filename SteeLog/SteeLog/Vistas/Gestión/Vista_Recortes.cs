@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using SteeLog.UI;
 using System.Data;
 using System.Drawing;
 using System.Globalization;
@@ -24,6 +25,9 @@ namespace SteeLog.Vistas
         public Vista_Recortes()
         {
             InitializeComponent();
+            GestionUi.Abm(this, panelAntiParpadeo1, label1, new[] { panelAntiParpadeo2, panelAntiParpadeo3 }, btnGuardar, btnEliminar);
+            GestionUi.Subtitulo(panelAntiParpadeo4, label7);
+            guna2Panel1.Dock = DockStyle.Fill;
             CargarEstadosRecorte();
             Shown += (s, e) => { CargarCategoriasRecortables(); CargarRecortes(); };
             FormClosed += (s, e) => _cierre.Cancel();
@@ -175,31 +179,12 @@ namespace SteeLog.Vistas
 
         private void ConfigurarGrid()
         {
-            dgvRecortes.EnableHeadersVisualStyles = false;
             dgvRecortes.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvRecortes.MultiSelect = false;
             dgvRecortes.ReadOnly = true;
-            dgvRecortes.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvRecortes.ColumnHeadersHeight = 35;
             dgvRecortes.RowHeadersVisible = false;
             dgvRecortes.AllowUserToResizeColumns = false;
             dgvRecortes.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-
-            dgvRecortes.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvRecortes.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvRecortes.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvRecortes.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvRecortes.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-
-            dgvRecortes.BackgroundColor = Color.FromArgb(20, 30, 25);
-            dgvRecortes.DefaultCellStyle.BackColor = Color.FromArgb(28, 40, 32);
-            dgvRecortes.DefaultCellStyle.ForeColor = Color.White;
-            dgvRecortes.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 90, 60);
-            dgvRecortes.DefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgvRecortes.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(35, 50, 40);
-            dgvRecortes.AlternatingRowsDefaultCellStyle.ForeColor = Color.White;
-            dgvRecortes.AlternatingRowsDefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 90, 60);
 
             if (dgvRecortes.Columns["id"] != null) dgvRecortes.Columns["id"].Visible = false;
             if (dgvRecortes.Columns["id_material"] != null) dgvRecortes.Columns["id_material"].Visible = false;
@@ -251,6 +236,7 @@ namespace SteeLog.Vistas
                 dgvRecortes.Columns["estado"].AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill;
                 dgvRecortes.Columns["estado"].FillWeight = 16;
             }
+            GestionUi.AjustarColumnas(dgvRecortes);
         }
 
         private void TxtDimension_KeyPress(object sender, KeyPressEventArgs e)
@@ -302,7 +288,7 @@ namespace SteeLog.Vistas
                 altura = 0;
             }
 
-            if (MessageBox.Show("¿Guardar este recorte?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!GestionUi.Confirmar("¿Guardar este recorte?", "Confirmar", MessageBoxIcon.Question)) return;
 
             if (_guardando) return;
             _guardando = true;
@@ -338,7 +324,7 @@ namespace SteeLog.Vistas
 
             var recorte = (Recorte)dgvRecortes.SelectedRows[0].DataBoundItem;
             int id = recorte.id;
-            if (MessageBox.Show("¿Seguro que desea eliminar este recorte?", "Confirmar", MessageBoxButtons.YesNo) == DialogResult.Yes)
+            if (GestionUi.Confirmar("¿Seguro que desea eliminar este recorte?", "Confirmar", MessageBoxIcon.Warning))
             {
                 if (_guardando) return;
                 _guardando = true; ActualizarBotonEliminar();

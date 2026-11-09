@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
@@ -67,6 +68,7 @@ namespace SteeLog.Vistas
             txtPrecio.KeyPress += TxtPrecio_KeyPress;
             txtFiltroPrecio.KeyPress += TxtPrecio_KeyPress;
             lblListado.Visible = false;
+            AplicarEstiloGestion();
             CargarFiltroPagado();
             LimpiarFotosUI();
             UbicarPanelFotosJuntoACarga();
@@ -210,32 +212,13 @@ namespace SteeLog.Vistas
 
         private void ConfigurarGrid()
         {
-            dgvCanaletas.EnableHeadersVisualStyles = false;
             dgvCanaletas.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvCanaletas.MultiSelect = false;
             dgvCanaletas.ReadOnly = true;
-            dgvCanaletas.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvCanaletas.ColumnHeadersHeight = 32;
             dgvCanaletas.RowHeadersVisible = false;
             dgvCanaletas.AllowUserToResizeColumns = false;
             dgvCanaletas.AllowUserToResizeRows = false;
             dgvCanaletas.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.None;
-
-            dgvCanaletas.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-            dgvCanaletas.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvCanaletas.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-            dgvCanaletas.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvCanaletas.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-
-            dgvCanaletas.BackgroundColor = Color.FromArgb(20, 30, 25);
-            dgvCanaletas.DefaultCellStyle.BackColor = Color.FromArgb(28, 40, 32);
-            dgvCanaletas.DefaultCellStyle.ForeColor = Color.White;
-            dgvCanaletas.DefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 90, 60);
-            dgvCanaletas.DefaultCellStyle.SelectionForeColor = Color.White;
-
-            dgvCanaletas.AlternatingRowsDefaultCellStyle.BackColor = Color.FromArgb(35, 50, 40);
-            dgvCanaletas.AlternatingRowsDefaultCellStyle.ForeColor = Color.White;
-            dgvCanaletas.AlternatingRowsDefaultCellStyle.SelectionBackColor = Color.FromArgb(50, 90, 60);
 
             if (dgvCanaletas.Columns["id"] != null) dgvCanaletas.Columns["id"].Visible = false;
             if (dgvCanaletas.Columns["id_obra"] != null) dgvCanaletas.Columns["id_obra"].Visible = false;
@@ -263,12 +246,12 @@ namespace SteeLog.Vistas
             }
             if (dgvCanaletas.Columns["pagado"] != null)
             {
-                dgvCanaletas.Columns["pagado"].HeaderText = "Pag.";
+                dgvCanaletas.Columns["pagado"].HeaderText = "Pagado";
                 dgvCanaletas.Columns["pagado"].AutoSizeMode = DataGridViewAutoSizeColumnMode.None;
-                dgvCanaletas.Columns["pagado"].Width = 58;
-                dgvCanaletas.Columns["pagado"].MinimumWidth = 58;
-                dgvCanaletas.Columns["pagado"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
+                dgvCanaletas.Columns["pagado"].Width = 96;
+                dgvCanaletas.Columns["pagado"].MinimumWidth = 96;
             }
+            GestionUi.AjustarColumnas(dgvCanaletas);
         }
 
         private void Vista_CanaletasPlegados_Resize(object sender, EventArgs e)
@@ -338,6 +321,48 @@ namespace SteeLog.Vistas
             panelFotos.ResumeLayout();
         }
 
+        /// <summary>Estilo común de Gestión: banda, formulario, filtros, bloque de fotos y grilla.</summary>
+        private void AplicarEstiloGestion()
+        {
+            GestionUi.Abm(this, panelAntiParpadeo1, label1, new[] { panelAntiParpadeo2 }, btnGuardar, btnEliminar);
+            // Formulario (2 filas): columnas de campos cortos con ancho propio.
+            panelAntiParpadeo2.ColumnStyles[3].Width = 120;
+            panelAntiParpadeo2.ColumnStyles[4].Width = 150;
+            chkPagado.Anchor = AnchorStyles.Left;
+            chkPagado.Margin = new Padding(16, 0, 0, 0);
+            chkPagado.Text = "Pagado";
+            // Filtros
+            var f = panelAntiParpadeo3;
+            GestionUi.FormularioFila(f, 8, 8, false);
+            f.RowStyles[0].Height = 28;
+            f.Height = 28 + 2 * (SteeLog.UI.Tema.AltoControl + 12) + 16;
+            f.ColumnStyles[3].Width = 120;
+            f.ColumnStyles[5].Width = 150;
+            f.ColumnStyles[6].Width = 0; // columna del rótulo oculto "LISTADO"
+            lblSubtituloFiltro.Font = SteeLog.UI.Tema.FuenteSubtitulo;
+            lblSubtituloFiltro.ForeColor = SteeLog.UI.Tema.TextoSecundario;
+            lblSubtituloFiltro.Padding = Padding.Empty;
+            lblSubtituloFiltro.Text = lblSubtituloFiltro.Text.ToUpper(System.Globalization.CultureInfo.CurrentCulture);
+            Tema.Boton(btnLimpiar, SteeLog.UI.Variante.Secundario);
+            // Fotos
+            panelFotos.BackColor = SteeLog.UI.Tema.Superficie;
+            lblFotosTitulo.Font = SteeLog.UI.Tema.FuenteSubtitulo;
+            lblFotosTitulo.ForeColor = SteeLog.UI.Tema.TextoSecundario;
+            lblContadorFotos.Font = SteeLog.UI.Tema.Fuente(10.5f);
+            lblContadorFotos.ForeColor = SteeLog.UI.Tema.TextoApagado;
+            lstFotos.BackColor = SteeLog.UI.Tema.FondoInput;
+            lstFotos.ForeColor = SteeLog.UI.Tema.Texto;
+            lstFotos.BorderStyle = BorderStyle.None;
+            lstFotos.Font = SteeLog.UI.Tema.Fuente(10.5f);
+            picPreview.BackColor = SteeLog.UI.Tema.FondoInput;
+            picPreview.BorderStyle = BorderStyle.None;
+            panelFotosBotones.BackColor = SteeLog.UI.Tema.Superficie;
+            Tema.Boton(btnAgregarFoto, SteeLog.UI.Variante.Secundario);
+            Tema.Boton(btnQuitarFoto, SteeLog.UI.Variante.Peligro);
+            btnAgregarFoto.Height = SteeLog.UI.Tema.AltoControl; btnQuitarFoto.Height = SteeLog.UI.Tema.AltoControl;
+            guna2Panel1.BackColor = SteeLog.UI.Tema.Fondo;
+        }
+
         private void UbicarPanelFotosJuntoACarga()
         {
             Controls.SetChildIndex(guna2Panel1, 0);
@@ -386,7 +411,6 @@ namespace SteeLog.Vistas
             }
 
             btnGuardar.Text = "Actualizar";
-            btnGuardar.FillColor = Color.FromArgb(33, 150, 243);
             btnEliminar.Enabled = true;
 
             await CargarFotosExistenteAsync(id);
@@ -436,7 +460,7 @@ namespace SteeLog.Vistas
             string descripcion = txtDescripcion.Text.Trim();
             if (string.IsNullOrWhiteSpace(descripcion)) { ToastNotification.ShowWarning("Ingrese una descripción."); return; }
             if (!decimal.TryParse(txtPrecio.Text.Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal precio) || precio < 0) { ToastNotification.ShowWarning("Ingrese un precio válido (mayor o igual a 0)."); return; }
-            if (MessageBox.Show(_idSeleccionado < 0 ? "¿Registrar este trabajo?" : "¿Actualizar este trabajo?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
+            if (!GestionUi.Confirmar(_idSeleccionado < 0 ? "¿Registrar este trabajo?" : "¿Actualizar este trabajo?", "Confirmar", MessageBoxIcon.Question)) return;
             await GuardarCoreAsync(obra.id, descripcion, precio, chkPagado.Checked);
         }
 
@@ -509,7 +533,7 @@ namespace SteeLog.Vistas
         private async void btnEliminar_Click(object sender, EventArgs e)
         {
             if (_inicializando || _cargandoFotos || _guardando || _errorFotos || _idSeleccionado < 0) return;
-            if (MessageBox.Show("¿Eliminar este registro?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+            if (!GestionUi.Confirmar("¿Eliminar este registro?", "Confirmar", MessageBoxIcon.Warning)) return;
             await EliminarCoreAsync();
         }
 
@@ -541,7 +565,6 @@ namespace SteeLog.Vistas
             if (cmbObra.Items.Count > 0)
                 cmbObra.SelectedIndex = 0;
             btnGuardar.Text = "Guardar";
-            btnGuardar.FillColor = Color.FromArgb(39, 174, 96);
             btnEliminar.Enabled = false;
             dgvCanaletas.ClearSelection();
             LimpiarFotosUI();
@@ -552,7 +575,6 @@ namespace SteeLog.Vistas
         {
             _idSeleccionado = id;
             btnGuardar.Text = "Actualizar";
-            btnGuardar.FillColor = Color.FromArgb(33, 150, 243);
             btnEliminar.Enabled = true;
         }
 
@@ -715,7 +737,7 @@ namespace SteeLog.Vistas
             if (item == null)
                 return;
 
-            if (MessageBox.Show("¿Quitar esta foto?", "Confirmar", MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes)
+            if (!GestionUi.Confirmar("¿Quitar esta foto?", "Confirmar", MessageBoxIcon.Question))
                 return;
 
             if (item.EsPendiente)

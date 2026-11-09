@@ -1,4 +1,5 @@
 using Guna.UI2.WinForms;
+using SteeLog.UI;
 using System;
 using System.ComponentModel;
 using System.Drawing;
@@ -92,18 +93,21 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             root.Dock = DockStyle.Fill;
             root.RowCount = 4;
             root.ColumnCount = 1;
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 70F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 190F));
+            root.Margin = new Padding(0);
+            root.Padding = new Padding(0, 8, 0, 0);
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 44F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 200F));
             root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
-            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 90F));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 68F));
 
             var header = new Panel();
             header.Dock = DockStyle.Fill;
-            header.Padding = new Padding(18, 18, 18, 6);
+            header.Margin = new Padding(28, 0, 28, 0);
             lblTitulo = new Label();
             lblTitulo.Text = "Revisión de Orden";
-            lblTitulo.Font = new Font("Bahnschrift SemiBold", 17F, FontStyle.Bold);
-            lblTitulo.ForeColor = Color.White;
+            lblTitulo.Font = Tema.Fuente(12f, true);
+            lblTitulo.ForeColor = Tema.Texto;
+            lblTitulo.TextAlign = ContentAlignment.MiddleLeft;
             lblTitulo.Dock = DockStyle.Fill;
             lblTitulo.AutoEllipsis = true;
             header.Controls.Add(lblTitulo);
@@ -111,16 +115,17 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             var resumenCard = new Panel();
             resumenCard.Dock = DockStyle.Fill;
             resumenCard.Padding = new Padding(18, 10, 18, 10);
+            resumenCard.Margin = new Padding(28, 0, 28, 10);
             resumenCard.BackColor = OrdenesUi.FondoPanel;
             lblResumen = new Label();
-            lblResumen.ForeColor = Color.White;
-            lblResumen.Font = new Font("Bahnschrift Light", 10.75F);
+            lblResumen.ForeColor = Tema.Texto;
+            lblResumen.Font = Tema.FuenteTexto;
             lblResumen.Dock = DockStyle.Top;
             lblResumen.Height = 38;
 
             lblAyuda = new Label();
             lblAyuda.ForeColor = OrdenesUi.TextoMuted;
-            lblAyuda.Font = new Font("Bahnschrift Light", 9.75F);
+            lblAyuda.Font = Tema.FuenteTexto;
             lblAyuda.Dock = DockStyle.Top;
             lblAyuda.Height = 20;
             lblAyuda.Text = "Carga rápida: escribí la cantidad a sumar, Enter y seguís con el próximo material.";
@@ -130,15 +135,15 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             panelCargaRapida.Height = 50;
 
             lblMaterialActual = new Label();
-            lblMaterialActual.ForeColor = Color.White;
-            lblMaterialActual.Font = new Font("Bahnschrift SemiBold", 10.5F, FontStyle.Bold);
+            lblMaterialActual.ForeColor = Tema.Texto;
+            lblMaterialActual.Font = Tema.FuenteSubtitulo;
             lblMaterialActual.Location = new Point(0, 4);
             lblMaterialActual.Size = new Size(420, 22);
             lblMaterialActual.Text = "Material actual: -";
 
             lblPendienteActual = new Label();
             lblPendienteActual.ForeColor = OrdenesUi.TextoMuted;
-            lblPendienteActual.Font = new Font("Bahnschrift Light", 9.75F);
+            lblPendienteActual.Font = Tema.FuenteTexto;
             lblPendienteActual.Location = new Point(0, 28);
             lblPendienteActual.Size = new Size(220, 20);
             lblPendienteActual.Text = "Pendiente: -";
@@ -151,12 +156,12 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             txtCantidadRapida.KeyPress += TxtCantidadRapida_KeyPress;
             txtCantidadRapida.KeyDown += TxtCantidadRapida_KeyDown;
 
-            btnAplicarSiguiente = OrdenesUi.CrearBoton("Aplicar y Siguiente", true);
+            btnAplicarSiguiente = OrdenesUi.CrearBoton("Aplicar y siguiente", true);
             btnAplicarSiguiente.Location = new Point(554, 8);
             btnAplicarSiguiente.Size = new Size(180, 36);
             btnAplicarSiguiente.Click += BtnAplicarSiguiente_Click;
 
-            btnCompletarActual = OrdenesUi.CrearBoton("Completar Actual");
+            btnCompletarActual = OrdenesUi.CrearBoton("Completar actual");
             btnCompletarActual.Location = new Point(746, 8);
             btnCompletarActual.Size = new Size(170, 36);
             btnCompletarActual.Click += BtnCompletarActual_Click;
@@ -179,6 +184,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             dgvDetalles = new Guna2DataGridView();
             dgvDetalles.Dock = DockStyle.Fill;
+            dgvDetalles.Margin = new Padding(28, 0, 28, 10);
             dgvDetalles.AutoGenerateColumns = false;
             dgvDetalles.DataSource = _detalles;
             dgvDetalles.EditMode = DataGridViewEditMode.EditOnEnter;
@@ -258,26 +264,30 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 HeaderText = "",
                 Text = "Completar",
                 UseColumnTextForButtonValue = true,
-                FillWeight = 12
+                FillWeight = 12,
+                Tag = Variante.Secundario
             });
 
             var footer = new Panel();
             footer.Dock = DockStyle.Fill;
-            footer.Padding = new Padding(18);
+            footer.Margin = new Padding(28, 0, 28, 0);
 
             btnCancelar = OrdenesUi.CrearBoton("Cancelar");
-            btnCancelar.Location = new Point(18, 18);
+            btnCancelar.Location = new Point(0, 10);
             btnCancelar.Click += BtnCancelar_Click;
             footer.Controls.Add(btnCancelar);
 
-            btnCompletarTodo = OrdenesUi.CrearBoton("Completar Todo");
-            btnCompletarTodo.Location = new Point(214, 18);
+            btnCompletarTodo = OrdenesUi.CrearBoton("Completar todo");
+            btnCompletarTodo.Location = new Point(192, 10);
             btnCompletarTodo.Click += BtnCompletarTodo_Click;
             footer.Controls.Add(btnCompletarTodo);
 
-            btnConfirmar = OrdenesUi.CrearBoton("Confirmar Recepción", true);
-            btnConfirmar.Location = new Point(820, 18);
+            btnConfirmar = OrdenesUi.CrearBoton("Confirmar recepción", true);
+            btnConfirmar.Height = Tema.AltoBotonPrincipal;
+            btnConfirmar.Anchor = AnchorStyles.Top | AnchorStyles.Right;
+            btnConfirmar.Location = new Point(footer.Width - btnConfirmar.Width, 8);
             btnConfirmar.Click += BtnConfirmar_Click;
+            footer.Resize += (s, e) => btnConfirmar.Left = footer.Width - btnConfirmar.Width;
             footer.Controls.Add(btnConfirmar);
 
             root.Controls.Add(header, 0, 0);
@@ -515,13 +525,13 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
 
             if (detalle.cantidad_faltante == 0)
             {
-                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Color.FromArgb(148, 214, 178);
-                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.SelectionForeColor = Color.FromArgb(148, 214, 178);
+                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Tema.AcentoHover;
+                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.SelectionForeColor = Tema.AcentoHover;
             }
             else
             {
-                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Color.FromArgb(243, 196, 104);
-                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.SelectionForeColor = Color.FromArgb(243, 196, 104);
+                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.ForeColor = Tema.Advertencia;
+                dgvDetalles.Rows[e.RowIndex].DefaultCellStyle.SelectionForeColor = Tema.Advertencia;
             }
         }
 
@@ -678,7 +688,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
             mensaje.AppendLine();
             mensaje.AppendLine("¿Está seguro de confirmar esta recepción?");
 
-            return MessageBox.Show(
+            return Dialogo.Mostrar(this,
                 mensaje.ToString(),
                 "Confirmar recepción",
                 MessageBoxButtons.YesNo,

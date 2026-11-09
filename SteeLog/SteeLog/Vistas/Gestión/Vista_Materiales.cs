@@ -1,4 +1,5 @@
 using System;
+using SteeLog.UI;
 
 using System.Collections.Generic;
 
@@ -44,7 +45,7 @@ namespace SteeLog.Vistas
         private int _versionCategorias;
         internal Action<string> AvisarAdvertencia = mensaje => ToastNotification.ShowWarning(mensaje);
         internal Action<string> AvisarError = mensaje => ToastNotification.ShowError(mensaje);
-        internal Func<string, string, MessageBoxIcon, bool> Confirmar = (mensaje, titulo, icono) => MessageBox.Show(mensaje, titulo, MessageBoxButtons.YesNo, icono) == DialogResult.Yes;
+        internal Func<string, string, MessageBoxIcon, bool> Confirmar = (mensaje, titulo, icono) => GestionUi.Confirmar(mensaje, titulo, icono);
         int idMaterialSeleccionado = -1;
 
         private decimal stockOriginalSeleccionado = 0;
@@ -61,6 +62,9 @@ namespace SteeLog.Vistas
 
             _presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             InitializeComponent();
+            GestionUi.Abm(this, panelAntiParpadeo1, label1, new[] { panelAntiParpadeo8 }, guna2Button1, eliminarMaterialBoton);
+            GestionUi.FormularioFila(panelAntiParpadeo8, 16, 4);
+            FormularioMateriales();
             nombreMaterial.MaxLength = SteeLog.Domain.Inventario.Material.MaxNombre;
 
             this.Load += Vista_Materiales_Load;
@@ -75,6 +79,24 @@ namespace SteeLog.Vistas
             FormClosed += (s, e) => _cierre.Cancel();
             Disposed += (s, e) => _cierre.Cancel();
 
+        }
+
+        /// <summary>Ajustes propios del formulario de materiales sobre el bloque común.</summary>
+        private void FormularioMateriales()
+        {
+            stAct.Anchor = AnchorStyles.Left; stAct.Width = 180;
+            stMin.Anchor = AnchorStyles.Left; stMin.Width = 180;
+            btnProveedores.Anchor = AnchorStyles.Left; btnProveedores.Width = 280; btnProveedores.Height = SteeLog.UI.Tema.AltoControl;
+            Tema.Boton(btnProveedores, SteeLog.UI.Variante.Secundario);
+            guna2Button1.Height = SteeLog.UI.Tema.AltoBotonPrincipal; eliminarMaterialBoton.Height = SteeLog.UI.Tema.AltoBotonPrincipal;
+            GestionUi.Subtitulo(panelAntiParpadeo6, label8);
+            panelAntiParpadeo5.BackColor = SteeLog.UI.Tema.Superficie;
+            materiales.Dock = DockStyle.Fill;
+            txtFiltroMaterial.Dock = DockStyle.None; txtFiltroMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtFiltroMaterial.Height = SteeLog.UI.Tema.AltoControl; txtFiltroMaterial.Margin = new Padding(3, 0, 8, 0);
+            filtrarMaterial.Anchor = AnchorStyles.Right; filtrarMaterial.Margin = Padding.Empty;
+            filtrarMaterial.Height = SteeLog.UI.Tema.AltoControl; filtrarMaterial.Width = 48;
+            Tema.Boton(filtrarMaterial, SteeLog.UI.Variante.Secundario);
         }
 
         private async void Vista_Materiales_Load(object sender, EventArgs e)
@@ -146,7 +168,7 @@ namespace SteeLog.Vistas
 
                     idsProveedoresSeleccionados = modal.IDsSeleccionados;
 
-                    btnProveedores.Text = $"Seleccionar Proveedores ({idsProveedoresSeleccionados.Count})";
+                    btnProveedores.Text = $"Seleccionar proveedores ({idsProveedoresSeleccionados.Count})";
 
                 }
 
@@ -160,7 +182,7 @@ namespace SteeLog.Vistas
 
         {
 
-            btnProveedores.Text = $"Seleccionar Proveedores ({idsProveedoresSeleccionados.Count})";
+            btnProveedores.Text = $"Seleccionar proveedores ({idsProveedoresSeleccionados.Count})";
 
         }
 
@@ -190,36 +212,6 @@ namespace SteeLog.Vistas
                 dgvMateriales.AllowUserToResizeColumns = false;
 
                 dgvMateriales.AllowUserToResizeRows = false;
-
-
-
-
-
-                dgvMateriales.EnableHeadersVisualStyles = false;
-
-                dgvMateriales.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-
-                dgvMateriales.ColumnHeadersHeight = 35;
-
-
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43);
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.SelectionBackColor = Color.FromArgb(35, 63, 43);
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-
-                dgvMateriales.ColumnHeadersDefaultCellStyle.Font = new Font("Bahnschrift Light", 11F);
-
-                dgvMateriales.DefaultCellStyle.Font = new Font("Bahnschrift Light", 12F);
-
-                dgvMateriales.DefaultCellStyle.SelectionBackColor = Color.FromArgb(47, 84, 57);
-
-                dgvMateriales.DefaultCellStyle.SelectionForeColor = Color.White;
 
 
 
@@ -368,12 +360,10 @@ namespace SteeLog.Vistas
 
 
                 if (dgvMateriales.Columns["cantidadMovimientos"] != null)
-
                 {
-
                     dgvMateriales.Columns["cantidadMovimientos"].Visible = false;
-
                 }
+                GestionUi.AjustarColumnas(dgvMateriales);
 
             }
 
@@ -604,7 +594,7 @@ namespace SteeLog.Vistas
 
             {
 
-                guna2Button1.Text = "Guardar Material";
+                guna2Button1.Text = "Guardar";
 
                 idMaterialSeleccionado = -1;
                 _versionProveedores++; _cargandoProveedores = false; _proveedoresDisponibles = true;
@@ -659,7 +649,7 @@ namespace SteeLog.Vistas
                 catch (Exception ex) { if (!_cierre.IsCancellationRequested && version == _versionProveedores) ToastNotification.ShowError("No se pudieron cargar proveedores: " + ex.Message); return; }
                 finally { if (version == _versionProveedores) _cargandoProveedores = false; }
 
-                guna2Button1.Text = "Actualizar Material";
+                guna2Button1.Text = "Actualizar";
 
                 eliminarMaterialBoton.Enabled = true;
 
@@ -681,7 +671,7 @@ namespace SteeLog.Vistas
 
         {
 
-            guna2Button1.Text = "Guardar Material";
+            guna2Button1.Text = "Guardar";
 
             _versionProveedores++; _cargandoProveedores = false; _proveedoresDisponibles = true;
             idMaterialSeleccionado = -1;

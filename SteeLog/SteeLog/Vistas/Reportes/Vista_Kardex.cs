@@ -14,6 +14,8 @@ using SteeLog.Presentation;
 
 using SteeLog;
 using SteeLog.Servicios;
+using SteeLog.UI;
+using SteeLog.Vistas.Inventario;
 using System.IO;
 using System.Diagnostics;
 
@@ -45,7 +47,7 @@ namespace SteeLog.Vistas
         private object identidadDatos;
         private bool exportando;
         private bool eliminando;
-        private Func<bool> confirmarEliminacion = () => MessageBox.Show("¿Está seguro de eliminar este movimiento? Esto revertirá el stock.", "Confirmar Eliminación", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+        private Func<bool> confirmarEliminacion = () => Dialogo.Confirmar("¿Seguro que querés eliminar este movimiento?\nEsto revertirá el stock.", "Confirmar eliminación", true);
         private Action<string> avisarEliminacionExitosa = mensaje => ToastNotification.ShowSuccess(mensaje);
         private Action<string> avisarEliminacionFallida = mensaje => ToastNotification.ShowError(mensaje);
         private void CancelarOperaciones()
@@ -58,6 +60,7 @@ namespace SteeLog.Vistas
         public Vista_Kardex()
         {
             InitializeComponent();
+            Tema.SinEscala(this);
             InitializeCustomControls();
             this.Load += Vista_Kardex_Load;
             ConfigurarGrid();
@@ -74,173 +77,138 @@ namespace SteeLog.Vistas
 
         private void InitializeCustomControls()
         {
-            Color themeColor = Color.FromArgb(47, 84, 57);
-            Color hoverColor = Color.FromArgb(60, 100, 70);
-            Font btnFont = new Font("Bahnschrift Light", 12F, FontStyle.Regular, GraphicsUnit.Point, 0);
+            BackColor = Tema.Fondo;
+
             // --- DateTimePickers ---
             dtpInicio = new Guna.UI2.WinForms.Guna2DateTimePicker();
-            dtpInicio.Size = new Size(130, 36);
+            dtpInicio.Size = new Size(138, Tema.AltoControl);
             dtpInicio.Format = DateTimePickerFormat.Short;
             dtpInicio.Value = DateTime.Now.AddMonths(-1);
-            dtpInicio.FillColor = themeColor;
-            dtpInicio.ForeColor = Color.White;
-            dtpInicio.BorderColor = Color.Gray;
-            dtpInicio.BorderThickness = 1;
-            dtpInicio.Enabled = false;
+            UiVista.AtenuarFecha(dtpInicio, false);
+            Tema.Fecha(dtpInicio); UiVista.AtenuarFecha(dtpInicio, false);
 
             dtpFin = new Guna.UI2.WinForms.Guna2DateTimePicker();
-            dtpFin.Size = new Size(130, 36);
+            dtpFin.Size = new Size(138, Tema.AltoControl);
             dtpFin.Format = DateTimePickerFormat.Short;
             dtpFin.Value = DateTime.Now;
-            dtpFin.FillColor = themeColor;
-            dtpFin.ForeColor = Color.White;
-            dtpFin.BorderColor = Color.Gray;
-            dtpFin.BorderThickness = 1;
-            dtpFin.Enabled = false;
+            UiVista.AtenuarFecha(dtpFin, false);
+            Tema.Fecha(dtpFin); UiVista.AtenuarFecha(dtpFin, false);
 
-            // --- Toggle Switches (Guna2ToggleSwitch) - no text, visual only ---
+            // --- Toggle Switches ---
             chkDesde = new Guna.UI2.WinForms.Guna2ToggleSwitch();
             chkDesde.Checked = false;
-            chkDesde.Size = new Size(56, 30);
+            chkDesde.Size = new Size(46, 24);
             chkDesde.Animated = true;
             chkDesde.AutoRoundedCorners = true;
-            chkDesde.CheckedState.FillColor = Color.FromArgb(80, 160, 90);      // verde ON
-            chkDesde.CheckedState.BorderColor = Color.FromArgb(80, 160, 90);
-            chkDesde.CheckedState.InnerColor = Color.White;
-            chkDesde.CheckedState.InnerBorderColor = Color.White;
-            chkDesde.UncheckedState.FillColor = Color.FromArgb(70, 70, 75);     // gris OFF
-            chkDesde.UncheckedState.BorderColor = Color.FromArgb(90, 90, 95);
-            chkDesde.UncheckedState.InnerColor = Color.White;
-            chkDesde.UncheckedState.InnerBorderColor = Color.White;
-            chkDesde.Cursor = Cursors.Hand;
-            // Toggle Desde: habilita DTP + filtra
+            Tema.Toggle(chkDesde);
             chkDesde.CheckedChanged += (s, e) =>
             {
-                dtpInicio.Enabled = chkDesde.Checked;
+                UiVista.AtenuarFecha(dtpInicio, chkDesde.Checked);
                 CargarKardex();
             };
-            // DatePicker Desde: filtra al cambiar fecha (solo si toggle activo)
-            dtpInicio.ValueChanged += (s, e) => { if (chkDesde.Checked) CargarKardex(); };
+            dtpInicio.ValueChanged += (s, e) => { if (chkDesde.Checked) CargarKardex(); else chkDesde.Checked = true; };
 
-            // --- Desde group: [Toggle | DatePicker] centrados verticalmente ---
-            Panel flowDesde = new Panel();
-            flowDesde.BackColor = Color.Transparent;
-            flowDesde.Dock = DockStyle.Fill;
-            chkDesde.Anchor = AnchorStyles.None;
-            dtpInicio.Anchor = AnchorStyles.None;
-            flowDesde.Controls.Add(chkDesde);
-            flowDesde.Controls.Add(dtpInicio);
-            flowDesde.Resize += (s, e) =>
-            {
-                int gap = 10;
-                int totalW = chkDesde.Width + gap + dtpInicio.Width;
-                int startX = Math.Max(0, (flowDesde.ClientSize.Width - totalW) / 2);
-                int midY = flowDesde.ClientSize.Height / 2;
-                chkDesde.Location = new Point(startX, midY - chkDesde.Height / 2);
-                dtpInicio.Location = new Point(startX + chkDesde.Width + gap, midY - dtpInicio.Height / 2);
-            };
-
-            // Toggle Hasta: habilita DTP + filtra
             chkHasta = new Guna.UI2.WinForms.Guna2ToggleSwitch();
             chkHasta.Checked = false;
-            chkHasta.Size = new Size(56, 30);
+            chkHasta.Size = new Size(46, 24);
             chkHasta.Animated = true;
             chkHasta.AutoRoundedCorners = true;
-            chkHasta.CheckedState.FillColor = Color.FromArgb(80, 160, 90);
-            chkHasta.CheckedState.BorderColor = Color.FromArgb(80, 160, 90);
-            chkHasta.CheckedState.InnerColor = Color.White;
-            chkHasta.CheckedState.InnerBorderColor = Color.White;
-            chkHasta.UncheckedState.FillColor = Color.FromArgb(70, 70, 75);
-            chkHasta.UncheckedState.BorderColor = Color.FromArgb(90, 90, 95);
-            chkHasta.UncheckedState.InnerColor = Color.White;
-            chkHasta.UncheckedState.InnerBorderColor = Color.White;
-            chkHasta.Cursor = Cursors.Hand;
+            Tema.Toggle(chkHasta);
             chkHasta.CheckedChanged += (s, e) =>
             {
-                dtpFin.Enabled = chkHasta.Checked;
+                UiVista.AtenuarFecha(dtpFin, chkHasta.Checked);
                 CargarKardex();
             };
-            dtpFin.ValueChanged += (s, e) => { if (chkHasta.Checked) CargarKardex(); };
-            
-            Panel flowHasta = new Panel();
-            flowHasta.BackColor = Color.Transparent;
-            flowHasta.Dock = DockStyle.Fill;
-            chkHasta.Anchor = AnchorStyles.None;
-            dtpFin.Anchor = AnchorStyles.None;
-            flowHasta.Controls.Add(chkHasta);
-            flowHasta.Controls.Add(dtpFin);
-            flowHasta.Resize += (s, e) =>
-            {
-                int gap = 10;
-                int totalW = chkHasta.Width + gap + dtpFin.Width;
-                int startX = Math.Max(0, (flowHasta.ClientSize.Width - totalW) / 2);
-                int midY = flowHasta.ClientSize.Height / 2;
-                chkHasta.Location = new Point(startX, midY - chkHasta.Height / 2);
-                dtpFin.Location = new Point(startX + chkHasta.Width + gap, midY - dtpFin.Height / 2);
-            };
+            dtpFin.ValueChanged += (s, e) => { if (chkHasta.Checked) CargarKardex(); else chkHasta.Checked = true; };
 
-            // --- Botón PDF ---
+            // --- Botones de exportación ---
             btnDescargarPDF = new Guna.UI2.WinForms.Guna2Button();
             btnDescargarPDF.Text = "PDF";
-            btnDescargarPDF.Size = new Size(86, 34);
-            btnDescargarPDF.FillColor = themeColor;
-            btnDescargarPDF.ForeColor = Color.White;
-            btnDescargarPDF.Font = btnFont;
-            btnDescargarPDF.BorderRadius = 2;
+            btnDescargarPDF.Size = new Size(90, Tema.AltoControl);
             btnDescargarPDF.Click += BtnDescargarPDF_Click;
-            btnDescargarPDF.HoverState.FillColor = Color.FromArgb(60, 100, 70);
+            Tema.Boton(btnDescargarPDF, Variante.Secundario);
 
-            // --- Botón EXCEL ---
             btnDescargarExcel = new Guna.UI2.WinForms.Guna2Button();
-            btnDescargarExcel.Text = "EXCEL";
-            btnDescargarExcel.Size = new Size(86, 34);
-            btnDescargarExcel.FillColor = Color.FromArgb(30, 120, 60); // excel green
-            btnDescargarExcel.ForeColor = Color.White;
-            btnDescargarExcel.Font = btnFont;
-            btnDescargarExcel.BorderRadius = 2;
+            btnDescargarExcel.Text = "Excel";
+            btnDescargarExcel.Size = new Size(90, Tema.AltoControl);
             btnDescargarExcel.Click += BtnDescargarExcel_Click;
-            btnDescargarExcel.HoverState.FillColor = Color.FromArgb(40, 150, 75);
+            Tema.Boton(btnDescargarExcel, Variante.Primario);
 
-            Panel wrapPDF = CenterPanel(btnDescargarPDF);
-            Panel wrapExcel = CenterPanel(btnDescargarExcel);
-
-            // --- Main Filter TableLayoutPanel ---
-            // 7 cols centered: Padding Left (%), Desde (fixed), Hasta (fixed), Spacer (fixed), PDF (fixed), Excel (fixed), Padding Right (%)
+            // --- Barra de filtros: material seleccionado a la izquierda, rango y exportación a la derecha ---
             TableLayoutPanel panelFiltros = new TableLayoutPanel();
             panelFiltros.Dock = DockStyle.Top;
-            panelFiltros.Height = 58;
-            panelFiltros.BackColor = Color.Transparent;
-            panelFiltros.Padding = new Padding(0, 10, 0, 8); // remove h-padding as we use spacer cols
-            panelFiltros.ColumnCount = 7;
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));   // Spacer Left
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 206F)); // Desde (56 + 10 gap + 130 + 10 margin approx)
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 206F)); // Hasta
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 40F));  // Spacer between Filters and Buttons
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90F));  // PDF (+4px padding around via wrapPDF)
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 90F));  // Excel
-            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 50F));   // Spacer Right
+            panelFiltros.Height = 64;
+            panelFiltros.BackColor = Tema.Fondo;
+            panelFiltros.Padding = new Padding(28, 14, 28, 6);
+            panelFiltros.ColumnCount = 2;
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            panelFiltros.ColumnStyles.Add(new ColumnStyle(SizeType.AutoSize));
             panelFiltros.RowCount = 1;
             panelFiltros.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
 
-            panelFiltros.Controls.Add(flowDesde, 1, 0);
-            panelFiltros.Controls.Add(flowHasta, 2, 0);
-            // 3 is Spacer
-            panelFiltros.Controls.Add(wrapPDF, 4, 0);
-            panelFiltros.Controls.Add(wrapExcel, 5, 0);
+            // lblMaterialNombre alimenta PDF/Excel: se conserva, ahora como título de la selección.
+            panelAntiParpadeo1.Controls.Remove(lblMaterialNombre);
+            lblMaterialNombre.AutoSize = false;
+            lblMaterialNombre.Dock = DockStyle.Fill;
+            lblMaterialNombre.Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top | AnchorStyles.Bottom;
+            lblMaterialNombre.Font = Tema.Fuente(11f, true);
+            lblMaterialNombre.ForeColor = Tema.Texto;
+            lblMaterialNombre.TextAlign = ContentAlignment.MiddleLeft;
+            lblMaterialNombre.AutoEllipsis = true;
+            lblMaterialNombre.Margin = new Padding(0);
+            panelFiltros.Controls.Add(lblMaterialNombre, 0, 0);
+
+            var flujo = new FlowLayoutPanel
+            {
+                AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
+                Dock = DockStyle.Fill, Margin = new Padding(0), BackColor = Tema.Fondo
+            };
+            var lblDesde = UiVista.Etiqueta("Desde", Tema.AltoControl);
+            lblDesde.Margin = new Padding(0, 0, 8, 0);
+            chkDesde.Margin = new Padding(0, 6, 8, 6);
+            var lblHasta = UiVista.Etiqueta("Hasta", Tema.AltoControl);
+            lblHasta.Margin = new Padding(20, 0, 8, 0);
+            chkHasta.Margin = new Padding(0, 6, 8, 6);
+            dtpInicio.Margin = new Padding(0);
+            dtpFin.Margin = new Padding(0);
+            btnDescargarPDF.Margin = new Padding(24, 0, 0, 0);
+            btnDescargarExcel.Margin = new Padding(8, 0, 0, 0);
+            flujo.Controls.Add(lblDesde);
+            flujo.Controls.Add(chkDesde);
+            flujo.Controls.Add(dtpInicio);
+            flujo.Controls.Add(lblHasta);
+            flujo.Controls.Add(chkHasta);
+            flujo.Controls.Add(dtpFin);
+            flujo.Controls.Add(btnDescargarPDF);
+            flujo.Controls.Add(btnDescargarExcel);
+            panelFiltros.Controls.Add(flujo, 1, 0);
+
+            // --- Buscador de material + grilla ---
+            panelAntiParpadeo1.Visible = false;
+            this.Padding = Padding.Empty;
+            materiales.AutoSize = false;
+            materiales.CellBorderStyle = TableLayoutPanelCellBorderStyle.None;
+            materiales.Dock = DockStyle.Fill;
+            materiales.BackColor = Tema.Fondo;
+            materiales.ForeColor = Tema.Texto;
+            materiales.Padding = new Padding(28, 4, 28, 20);
+            materiales.RowStyles[0] = new RowStyle(SizeType.Absolute, 52F);
+            labelSelect.Font = Tema.FuenteTexto;
+            labelSelect.ForeColor = Tema.TextoSecundario;
+            labelSelect.Text = "Material:";
+            labelSelect.Margin = new Padding(0, 0, 12, 0);
+            txtBuscadorMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
+            txtBuscadorMaterial.Height = Tema.AltoControl;
+            txtBuscadorMaterial.Margin = new Padding(0, 0, 0, 0);
+            txtBuscadorMaterial.PlaceholderText = "Buscar material por nombre o categoría...";
+            Tema.Input(txtBuscadorMaterial);
+            txtBuscadorMaterial.Cursor = Cursors.IBeam;
 
             this.Controls.Add(panelFiltros);
-
-            panelAntiParpadeo1.BringToFront();
+            materiales.BringToFront();
             panelFiltros.SendToBack();
-
-            panelFiltros.Location = new Point(0, 80);
-            panelFiltros.Width = this.Width;
-            panelFiltros.Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right;
-
-            // Ajustar posición del panel de materiales (que contiene el buscador y el grid)
-            // para que empiece justo debajo de los filtros.
-            materiales.Top = 138;
-            materiales.Height = this.ClientSize.Height - materiales.Top;
+            var banda = Tema.TituloVista(this, "Kardex de materiales");
+            if (banda != null) banda.SendToBack();
 
             // --- Inicializar Búsqueda Inteligente ---
             CrearPanelResultados();
@@ -275,7 +243,7 @@ namespace SteeLog.Vistas
             _panelResultados = new Panel
             {
                 Size = new Size(txtBuscadorMaterial.Width, 0),
-                BackColor = Color.FromArgb(25, 30, 28),
+                BackColor = Tema.FondoInput,
                 Visible = false,
                 AutoScroll = true,
                 BorderStyle = BorderStyle.FixedSingle
@@ -392,14 +360,14 @@ namespace SteeLog.Vistas
                 Dock = DockStyle.Top,
                 Cursor = Cursors.Hand,
                 Padding = new Padding(10, 0, 0, 0),
-                BackColor = Color.FromArgb(25, 30, 28)
+                BackColor = Tema.FondoInput
             };
 
             var lbl = new Label
             {
-                Text = m == null ? "--- TODOS LOS MATERIALES ---" : m.nombre,
-                Font = new Font("Bahnschrift Light", 11f),
-                ForeColor = m == null ? Color.FromArgb(39, 174, 96) : Color.White,
+                Text = m == null ? "Todos los materiales" : m.nombre,
+                Font = m == null ? Tema.Fuente(10.5f, true) : Tema.FuenteTexto,
+                ForeColor = m == null ? Tema.Acento : Tema.Texto,
                 AutoSize = false,
                 Dock = DockStyle.Fill,
                 TextAlign = ContentAlignment.MiddleLeft,
@@ -409,8 +377,8 @@ namespace SteeLog.Vistas
             var lblCat = new Label
             {
                 Text = m == null ? "" : m.nombre_categoria,
-                Font = new Font("Bahnschrift Light", 8f),
-                ForeColor = Color.DarkGray,
+                Font = Tema.Fuente(9f),
+                ForeColor = Tema.TextoSecundario,
                 AutoSize = false,
                 Width = 120,
                 Dock = DockStyle.Right,
@@ -423,8 +391,8 @@ namespace SteeLog.Vistas
             Control[] ctrls = { panel, lbl, lblCat };
             foreach (var c in ctrls)
             {
-                c.MouseEnter += (s, e) => panel.BackColor = Color.FromArgb(40, 50, 45);
-                c.MouseLeave += (s, e) => panel.BackColor = Color.FromArgb(25, 30, 28);
+                c.MouseEnter += (s, e) => panel.BackColor = Tema.Seleccion;
+                c.MouseLeave += (s, e) => panel.BackColor = Tema.FondoInput;
                 c.Click += (s, e) =>
                 {
                     SeleccionarMaterial(m);
@@ -613,59 +581,14 @@ namespace SteeLog.Vistas
 
         private void ConfigurarGrid()
         {
-             dgvKardex.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
+            dgvKardex.SelectionMode = DataGridViewSelectionMode.FullRowSelect;
             dgvKardex.MultiSelect = false;
             dgvKardex.ReadOnly = true;
             dgvKardex.AutoSizeColumnsMode = DataGridViewAutoSizeColumnsMode.Fill;
             dgvKardex.AllowUserToResizeColumns = false;
             dgvKardex.AllowUserToResizeRows = false;
-            dgvKardex.EnableHeadersVisualStyles = false;
-            dgvKardex.ColumnHeadersHeightSizeMode = DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
-            dgvKardex.ColumnHeadersHeight = 45; 
-            dgvKardex.RowTemplate.Height = 45; 
-            dgvKardex.ThemeStyle.HeaderStyle.Height = 45;
-            dgvKardex.ThemeStyle.RowsStyle.Height = 45;
-
-            // Define Green Colors
-            Color headerColor = Color.FromArgb(35, 63, 43); // Dark Green Header
-            Color rowColor1 = Color.FromArgb(28, 40, 32); // Very Dark Green/Gray
-            Color rowColor2 = Color.FromArgb(35, 50, 40); // Slightly lighter Green
-            Color selectionColor = Color.FromArgb(50, 90, 60); // Highlight Green
-
-            // Header Style
-            dgvKardex.ColumnHeadersDefaultCellStyle.BackColor = headerColor;
-            dgvKardex.ColumnHeadersDefaultCellStyle.ForeColor = Color.White;
-            dgvKardex.ColumnHeadersDefaultCellStyle.SelectionBackColor = headerColor;
-            dgvKardex.ColumnHeadersDefaultCellStyle.SelectionForeColor = Color.White;
-            dgvKardex.ColumnHeadersDefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleLeft;
-            dgvKardex.ColumnHeadersDefaultCellStyle.Font = new Font("Bahnschrift", 11, FontStyle.Bold); 
-
-            // Row Styles
-            dgvKardex.BackgroundColor = Color.FromArgb(20, 30, 25); // Main background
-            
-            dgvKardex.DefaultCellStyle.BackColor = rowColor1;
-            dgvKardex.DefaultCellStyle.ForeColor = Color.White;
-            dgvKardex.DefaultCellStyle.Font = new Font("Bahnschrift Light", 11);
-            dgvKardex.DefaultCellStyle.SelectionBackColor = selectionColor; 
-            dgvKardex.DefaultCellStyle.SelectionForeColor = Color.White;
-            dgvKardex.DefaultCellStyle.Padding = new Padding(5); 
-            dgvKardex.GridColor = Color.FromArgb(40, 60, 50);
-
-            dgvKardex.AlternatingRowsDefaultCellStyle.BackColor = rowColor2;
-            dgvKardex.AlternatingRowsDefaultCellStyle.ForeColor = Color.White;
-            dgvKardex.AlternatingRowsDefaultCellStyle.SelectionBackColor = selectionColor;
-            dgvKardex.AlternatingRowsDefaultCellStyle.SelectionForeColor = Color.White;
-
-            // Theme properties for Guna Grid (often overrides standard styles if not set carefully)
-            dgvKardex.ThemeStyle.BackColor = Color.FromArgb(20, 30, 25);
-            dgvKardex.ThemeStyle.GridColor = Color.FromArgb(40, 60, 50);
-            dgvKardex.ThemeStyle.HeaderStyle.BackColor = headerColor;
-            dgvKardex.ThemeStyle.HeaderStyle.ForeColor = Color.White;
-            dgvKardex.ThemeStyle.RowsStyle.BackColor = rowColor1;
-            dgvKardex.ThemeStyle.RowsStyle.ForeColor = Color.White;
-            dgvKardex.ThemeStyle.RowsStyle.SelectionBackColor = selectionColor;
-            dgvKardex.ThemeStyle.RowsStyle.SelectionForeColor = Color.White;
-            dgvKardex.ThemeStyle.AlternatingRowsStyle.BackColor = rowColor2;
+            dgvKardex.RowTemplate.DefaultCellStyle.Font = Tema.FuenteTexto;
+            Tema.Grilla(dgvKardex);
 
             // Add Delete Button Column
             if (dgvKardex.Columns["btnEliminar"] == null)
@@ -676,18 +599,23 @@ namespace SteeLog.Vistas
                 btnEliminar.Text = "Eliminar";
                 btnEliminar.UseColumnTextForButtonValue = true;
                 btnEliminar.FillWeight = 15;
-                btnEliminar.FlatStyle = FlatStyle.Flat;
-                // Style for the button cell
-                btnEliminar.DefaultCellStyle.BackColor = Color.FromArgb(35, 63, 43); // Match header/theme
-                btnEliminar.DefaultCellStyle.ForeColor = Color.White;
-                btnEliminar.DefaultCellStyle.SelectionBackColor = selectionColor;
-                btnEliminar.DefaultCellStyle.SelectionForeColor = Color.White;
-                
+                btnEliminar.Tag = Variante.Peligro;
                 dgvKardex.Columns.Add(btnEliminar);
             }
 
             // Important: Wire up the event
             dgvKardex.CellContentClick += DgvKardex_CellContentClick;
+            dgvKardex.CellFormatting += DgvKardex_CellFormatting;
+        }
+
+        // Sólo presentación: los tipos de movimiento vienen de la base sin tildes.
+        private void DgvKardex_CellFormatting(object sender, DataGridViewCellFormattingEventArgs e)
+        {
+            if (e.RowIndex < 0 || e.ColumnIndex < 0 || dgvKardex.Columns[e.ColumnIndex].Name != "tipo_movimiento") return;
+            var texto = e.Value as string;
+            if (string.IsNullOrEmpty(texto)) return;
+            string visible = texto.Replace("Devolucion", "Devolución").Replace("Reparacion", "Reparación").Replace("Envio", "Envío");
+            if (!ReferenceEquals(visible, texto) && visible != texto) { e.Value = visible; e.FormattingApplied = true; }
         }
 
         private async void DgvKardex_CellContentClick(object sender, DataGridViewCellEventArgs e)
@@ -804,7 +732,7 @@ namespace SteeLog.Vistas
                     dgvKardex.Columns["saldo"].FillWeight = 15;
                     dgvKardex.Columns["saldo"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
                     dgvKardex.Columns["saldo"].HeaderCell.Style.Alignment = DataGridViewContentAlignment.MiddleCenter;
-                    dgvKardex.Columns["saldo"].DefaultCellStyle.Font = new Font("Bahnschrift", 11, FontStyle.Bold);
+                    dgvKardex.Columns["saldo"].DefaultCellStyle.Font = Tema.Fuente(10.5f, true);
                     dgvKardex.Columns["saldo"].DefaultCellStyle.Format = "N2";
                 }
                 

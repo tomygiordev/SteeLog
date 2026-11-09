@@ -50,6 +50,7 @@ namespace SteeLog.Vistas
             this.label7 = new System.Windows.Forms.Label();
             this.stMin = new Guna.UI2.WinForms.Guna2NumericUpDown();
             this.btnProveedores = new Guna.UI2.WinForms.Guna2Button();
+            this.lblProveedores = new System.Windows.Forms.Label();
             this.panelAntiParpadeo5 = new SteeLog.PanelAntiParpadeo();
             this.guna2Button1 = new Guna.UI2.WinForms.Guna2Button();
             this.eliminarMaterialBoton = new Guna.UI2.WinForms.Guna2Button();
@@ -106,7 +107,7 @@ namespace SteeLog.Vistas
 
             this.minimoToolStripMenuItem.Name = "minimoToolStripMenuItem";
             this.minimoToolStripMenuItem.Size = new System.Drawing.Size(124, 24);
-            this.minimoToolStripMenuItem.Text = "Minimo";
+            this.minimoToolStripMenuItem.Text = "Mínimo";
 
             // -------------------------------------------------------
             // panelAntiParpadeo1 — Encabezado
@@ -153,7 +154,8 @@ namespace SteeLog.Vistas
             this.panelAntiParpadeo8.Controls.Add(this.cmbCategoria, 1, 1);
             this.panelAntiParpadeo8.Controls.Add(this.label7, 2, 1);
             this.panelAntiParpadeo8.Controls.Add(this.stMin, 3, 1);
-            this.panelAntiParpadeo8.Controls.Add(this.btnProveedores, 0, 2);
+            this.panelAntiParpadeo8.Controls.Add(this.lblProveedores, 0, 2);
+            this.panelAntiParpadeo8.Controls.Add(this.btnProveedores, 1, 2);
             this.panelAntiParpadeo8.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelAntiParpadeo8.Location = new System.Drawing.Point(0, 42);
             this.panelAntiParpadeo8.Name = "panelAntiParpadeo8";
@@ -292,9 +294,18 @@ namespace SteeLog.Vistas
             this.stMin.TabIndex = 12;
             this.stMin.UpDownButtonFillColor = System.Drawing.Color.FromArgb(35, 50, 40);
 
-            // btnProveedores — estilo secundario (span 4 columnas)
+            // lblProveedores
+            this.lblProveedores.AutoSize = false;
+            this.lblProveedores.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.lblProveedores.Font = new System.Drawing.Font("Bahnschrift Light", 10.5F);
+            this.lblProveedores.ForeColor = System.Drawing.Color.FromArgb(155, 185, 165);
+            this.lblProveedores.Name = "lblProveedores";
+            this.lblProveedores.TabIndex = 14;
+            this.lblProveedores.Text = "Proveedores:";
+            this.lblProveedores.TextAlign = System.Drawing.ContentAlignment.MiddleLeft;
+
+            // btnProveedores — estilo secundario (misma grilla que el resto de campos)
             this.btnProveedores.Anchor = ((System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right));
-            this.panelAntiParpadeo8.SetColumnSpan(this.btnProveedores, 4);
             this.btnProveedores.BorderRadius = 0;
             this.btnProveedores.BorderColor = System.Drawing.Color.FromArgb(55, 90, 68);
             this.btnProveedores.BorderThickness = 1;
@@ -307,32 +318,33 @@ namespace SteeLog.Vistas
             this.btnProveedores.ForeColor = System.Drawing.Color.FromArgb(150, 190, 165);
             this.btnProveedores.HoverState.FillColor = System.Drawing.Color.FromArgb(42, 62, 50);
             this.btnProveedores.Location = new System.Drawing.Point(160, 86);
-            this.btnProveedores.Margin = new System.Windows.Forms.Padding(160, 3, 160, 3);
+            this.btnProveedores.Margin = new System.Windows.Forms.Padding(0);
             this.btnProveedores.Name = "btnProveedores";
             this.btnProveedores.Size = new System.Drawing.Size(450, 30);
             this.btnProveedores.TabIndex = 15;
-            this.btnProveedores.Text = "Seleccionar Proveedores (0)";
+            this.btnProveedores.Text = "Seleccionar proveedores (0)";
             this.btnProveedores.Click += new System.EventHandler(this.btnProveedores_Click);
 
             // -------------------------------------------------------
             // panelAntiParpadeo5 — Botones de acción
             // -------------------------------------------------------
-            this.panelAntiParpadeo5.ColumnCount = 2;
-            this.panelAntiParpadeo5.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.panelAntiParpadeo5.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 50F));
-            this.panelAntiParpadeo5.Controls.Add(this.guna2Button1, 0, 0);
-            this.panelAntiParpadeo5.Controls.Add(this.eliminarMaterialBoton, 1, 0);
+            this.panelAntiParpadeo5.ColumnCount = 3;
+            this.panelAntiParpadeo5.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Percent, 100F));
+            this.panelAntiParpadeo5.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 148F));
+            this.panelAntiParpadeo5.ColumnStyles.Add(new System.Windows.Forms.ColumnStyle(System.Windows.Forms.SizeType.Absolute, 148F));
+            this.panelAntiParpadeo5.Controls.Add(this.guna2Button1, 1, 0);
+            this.panelAntiParpadeo5.Controls.Add(this.eliminarMaterialBoton, 2, 0);
             this.panelAntiParpadeo5.Dock = System.Windows.Forms.DockStyle.Top;
             this.panelAntiParpadeo5.GrowStyle = System.Windows.Forms.TableLayoutPanelGrowStyle.AddColumns;
             this.panelAntiParpadeo5.Location = new System.Drawing.Point(0, 170);
             this.panelAntiParpadeo5.Name = "panelAntiParpadeo5";
-            this.panelAntiParpadeo5.Padding = new System.Windows.Forms.Padding(100, 6, 100, 6);
+            this.panelAntiParpadeo5.Padding = new System.Windows.Forms.Padding(24, 4, 24, 16);
             this.panelAntiParpadeo5.RowCount = 1;
             this.panelAntiParpadeo5.RowStyles.Add(new System.Windows.Forms.RowStyle(System.Windows.Forms.SizeType.Percent, 100F));
-            this.panelAntiParpadeo5.Size = new System.Drawing.Size(800, 48);
+            this.panelAntiParpadeo5.Size = new System.Drawing.Size(800, 60);
             this.panelAntiParpadeo5.TabIndex = 35;
 
-            // guna2Button1 — "Guardar Material" (acción primaria)
+            // guna2Button1 — "Guardar" (acción primaria)
             this.guna2Button1.Anchor = ((System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right));
             this.guna2Button1.BorderRadius = 0;
             this.guna2Button1.DisabledState.BorderColor = System.Drawing.Color.FromArgb(50, 65, 55);
@@ -348,10 +360,10 @@ namespace SteeLog.Vistas
             this.guna2Button1.Name = "guna2Button1";
             this.guna2Button1.Size = new System.Drawing.Size(291, 36);
             this.guna2Button1.TabIndex = 0;
-            this.guna2Button1.Text = "Guardar Material";
+            this.guna2Button1.Text = "Guardar";
             this.guna2Button1.Click += new System.EventHandler(this.guna2Button1_Click);
 
-            // eliminarMaterialBoton — "Eliminar Material" (acción destructiva)
+            // eliminarMaterialBoton — "Eliminar" (acción destructiva)
             this.eliminarMaterialBoton.Anchor = ((System.Windows.Forms.AnchorStyles)(System.Windows.Forms.AnchorStyles.Left | System.Windows.Forms.AnchorStyles.Right));
             this.eliminarMaterialBoton.BorderRadius = 0;
             this.eliminarMaterialBoton.DisabledState.BorderColor = System.Drawing.Color.FromArgb(50, 50, 50);
@@ -367,7 +379,7 @@ namespace SteeLog.Vistas
             this.eliminarMaterialBoton.Name = "eliminarMaterialBoton";
             this.eliminarMaterialBoton.Size = new System.Drawing.Size(291, 36);
             this.eliminarMaterialBoton.TabIndex = 1;
-            this.eliminarMaterialBoton.Text = "Eliminar Material";
+            this.eliminarMaterialBoton.Text = "Eliminar";
             this.eliminarMaterialBoton.Click += new System.EventHandler(this.eliminarMaterialBoton_Click);
 
             // -------------------------------------------------------
@@ -599,5 +611,6 @@ namespace SteeLog.Vistas
         private System.Windows.Forms.ToolStripMenuItem cantidadToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem minimoToolStripMenuItem;
         private Guna.UI2.WinForms.Guna2Button btnProveedores;
+        private System.Windows.Forms.Label lblProveedores;
     }
 }
