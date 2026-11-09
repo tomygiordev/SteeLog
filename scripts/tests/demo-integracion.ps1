@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = 'Stop'
 # Este runner admite únicamente el contexto Docker local tcp://127.0.0.1:2375.
 $contextJson = docker context inspect
 if ($LASTEXITCODE -ne 0) { throw 'No se pudo inspeccionar el contexto Docker activo.' }
@@ -7,6 +7,8 @@ $dockerHost = $context.Endpoints.docker.Host
 if ($env:DOCKER_HOST) { $dockerHost = $env:DOCKER_HOST }
 if ($dockerHost -ne 'tcp://127.0.0.1:2375') { throw "Contexto Docker no soportado: $dockerHost; se requiere tcp://127.0.0.1:2375." }
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+$manifestTablas = Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'docker/demo/tablas.json') | ConvertFrom-Json
+if ((Get-FileHash -Algorithm SHA256 (Join-Path $repo $manifestTablas.origen)).Hash.ToLowerInvariant() -cne $manifestTablas.sha256_origen) { throw 'Hash de origen del esquema demo desactualizado' }
 $base = Join-Path ([IO.Path]::GetTempPath()) ('steelog-demo-bootstrap-' + [guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $base | Out-Null
 $previousEnv = @{}
@@ -90,15 +92,8 @@ END `$check`$;
     (Get-Content -Raw -Encoding UTF8 (Join-Path $repo 'docker/demo/01-schema.sql')) | Invoke-DockerExec $name psql -U postgres -d $db -v ON_ERROR_STOP=1 -q
     if ($LASTEXITCODE -ne 3) { throw 'El esquema debe rechazar una DB ya inicializada' }
     "PASS cierre $($tables.Count) tablas, seed coherente y rechazo de reinstalación"
-    $migrations = @(Get-ChildItem -Path (Join-Path $repo 'docker/migrations') -Filter 'F4*.sql' -File)
-    if ($migrations.Count -ne 1) { throw 'Se requiere exactamente una migración F4 explícita.' }
-    $migrations += @(Get-ChildItem -Path (Join-Path $repo 'docker/migrations') -Filter 'F10_*.sql' -File | Sort-Object Name)
-    foreach ($attempt in 1..2) {
-        foreach ($migration in $migrations) {
-            ($guard + "`n" + (Get-Content -Raw -Encoding UTF8 $migration.FullName)) | Invoke-DockerExec $name psql -U postgres -d $db -v ON_ERROR_STOP=1 -q
-            if ($LASTEXITCODE -ne 0) { throw "Migración $($migration.Name) falló en aplicación $attempt" }
-        }
-    }
+    . (Join-Path $PSScriptRoot 'aplicar-migraciones-f10.ps1')
+    Invoke-SteelogMigracionesNuevaInstalacion -Container $name -Database $db -Repo $repo
     foreach ($project in @('SteeLog.Domain','SteeLog.Application','SteeLog.Infrastructure')) {
         $source = Join-Path $repo "SteeLog/$project"; $dest = Join-Path $base $project
         New-Item -ItemType Directory -Force $dest | Out-Null

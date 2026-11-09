@@ -70,6 +70,46 @@ public sealed class InventarioIntegrationTests
         Assert.Equal(10m, Stock(material));
     }
 
+    [Fact]
+    public async Task AjusteInternoAdmiteTodoElRangoDelDominioYConservaCantidadesConSigno()
+    {
+        int material = Material(0m);
+        await EditarDatos(material,Datos("Rango completo"),99999999.99m,0m);
+        Assert.Equal(99999999.99m, Stock(material));
+        await EditarDatos(material,Datos("Rango completo"),0m,99999999.99m);
+        Assert.Equal(0m, Stock(material));
+        int otro = Material(1000000m);
+        await EditarDatos(otro,Datos("Ajuste negativo"),0m,1000000m);
+        Assert.Equal(0m, Stock(otro));
+        Assert.Equal(-1000000m, Convert.ToDecimal(Sql("SELECT cantidad FROM public.movimientomaterial WHERE id_material=@id", new NpgsqlParameter("id",otro))));
+    }
+
+    [Theory]
+    [InlineData("UPDATE public.materiales SET stockactual=NULL WHERE id=@id", "23502")]
+    [InlineData("UPDATE public.materiales SET stockminimo=NULL WHERE id=@id", "23502")]
+    [InlineData("UPDATE public.materiales SET preciounitario=NULL WHERE id=@id", "23502")]
+    [InlineData("UPDATE public.materiales SET preciounitario=-1 WHERE id=@id", "23514")]
+    [InlineData("UPDATE public.materiales SET stockactual=-1 WHERE id=@id", "23514")]
+    public void BaseRechazaNulosYNegativosQueElDominioProhibe(string sql, string codigo)
+    {
+        int material = Material(10m);
+        var ex = Assert.Throws<PostgresException>(() => Sql(sql, new NpgsqlParameter("id",material)));
+        Assert.Equal(codigo, ex.SqlState);
+        Assert.Equal(10m, Stock(material));
+    }
+
+    [Fact]
+    public async Task BaseRechazaTipoHuerfanoEImpactoInvalidoYCantidadNula()
+    {
+        int material = Material(10m), id = await Crear(Solicitud(material,2,1m));
+        var fk = Assert.Throws<PostgresException>(() => Sql("UPDATE public.movimientos SET id_tipomovimiento=2147483647 WHERE id_movimiento=@id",new NpgsqlParameter("id",id)));
+        Assert.Equal("23503",fk.SqlState);
+        var cantidad = Assert.Throws<PostgresException>(() => Sql("UPDATE public.movimientomaterial SET cantidad=NULL WHERE id_movimiento=@id",new NpgsqlParameter("id",id)));
+        Assert.Equal("23502",cantidad.SqlState);
+        var impacto = Assert.Throws<PostgresException>(() => Sql("INSERT INTO public.tipo_movimiento(nombre,impacto) VALUES (@nombre,'invalido')",new NpgsqlParameter("nombre",Guid.NewGuid().ToString("N"))));
+        Assert.Equal("23514",impacto.SqlState);
+    }
+
     [Theory]
     [InlineData("1.2345", "1.23")]
     [InlineData("1.2350", "1.24")]

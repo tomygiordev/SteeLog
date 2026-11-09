@@ -105,6 +105,7 @@ contra **la base elegida por el administrador**, primero F4 si todavía falta y 
 
 ```powershell
 psql --dbname=$env:STEELOG_MIGRATION_CONNECTION -v ON_ERROR_STOP=1 -f docker/migrations/F4_insumo_movimientos_snapshot.sql
+if ($LASTEXITCODE -ne 0) { throw "Migracion F4 fallida" }
 Get-ChildItem docker/migrations/F10_*.sql | Sort-Object Name | ForEach-Object {
     psql --dbname=$env:STEELOG_MIGRATION_CONNECTION -v ON_ERROR_STOP=1 -f $_.FullName
     if ($LASTEXITCODE -ne 0) { throw "Migracion fallida: $($_.Name)" }
@@ -114,3 +115,26 @@ Get-ChildItem docker/migrations/F10_*.sql | Sort-Object Name | ForEach-Object {
 Cada archivo es transaccional e idempotente. Los conflictos de datos se informan sin
 borrar ni corregir filas silenciosamente. Init y demo ya incorporan las migraciones;
 no reinstalar sus esquemas sobre una base existente.
+
+### Decisiones de diseño F10
+
+| Mejora | Decisión y evidencia |
+| --- | --- |
+| Impacto del tipo | Aplicada: cinco comportamientos, CASE con precedencia histórica; NULL conserva fallback. Los 9 nombres de la copia real permiten NOT NULL y UNIQUE; se comprueban conflictos en cada ejecución. |
+| FK de movimientos a tipo | Aplicada y validada: 0 huérfanos en 10 movimientos de la copia. Las demás FK entre entidades usadas ya estaban presentes. |
+| Nulos en cantidades/cabecera | Aplicados 9 NOT NULL: stocks/precio de material, cantidad de línea, origen/tipos/tipo de movimiento/flete. Sin conflictos en la copia; preflight informa tabla, columna y cantidad. Flete omitido toma 0. |
+| Importes y saldo | Aplicados 4 CHECK validados: precio de material y línea, saldo de línea e importes de movimiento no negativos. Los CHECK de stock de material y cantidad de recortes ya existían. |
+| Acceso por FK/WHERE/JOIN | Aplicados 20 índices, sin duplicar prefijos ya cubiertos por PK/UNIQUE: historial por material/movimiento/insumo/herramienta, ajustes por tipo-fecha y referencias a catálogos. No se afirma una mejora de tiempo medida. |
+| Cantidad de línea | Ampliada a numeric(12,4): el ajuste interno admite el rango de Material (hasta 99999999.99), que no cabía en numeric(10,4). |
+| Cantidad de línea positiva | Descartada como CHECK global: RegistrarAjusteAsync acumula diferencias con signo, incluso cero. La positividad de movimientos ordinarios sigue en LineaMovimiento. |
+| Cantidades de órdenes decimales | Descartada: CantidadOrden.Entera y LineaOrden exigen enteros; el decimal del contrato no autoriza fracciones. |
+| FK de origen/destino y snapshots | Descartadas: origen/destino de movimientos son polimórficos; snapshots F4 son evidencia histórica, no referencias vivas. Usuarios de conteos son texto, no FK a una tabla local de usuarios. |
+
+No se necesitaron restricciones NOT VALID en la copia probada. En otra base, los
+preflight abortan la transacción con cantidades de conflictos; no alteran filas para
+hacerlas pasar. La copia real inspeccionada tampoco tenía F4: las pruebas A son solo
+de lectura; F4 sigue siendo requisito previo de los flujos de edición con snapshots.
+`esquema-copia-real.ps1 -Dump <archivo-en-TEMP>` restaura una copia descartable,
+prueba A, aplica F4/F10 dos veces, prueba B y elimina copia y dump. Nunca accede a la
+base real. Los runners de integración verifican además que F4/F10 no cambien la firma
+de esquema ni datos de init/demo en ninguna de las dos aplicaciones.

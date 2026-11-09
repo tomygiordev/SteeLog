@@ -92,7 +92,7 @@ public sealed class ReportesIntegrationTests
         var nombre = Unique(); var material = Material(nombre); var obra = Id("INSERT INTO obras(nombre) VALUES(@n) RETURNING id", P("n", Unique()));
         var tipo = Id("INSERT INTO tipo_movimiento(nombre) VALUES(@n) RETURNING id_tipomovimiento", P("n", "Envío " + Unique()));
         var fecha = new DateTime(2026, 10, 15);
-        int movimiento = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
+        int movimiento = Id("INSERT INTO movimientos(fecha,nroremito,id_origen,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,1,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
         Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,2.1250,8.25)", P("v", movimiento), P("m", material));
         var caso = new ConsultarKardex(Actor(), new NpgsqlKardexConsulta(Factory()));
         var row = Assert.Single(await caso.HistorialAsync(material, fecha, fecha, default));
@@ -118,7 +118,7 @@ public sealed class ReportesIntegrationTests
         int salida = Id("INSERT INTO tipo_movimiento(nombre) VALUES(@n) RETURNING id_tipomovimiento", P("n", "ENVÍO " + Unique()));
         foreach (var fila in new[] { new { Tipo = salida, Fecha = new DateTime(2026, 10, 10), Cantidad = 1m }, new { Tipo = noCanonico, Fecha = new DateTime(2026, 10, 11), Cantidad = 3m }, new { Tipo = entrada, Fecha = new DateTime(2026, 10, 12), Cantidad = 5m } })
         {
-            int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen,id_tipomovimiento) VALUES(@f,@n,@o,'OBRA','UBICACION',@t) RETURNING id_movimiento", P("f", fila.Fecha), P("n", Unique()), P("o", obra), P("t", fila.Tipo));
+            int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_origen,id_destino,tipo_destino,tipo_origen,id_tipomovimiento) VALUES(@f,@n,1,@o,'OBRA','UBICACION',@t) RETURNING id_movimiento", P("f", fila.Fecha), P("n", Unique()), P("o", obra), P("t", fila.Tipo));
             Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,@q,NULL)", P("v", mov), P("m", material), P("q", fila.Cantidad));
         }
         var rows = await new NpgsqlKardexConsulta(Factory()).HistorialAsync(material, null, null);
@@ -134,7 +134,7 @@ public sealed class ReportesIntegrationTests
         var obra = Id("INSERT INTO obras(nombre) VALUES(@n) RETURNING id", P("n", Unique()));
         var tipo = Id("INSERT INTO tipo_movimiento(nombre) VALUES(@n) RETURNING id_tipomovimiento", P("n", "ENVÍO " + Unique()));
         var fecha = new DateTime(2026, 10, 15);
-        int movimiento = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
+        int movimiento = Id("INSERT INTO movimientos(fecha,nroremito,id_origen,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,1,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
         Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,2,8)", P("v", movimiento), P("m", material));
 
         var consulta = new NpgsqlKardexConsulta(Factory());
@@ -196,7 +196,7 @@ public sealed class ReportesIntegrationTests
         string nombre = Unique(); int obra = Id("INSERT INTO obras(nombre) VALUES(@n) RETURNING id", P("n", nombre));
         int material = Material(Unique()), tipo = Id("INSERT INTO tipo_movimiento(nombre) VALUES(@n) RETURNING id_tipomovimiento", P("n", "Aporte " + Unique()));
         var fecha = new DateTime(2026, 10, 16);
-        int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
+        int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_origen,id_destino,tipo_destino,tipo_origen,id_tipomovimiento,id_obra,costoflete) VALUES(@f,@n,1,@o,'OBRA','UBICACION',@t,@o,3) RETURNING id_movimiento", P("f", fecha), P("n", Unique()), P("o", obra), P("t", tipo));
         Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,2,4)", P("v", mov), P("m", material));
         Sql("INSERT INTO canaletas_plegados(id_obra,descripcion,precio,pagado,fecha_creacion) VALUES(@o,'Canaleta F8',10,false,@f)", P("o", obra), P("f", fecha));
         var f = Factory(); var consulta = new NpgsqlInformeObraConsulta(f);
@@ -292,7 +292,7 @@ public sealed class ReportesIntegrationTests
         var caso = new ConsultarReporteStock(Actor(), new NpgsqlReporteStockConsulta(f), new NpgsqlMaterialesConsulta(f));
         Assert.Empty(await caso.ListarAsync(new FiltroMaterialLectura { Nombre = nombre, SoloStockBajo = true }));
         int obra = Id("INSERT INTO obras(nombre) VALUES(@n) RETURNING id", P("n", Unique()));
-        int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_destino,tipo_destino,tipo_origen) VALUES(CURRENT_DATE,@n,@o,'OBRA','UBICACION') RETURNING id_movimiento", P("n", Unique()), P("o", obra));
+        int mov = Id("INSERT INTO movimientos(fecha,nroremito,id_origen,id_destino,tipo_destino,tipo_origen,id_tipomovimiento) VALUES(CURRENT_DATE,@n,1,@o,'OBRA','UBICACION',2) RETURNING id_movimiento", P("n", Unique()), P("o", obra));
         Sql("INSERT INTO movimientomaterial(id_movimiento,id_material,cantidad,stock_actual) VALUES(@v,@m,1,4)", P("v", mov), P("m", bajo));
         var rows = await caso.ListarAsync(new FiltroMaterialLectura { Nombre = nombre, SoloStockBajo = true });
         Assert.Equal(bajo, Assert.Single(rows).Material.Id); Assert.DoesNotContain(rows, x => x.Material.Id == alto);

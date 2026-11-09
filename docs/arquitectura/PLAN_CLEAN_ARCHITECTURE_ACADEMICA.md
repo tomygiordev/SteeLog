@@ -38,8 +38,8 @@ Este plan conserva el trabajo de modelado anterior y corrige su alcance. No part
 | `SteeLog/SteeLog.sln` contiene el proyecto WinForms .NET Framework 4.8 existente. | Preservar el proyecto de entrada y su diseñador; extraer bibliotecas gradualmente. |
 | `Datos/ConexionDB.cs` construye configuración por instancia y entrega conexiones nuevas. | Configuración única y fábrica de conexiones; no introducir una conexión singleton. |
 | `Vista_Movimientos.cs:1844-1864` guarda el movimiento y luego mueve insumos por separado. | Materiales, recortes, insumos e historial deben participar de una misma transacción del caso de uso. |
-| `SupabaseAuthService.cs` ya contempla usuarios demo locales y tokens ficticios. | Extraer un adaptador local explícito; no reconstruir autenticación cloud. |
-| `SupabaseStorageService.cs` ya guarda archivos en `%LOCALAPPDATA%/SteeLog/Storage`. | Reutilizar el comportamiento local y conservar la compatibilidad de rutas de fotos existentes. |
+| `AutenticacionLocal.cs` contempla usuarios demo locales y tokens ficticios. | Conservar el adaptador local explícito; no reconstruir autenticación cloud. |
+| La clase de storage antigua fue eliminada; `LocalCanaletaStorage` guarda archivos en `%LOCALAPPDATA%/SteeLog/Storage`. | Reutilizar el adaptador local y conservar la compatibilidad de rutas de fotos existentes. |
 | `UpdaterService.cs` consulta GitHub y puede reemplazar el ejecutable. | Sustituir el flujo registrado por una demostración local que no reemplace el programa. |
 | `CredentialStore.cs` ya cifra las credenciales con DPAPI. | No describir el estado actual como contraseñas guardadas en texto plano. |
 | `App.config` contiene runtime y binding redirects; el `.csproj` lo referencia. | Mantenerlo versionado. No desindexarlo como si fuera un secreto. |

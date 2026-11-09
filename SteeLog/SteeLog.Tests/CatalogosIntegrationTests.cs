@@ -69,7 +69,7 @@ public sealed class CatalogosIntegrationTests
     [Fact] public async Task UbicacionUsadaEnMovimientoNoSePuedeEliminar()
     {
         int u=await Run(x=>x.CrearUbicacionAsync(Unique()));
-        int mov=Convert.ToInt32(Sql("INSERT INTO public.movimientos(fecha,nroremito,id_origen,tipo_origen,id_destino,tipo_destino,precio_total) VALUES (CURRENT_DATE,@r,@u,'UBICACION',@u,'UBICACION',0) RETURNING id_movimiento",P("r",Unique()),P("u",u)));
+        int mov=Convert.ToInt32(Sql("INSERT INTO public.movimientos(fecha,nroremito,id_origen,tipo_origen,id_destino,tipo_destino,precio_total,id_tipomovimiento) VALUES (CURRENT_DATE,@r,@u,'UBICACION',@u,'UBICACION',0,2) RETURNING id_movimiento",P("r",Unique()),P("u",u)));
         try
         {
             var error=await Assert.ThrowsAsync<CatalogoEnUsoException>(()=>Run(x=>x.EliminarUbicacionAsync(u)));

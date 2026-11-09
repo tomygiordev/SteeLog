@@ -1,6 +1,6 @@
 {
   "origen": "docker/init/01-schema.sql",
-  "sha256_origen": "7cd879a8c1fd68a33e700f4e86330c066c6203aff6a2e3d33933a53f88f2bd1b",
+  "sha256_origen": "5268f3f38d97b1388fa9cd2d707dc19e30d4d7b2f493622f9db625d2f79acbc1",
   "tablas": [
     "canaletas_plegados",
     "canaletas_plegados_fotos",
@@ -32,6 +32,7 @@
   ],
   "migraciones_incorporadas": [
     "F4_insumo_movimientos_snapshot.sql",
-    "F10_01_impacto_tipo_movimiento.sql"
+    "F10_01_impacto_tipo_movimiento.sql",
+    "F10_02_integridad_indices.sql"
   ]
 }
