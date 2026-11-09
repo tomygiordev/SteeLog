@@ -739,7 +739,7 @@ namespace SteeLog.Vistas.Movimientos
 
                 var leidos = await Presenter.HistorialAsync(fechaDesde, fechaHasta, tipoFiltro, cargaHistorial.Token);
                 if (IsDisposed || cierre.IsCancellationRequested || version != versionHistorial) return;
-                rawHistorial = leidos.Select(x => new HistorialMovimiento { id_movimiento=x.IdMovimiento, id_movimientomaterial=x.IdLinea, id_material=x.IdMaterial, fecha=x.Fecha, nroremito=x.Remito, tipo_movimiento=x.Tipo, material=x.Material, cantidad=x.Cantidad, origen=x.Origen, destino=x.Destino, observaciones=x.Observaciones, esrecorte=x.EsRecorte, medida_recorte=x.Medida, esinsumo=x.EsInsumo, es_compra_eventual=x.Eventual, precio_unitario=x.PrecioUnitario, precio_total=x.PrecioTotal }).ToList();
+                rawHistorial = leidos.Select(x => new HistorialMovimiento { id_movimiento=x.IdMovimiento, id_movimientomaterial=x.IdLinea, fecha=x.Fecha, nroremito=x.Remito, tipo_movimiento=x.Tipo, material=x.Material, cantidad=x.Cantidad, origen=x.Origen, destino=x.Destino, observaciones=x.Observaciones, esrecorte=x.EsRecorte, medida_recorte=x.Medida, esinsumo=x.EsInsumo, es_compra_eventual=x.Eventual, precio_unitario=x.PrecioUnitario, precio_total=x.PrecioTotal }).ToList();
 
                 var grupos = rawHistorial.GroupBy(m => m.id_movimiento).Select(g => new MovimientoGrupo
                 {

@@ -324,7 +324,7 @@ namespace SteeLog.Vistas.Movimientos
                 if (IsDisposed || token.IsCancellationRequested || version != versionCatalogos) return;
                 catalogos = cat.Result;
                 materialesFull = materiales.Result.Select(x => new Material { id=x.Id, nombre=x.Nombre, id_categoria=x.CategoriaId, nombre_categoria=x.Categoria, precioUnitario=x.Precio, stockActual=x.Stock, stockMinimo=x.Minimo, cantidadUsada=x.CantidadUsada, cantidadMovimientos=x.CantidadMovimientos }).ToList();
-                _categorias = categorias.Result.Select(x => new Categoria { id=x.Id, nombre=x.Nombre, recortable=x.Recortable }).ToList();
+                _categorias = categorias.Result.Select(x => new Categoria { id=x.Id, recortable=x.Recortable }).ToList();
                 recortesDisponibles = recortes.Result.Select(x => new Recorte { id=x.Id, id_material=x.MaterialId, nombre_material=x.Material, nombre_categoria=x.Categoria, ancho=x.Ancho, altura=x.Altura, medida=x.Medida, cantidad=x.Cantidad, estado=x.Estado, fecha_creacion=x.FechaCreacion }).ToList();
                 int? tipoSeleccionado = cmbMovimientos.SelectedValue is int tipoActual ? (int?)tipoActual : null;
                 int? obraSeleccionada = cmbObras.SelectedValue is int obraActual ? (int?)obraActual : null;
@@ -355,7 +355,7 @@ namespace SteeLog.Vistas.Movimientos
         }
         private void EstablecerFletes(int? incluirId)
         {
-            var fletes=catalogos.Fletes.Where(x => x.Activo || x.Id==incluirId).Select(x => new Flete { id=x.Id,nombre=x.Nombre,activo=x.Activo }).ToList();
+            var fletes=catalogos.Fletes.Where(x => x.Activo || x.Id==incluirId).Select(x => new Flete { id=x.Id,nombre=x.Nombre }).ToList();
             fletes.Insert(0,new Flete { id=0,nombre="-" });
             UiVista.AsignarDatos(cmbFlete, fletes, "nombre", "id"); cmbFlete.SelectedValue=incluirId ?? 0;
         }

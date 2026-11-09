@@ -6,7 +6,6 @@ namespace SteeLog.Modelos
     {
         public int id_movimiento { get; set; }
         public int? id_movimientomaterial { get; set; }
-        public int? id_material { get; set; }
         public DateTime fecha { get; set; }
         public string nroremito { get; set; }
         public string tipo_movimiento { get; set; }
