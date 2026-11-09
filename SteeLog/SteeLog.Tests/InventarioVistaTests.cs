@@ -42,7 +42,7 @@ namespace SteeLog.Tests
                 {
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Inventario", true);
                     const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-                    using (var vista = (Form)Activator.CreateInstance(tipo, new Ejecutor()))
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), new Ejecutor()))
                     {
                         var combo = (ComboBox)tipo.GetField("cmbCategoria", flags).GetValue(vista);
                         var handle = combo.Handle;
@@ -73,7 +73,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Inventario", true);
                     const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new Ejecutor();
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor))
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor))
                     {
                         Assert.Equal(0, ejecutor.Llamadas);
                         var grid = (DataGridView)tipo.GetField("dgvInventario", flags).GetValue(vista);
@@ -104,7 +104,7 @@ namespace SteeLog.Tests
                     }
 
                     var ejecutorDispose = new Ejecutor();
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutorDispose))
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutorDispose))
                     {
                         var pendiente = new TaskCompletionSource<List<InventarioRecorte>>();
                         ejecutorDispose.Respuestas.Enqueue(pendiente);

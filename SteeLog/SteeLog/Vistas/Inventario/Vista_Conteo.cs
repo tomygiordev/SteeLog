@@ -23,6 +23,7 @@ namespace SteeLog.Vistas.Inventario
 {
     public partial class Vista_Conteo : Form, IRefrescable, IMessageFilter
     {
+        private readonly IServiciosVista servicios;
         private ConteosPresenter presenter;
         private IConteoPdf pdf;
         private readonly Action<string> abrirPdf;
@@ -70,11 +71,12 @@ namespace SteeLog.Vistas.Inventario
         private Guna2Button btnImprimir;
         private Guna2Button btnEliminar;
 
-        public Vista_Conteo() : this(null, null, null) { }
-        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer) : this(executor, renderer, null) { }
-        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf) : this(executor, renderer, abrirPdf, null, null) { }
-        public Vista_Conteo(IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf, Action<string> mostrarError, Action<string> mostrarExito)
+        public Vista_Conteo(IServiciosVista servicios) : this(servicios, null, null, null) { }
+        public Vista_Conteo(IServiciosVista servicios, IUseCaseExecutor executor, IConteoPdf renderer) : this(servicios, executor, renderer, null) { }
+        public Vista_Conteo(IServiciosVista servicios, IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf) : this(servicios, executor, renderer, abrirPdf, null, null) { }
+        public Vista_Conteo(IServiciosVista servicios, IUseCaseExecutor executor, IConteoPdf renderer, Action<string> abrirPdf, Action<string> mostrarError, Action<string> mostrarExito)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             this.mostrarError = mostrarError ?? (mensaje => ToastNotification.ShowError(mensaje));
             this.mostrarExito = mostrarExito ?? (mensaje => ToastNotification.ShowSuccess(mensaje));
             this.abrirPdf = abrirPdf ?? (ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true }));
@@ -84,8 +86,8 @@ namespace SteeLog.Vistas.Inventario
             Tema.SinEscala(this);
             CrearInterfaz(); ActualizarEstadoEntrada();
             Shown += async (s, e) => {
-                if (presenter == null) presenter = new ConteosPresenter(LocalServices.Current.Executor);
-                if (pdf == null) pdf = LocalServices.Current.ConteoPdf;
+                if (presenter == null) presenter = new ConteosPresenter(this.servicios.Executor);
+                if (pdf == null) pdf = this.servicios.ConteoPdf;
                 Application.AddMessageFilter(this);
                 await CargarMateriales(); if (Vigente && _tabActual == "entrada") await CargarConteoActual();
             };
@@ -799,7 +801,7 @@ namespace SteeLog.Vistas.Inventario
             dgvHistorial.Columns["colFecha"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvHistorial.Columns["colItems"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
             dgvHistorial.Columns["colDif"].DefaultCellStyle.Alignment = DataGridViewContentAlignment.MiddleCenter;
-            if (SessionManager.DebeOcultarCantidadesStockMateriales)
+            if (servicios.Sesion.DebeOcultarCantidadesStockMateriales)
                 dgvHistorial.Columns["colDif"].Visible = false;
             dgvHistorial.CellFormatting += DgvHistorial_CellFormatting;
             dgvHistorial.CellPainting += DgvHistorial_CellPainting;
@@ -832,7 +834,7 @@ namespace SteeLog.Vistas.Inventario
             dgvDetalleHistorial.Columns["colDCont"].DefaultCellStyle.Format = "N2";
             dgvDetalleHistorial.Columns["colDStk"].DefaultCellStyle.Format = "N2";
             dgvDetalleHistorial.Columns["colDDif"].DefaultCellStyle.Format = "N2";
-            if (SessionManager.DebeOcultarCantidadesStockMateriales)
+            if (servicios.Sesion.DebeOcultarCantidadesStockMateriales)
             {
                 dgvDetalleHistorial.Columns["colDStk"].Visible = false;
                 dgvDetalleHistorial.Columns["colDDif"].Visible = false;
@@ -953,9 +955,9 @@ namespace SteeLog.Vistas.Inventario
         {
             bool hay = _conteoSeleccionadoHistorial != null;
             string estado = hay ? (_conteoSeleccionadoHistorial.Estado ?? "").ToLower() : "";
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            bool esAdmin = servicios.Sesion.Role == UserRole.Admin;
             string propietario = _conteoSeleccionadoHistorial?.UsuarioInicio?.Trim();
-            string email = SessionManager.Email?.Trim();
+            string email = servicios.Sesion.Email?.Trim();
             bool esCreador = hay && !string.IsNullOrWhiteSpace(email) && (string.Equals(propietario, email, StringComparison.OrdinalIgnoreCase)
                 || (string.Equals(propietario, "admin", StringComparison.OrdinalIgnoreCase) && string.Equals(email, "admin@tesis.local", StringComparison.OrdinalIgnoreCase))
                 || (string.Equals(propietario, "galpon", StringComparison.OrdinalIgnoreCase) && string.Equals(email, "galpon@tesis.local", StringComparison.OrdinalIgnoreCase)));
@@ -989,7 +991,7 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnImprimir_Click(object sender, EventArgs e)
         {
             var conteo = _conteoSeleccionadoHistorial; if (conteo == null || !Comenzar()) return; int id = conteo.Id, version = versionHistorial;
-            bool esAdmin = SessionManager.Role == UserRole.Admin;
+            bool esAdmin = servicios.Sesion.Role == UserRole.Admin;
             try { var detalles = await presenter.DetallesAsync(id, cierre.Token); var secciones = await presenter.SeccionesAsync(cierre.Token);
                 if (!Vigente || _tabActual != "historial" || version != versionHistorial || _conteoSeleccionadoHistorial?.Id != id) return;
                 string ruta = Path.Combine(Path.GetTempPath(), pdf.SugerirNombreArchivo(conteo));
@@ -1002,7 +1004,7 @@ namespace SteeLog.Vistas.Inventario
         private async void BtnEliminarHistorial_Click(object sender, EventArgs e)
         {
             var conteo = _conteoSeleccionadoHistorial; if (conteo == null || ocupada) return;
-            if (SessionManager.Role != UserRole.Admin) { ToastNotification.ShowWarning("Solo los administradores pueden eliminar conteos."); return; }
+            if (servicios.Sesion.Role != UserRole.Admin) { ToastNotification.ShowWarning("Solo los administradores pueden eliminar conteos."); return; }
             int id = conteo.Id; if (!Dialogo.Confirmar($"¿Eliminar definitivamente el conteo #{id}?\n\nSe borrarán la cabecera y todos los detalles asociados.", "Confirmar eliminación", true) || !Comenzar()) return;
             int version = versionHistorial;
             try { await presenter.EliminarAsync(id, cierre.Token); if (Vigente && _tabActual == "historial" && version == versionHistorial && _conteoSeleccionadoHistorial?.Id == id) await CargarHistorial(); }

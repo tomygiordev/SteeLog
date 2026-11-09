@@ -74,11 +74,11 @@ namespace SteeLog.Tests
         private static IReadOnlyList<ReporteStockItem> Filas(string nombre) => new[] { new ReporteStockItem { Material = new MaterialInventarioLectura { Id = 1, Nombre = nombre, Categoria = "Acero", Stock = 73, Minimo = 2, Precio = 98765 } } };
         private static Form Vista(Executor executor, Pdf pdf, Func<object> identidad, Func<bool> admin, Func<string> ruta, Action<string> abrir, Action<string> error)
         {
-            return (Form)Activator.CreateInstance(Tipo("Vista_ReporteStock"), Privado, null, new object[] { new ReporteStockPresenter(executor, pdf), identidad, admin, ruta, abrir, error, (Action<string>)(_ => { }) }, null);
+            return (Form)Activator.CreateInstance(Tipo("Vista_ReporteStock"), Privado, null, new object[] { new ServiciosVistaDePrueba(), new ReporteStockPresenter(executor, pdf), identidad, admin, ruta, abrir, error, (Action<string>)(_ => { }) }, null);
         }
         private static Form Modal(ReporteStockPresenter presenter, Func<object> identidad, Action<string> error, Action<string> exito)
         {
-            return (Form)Activator.CreateInstance(Tipo("Reportes.ModalConfigReporteStock"), Privado, null, new object[] { presenter, identidad, error, exito }, null);
+            return (Form)Activator.CreateInstance(Tipo("Reportes.ModalConfigReporteStock"), Privado, null, new object[] { new ServiciosVistaDePrueba(), presenter, identidad, error, exito }, null);
         }
         private static Form Modal(ReporteStockPresenter presenter, Func<object> identidad, Action<string> error) => Modal(presenter, identidad, error, (Action<string>)(_ => { }));
         private static void Cargar(Form vista) => Llamar(vista, "CargarMateriales", null, false, null);
@@ -91,7 +91,7 @@ namespace SteeLog.Tests
                 var consulta = new ConsultaFiltro(); var executor = new ExecutorConsulta(consulta);
                 object identidad = new object();
                 using (var vista = (Form)Activator.CreateInstance(Tipo("Vista_ReporteStock"), Privado, null,
-                    new object[] { new ReporteStockPresenter(executor, new Pdf()), (Func<object>)(() => identidad),
+                    new object[] { new ServiciosVistaDePrueba(), new ReporteStockPresenter(executor, new Pdf()), (Func<object>)(() => identidad),
                         (Func<bool>)(() => true), (Func<string>)(() => null), (Action<string>)(_ => { }),
                         (Action<string>)(_ => { }), (Action<string>)(_ => { }) }, null)) {
                     var handle = vista.Handle;
@@ -177,7 +177,7 @@ namespace SteeLog.Tests
                 var executor = new Executor(); var primera = executor.Agregar(); var materiales = executor.Agregar(); var secciones = executor.Agregar(); var guardar = executor.Agregar();
                 var presenter = new ReporteStockPresenter(executor, new Pdf()); object identidad = new object(); int errores = 0;
                 var tipo = Tipo("Reportes.ModalConfigReporteStock");
-                using (var modal = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { presenter, (Func<object>)(() => identidad), (Action<string>)(_ => errores++), (Action<string>)(_ => { }) }, null)) {
+                using (var modal = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), presenter, (Func<object>)(() => identidad), (Action<string>)(_ => errores++), (Action<string>)(_ => { }) }, null)) {
                     var handle = modal.Handle; Llamar(modal, "CargarDatos", (object)null); Llamar(modal, "GuardarTodo"); Assert.Equal(1, executor.Llamadas);
                     primera.SetException(new Exception("fallo")); Esperar(() => errores == 1); Llamar(modal, "GuardarTodo"); Assert.Equal(1, executor.Llamadas);
                     Llamar(modal, "CargarDatos", (object)null); materiales.SetResult((IReadOnlyList<MaterialInventarioLectura>)new MaterialInventarioLectura[0]); Esperar(() => executor.Llamadas == 3);

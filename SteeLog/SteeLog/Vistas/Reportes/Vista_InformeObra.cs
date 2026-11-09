@@ -36,6 +36,7 @@ namespace SteeLog.Vistas.Reportes
         private readonly CancellationTokenSource vida = new CancellationTokenSource();
         private CancellationTokenSource cargaObra;
         private int versionObra;
+        private readonly IServiciosVista servicios;
         private readonly CanaletasPresenter presenterInyectado;
         private readonly Func<int, string, CancellationToken, Task<LecturasObra>> cargarLecturas;
         internal Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> GenerarInforme;
@@ -45,7 +46,7 @@ namespace SteeLog.Vistas.Reportes
         internal Action<string> AvisarRetorno;
         private bool retornandoHerramienta;
         private bool generandoInforme;
-        private CanaletasPresenter Presenter => presenterInyectado ?? new CanaletasPresenter(LocalServices.Current.Executor);
+        private CanaletasPresenter Presenter => presenterInyectado ?? new CanaletasPresenter(servicios.Executor);
         internal sealed class LecturasObra
         {
             internal List<InformeMovimientoDetallePdf> Movimientos;
@@ -53,12 +54,12 @@ namespace SteeLog.Vistas.Reportes
             internal List<InformeInsumoDetallePdf> Insumos;
             internal bool Mostrar;
         }
-        internal Vista_InformeObra(CanaletasPresenter presenter, Func<int, string, CancellationToken, Task<LecturasObra>> cargar) : this()
+        internal Vista_InformeObra(IServiciosVista servicios, CanaletasPresenter presenter, Func<int, string, CancellationToken, Task<LecturasObra>> cargar) : this(servicios)
         { presenterInyectado = presenter; cargarLecturas = cargar; }
         private async Task<LecturasObra> LeerDatosAsync(int id, string nombre, CancellationToken token)
         {
             if (cargarLecturas != null) return await cargarLecturas(id, nombre, token);
-            var lecturas = await new InformeObraPresenter(LocalServices.Current.Executor, LocalServices.Current.InformeObraPdf).LecturasAsync(id, nombre, token);
+            var lecturas = await new InformeObraPresenter(servicios.Executor, servicios.InformeObraPdf).LecturasAsync(id, nombre, token);
             return new LecturasObra { Movimientos = lecturas.Movimientos, Herramientas = lecturas.Herramientas, Insumos = lecturas.Insumos, Mostrar = lecturas.MostrarValorizacion };
         }
         private void HabilitarAcciones(bool habilitado) { panelTabs.Enabled = habilitado; dgvDatos.Enabled = habilitado; btnDescargar.Enabled = habilitado; }
@@ -67,8 +68,9 @@ namespace SteeLog.Vistas.Reportes
         private Label lblMateriales;
         private bool mostrarValorizacionActual;
 
-        public Vista_InformeObra()
+        public Vista_InformeObra(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             InitializeComponent();
             Tema.SinEscala(this);
             ConfigurarResumenUI();
@@ -299,7 +301,7 @@ namespace SteeLog.Vistas.Reportes
             try
             {
                 var obras = ConsultarObras != null ? await ConsultarObras(token)
-                    : await LocalServices.Current.Executor.ExecuteAsync<ConsultarCatalogos, IReadOnlyList<ObraCatalogo>>(x => x.ObrasAsync(token));
+                    : await servicios.Executor.ExecuteAsync<ConsultarCatalogos, IReadOnlyList<ObraCatalogo>>(x => x.ObrasAsync(token));
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
                 var dt = new DataTable();
                 dt.Columns.Add("id", typeof(int));
@@ -959,7 +961,7 @@ namespace SteeLog.Vistas.Reportes
             string nombreObra = drv["nombre"].ToString();
 
             int version = versionObra;
-            using (var modal = new ModalFechasInformeObra(idObra))
+            using (var modal = new ModalFechasInformeObra(servicios, idObra))
             {
                 if (modal.ShowDialog(this) != DialogResult.OK || vida.IsCancellationRequested || IsDisposed || version != versionObra)
                     return;
@@ -1069,7 +1071,7 @@ namespace SteeLog.Vistas.Reportes
             try
             {
                 if (RetornarHerramienta != null) await RetornarHerramienta(idHerramienta, token);
-                else await LocalServices.Current.Executor.ExecuteAsync<GestionarHerramientas, int>(x => x.EnviarAGalponAsync(idHerramienta, token));
+                else await servicios.Executor.ExecuteAsync<GestionarHerramientas, int>(x => x.EnviarAGalponAsync(idHerramienta, token));
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
                 CargarDatosObra();
                 if (AvisarRetorno != null) AvisarRetorno("La herramienta fue enviada al galpón.");

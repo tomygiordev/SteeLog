@@ -61,7 +61,7 @@ namespace SteeLog.Tests
                     ejecutor.Pendientes.Enqueue(a); ejecutor.Pendientes.Enqueue(b); ejecutor.Pendientes.Enqueue(c);
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
                     var identidad = new object();
-                    var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, new Pdf()), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null);
+                    var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new KardexPresenter(ejecutor, new Pdf()), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null);
                     Assert.Equal(0, ejecutor.Llamadas); var handle = vista.Handle;
                     var cargar = tipo.GetMethod("CargarKardex", Privado);
                     cargar.Invoke(vista, new object[] { null }); cargar.Invoke(vista, new object[] { null });
@@ -89,7 +89,7 @@ namespace SteeLog.Tests
                     var pdf = new PdfPendiente(); int aperturas = 0; var identidad = new object();
                     try {
                         var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
-                        var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => aperturas++) }, null);
+                        var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => aperturas++) }, null);
                         var handle = vista.Handle; tipo.GetMethod("CargarKardex", Privado).Invoke(vista, new object[] { null });
                         carga.SetResult(new List<KardexItem> { new KardexItem { id_movimiento = 1, fecha = DateTime.Today, nombre_material = "A" } });
                         var grid = (DataGridView)tipo.GetField("dgvKardex", Privado).GetValue(vista);
@@ -118,7 +118,7 @@ namespace SteeLog.Tests
                     var pdf = new PdfPendiente(); object identidad = new object(); int avisos = 0, confirmaciones = 0;
                     try {
                         var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
-                        using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null)) {
+                        using (var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new KardexPresenter(ejecutor, pdf), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null)) {
                             var handle = vista.Handle;
                             tipo.GetField("avisarPdfFallido", Privado).SetValue(vista, (Action<string>)(_ => avisos++));
                             tipo.GetField("confirmarEliminacion", Privado).SetValue(vista, (Func<bool>)(() => { confirmaciones++; return true; }));
@@ -158,7 +158,7 @@ namespace SteeLog.Tests
                     SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
                     var ejecutor = new DeleteExecutor(); object identidad = new object(); int exitos = 0, errores = 0, confirmaciones = 0;
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Vista_Kardex", true);
-                    var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new KardexPresenter(ejecutor, new Pdf()), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null);
+                    var vista = (Form)Activator.CreateInstance(tipo, Privado, null, new object[] { new ServiciosVistaDePrueba(), new KardexPresenter(ejecutor, new Pdf()), (Func<object>)(() => identidad), (Func<bool>)(() => false), (Action<string>)(_ => { }) }, null);
                     var handle = vista.Handle;
                     tipo.GetField("confirmarEliminacion", Privado).SetValue(vista, (Func<bool>)(() => { confirmaciones++; return true; }));
                     tipo.GetField("avisarEliminacionExitosa", Privado).SetValue(vista, (Action<string>)(_ => exitos++));

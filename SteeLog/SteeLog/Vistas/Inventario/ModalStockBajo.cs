@@ -14,15 +14,18 @@ namespace SteeLog.Vistas.Inventario
 {
     public class ModalStockBajo : Form
     {
-        private readonly MaterialesPresenter _presenter = new MaterialesPresenter(LocalServices.Current.Executor);
+        private readonly IServiciosVista servicios;
+        private readonly MaterialesPresenter _presenter;
         private readonly CancellationTokenSource _cierre = new CancellationTokenSource();
         private Guna.UI2.WinForms.Guna2DataGridView dgvMateriales;
         private Guna.UI2.WinForms.Guna2Button btnCerrar;
         private Label lblTitulo;
         private Guna.UI2.WinForms.Guna2Panel panelFondo;
 
-        public ModalStockBajo()
+        public ModalStockBajo(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            _presenter = new MaterialesPresenter(this.servicios.Executor);
             InitializeComponent();
             ConfigurarFormulario();
             Shown += (s, e) => CargarDatos();
@@ -112,14 +115,14 @@ namespace SteeLog.Vistas.Inventario
             {
                 var bajoStock = await _presenter.ListarAsync(new FiltroMaterialLectura { Priorizados = true }, _cierre.Token);
                 if (_cierre.IsCancellationRequested || IsDisposed) return;
-                bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+                bool ocultarCantidades = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
 
                 var source = bajoStock.Select(m => new
                 {
                     Codigo = m.Id,
                     Material = m.Nombre,
                     Categoria = m.Categoria,
-                    StockActual = ocultarCantidades ? SessionManager.ObtenerEstadoStockMaterial(m.Stock) : m.Stock.ToString("N0"),
+                    StockActual = ocultarCantidades ? servicios.Sesion.ObtenerEstadoStockMaterial(m.Stock) : m.Stock.ToString("N0"),
                     StockMinimo = ocultarCantidades ? string.Empty : m.Minimo.ToString("N0"),
                     Movimientos = m.CantidadMovimientos
                 }).ToList();

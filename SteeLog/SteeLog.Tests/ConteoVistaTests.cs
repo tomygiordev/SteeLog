@@ -104,7 +104,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new Ejecutor();
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor, null)) {
                         Assert.Equal(0, ejecutor.Llamadas);
                         var handle = vista.Handle;
                         var grid = (DataGridView)tipo.GetField("dgvEntrada", f).GetValue(vista); var gridHandle = grid.Handle;
@@ -122,7 +122,7 @@ namespace SteeLog.Tests
                         tardia.SetResult(new[] { new DetalleConteoLectura { Nombre="Tardío" } }); Esperar(tercera);
                         Assert.Equal("Nuevo", ((List<DetalleConteoLectura>)grid.DataSource)[0].Nombre);
                     }
-                    var otro = new Ejecutor(); var formulario = (Form)Activator.CreateInstance(tipo, otro, null);
+                    var otro = new Ejecutor(); var formulario = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), otro, null);
                     var token = (CancellationTokenSource)tipo.GetField("cierre", f).GetValue(formulario); formulario.Dispose(); Assert.True(token.IsCancellationRequested);
                 } catch (Exception ex) { error = ex; }
             });
@@ -138,7 +138,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new EjecutorMutacion();
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor, null)) {
                         var handle = vista.Handle;
                         var actual = tipo.GetField("_conteoActual", f); var material = tipo.GetField("_materialSeleccionado", f);
                         tipo.GetField("entradaLista", f).SetValue(vista, true); actual.SetValue(vista, new ConteoLectura { Id=1 }); material.SetValue(vista, new MaterialInventarioLectura { Id=9, Nombre="A" });
@@ -169,7 +169,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new EjecutorAbierto();
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor, null)) {
                         var handle = vista.Handle;
                         var antigua = new TaskCompletionSource<ConteoLectura>(); var nueva = new TaskCompletionSource<ConteoLectura>();
                         ejecutor.Pendientes.Enqueue(antigua); ejecutor.Pendientes.Enqueue(nueva);
@@ -201,7 +201,7 @@ namespace SteeLog.Tests
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new EjecutorRecuperacion { FallarCreacion = falloAntesDeCrear, FallarLectura = !falloAntesDeCrear };
                     var avisos = new List<string>(); Action<string> aviso = avisos.Add; Action<string> exito = _ => { };
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null, null, aviso, exito)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor, null, null, aviso, exito)) {
                         var handle = vista.Handle;
                         tipo.GetField("entradaLista", f).SetValue(vista, true);
                         var iniciar = tipo.GetMethod("BtnIniciarConteo_Click", f);
@@ -236,7 +236,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     var ejecutor = new EjecutorCargaIncierta(); var avisos = new List<string>(); Action<string> aviso = avisos.Add;
-                    using (var vista = (Form)Activator.CreateInstance(tipo, ejecutor, null, null, aviso, aviso)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), ejecutor, null, null, aviso, aviso)) {
                         var handle = vista.Handle;
                         tipo.GetField("entradaLista", f).SetValue(vista, true);
                         tipo.GetField("_conteoActual", f).SetValue(vista, new ConteoLectura { Id = 42 });
@@ -267,7 +267,7 @@ namespace SteeLog.Tests
                     var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Inventario.Vista_Conteo", true);
                     const BindingFlags f = BindingFlags.Instance | BindingFlags.NonPublic;
                     int abiertos = 0; Action<string> abrir = _ => abiertos++;
-                    using (var vista = (Form)Activator.CreateInstance(tipo, new EjecutorPdf(), pdf, abrir)) {
+                    using (var vista = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba(), new EjecutorPdf(), pdf, abrir)) {
                         var handle = vista.Handle;
                         tipo.GetField("_tabActual", f).SetValue(vista, "historial");
                         tipo.GetField("_conteoSeleccionadoHistorial", f).SetValue(vista, new ConteoLectura { Id=3, Estado="finalizado" });

@@ -11,11 +11,13 @@ namespace SteeLog.Vistas.Reportes
     public partial class ModalFechasInformeObra : Form
     {
         private readonly CancellationTokenSource vida = new CancellationTokenSource();
+        private readonly IServiciosVista servicios;
         private readonly int idObra;
         public DateTime FechaDesde { get; private set; }
         public DateTime FechaHasta { get; private set; }
-        public ModalFechasInformeObra(int idObra)
+        public ModalFechasInformeObra(IServiciosVista servicios, int idObra)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             this.idObra = idObra;
             InitializeComponent();
             AplicarEstilo();
@@ -69,7 +71,7 @@ namespace SteeLog.Vistas.Reportes
             var token = vida.Token;
             try
             {
-                var primera = await new InformeObraPresenter(LocalServices.Current.Executor, LocalServices.Current.InformeObraPdf).PrimeraFechaAsync(idObra, token);
+                var primera = await new InformeObraPresenter(servicios.Executor, servicios.InformeObraPdf).PrimeraFechaAsync(idObra, token);
                 if (!token.IsCancellationRequested && !IsDisposed) dtpDesde.Value = primera ?? DateTime.Today.AddMonths(-1);
             }
             catch (OperationCanceledException) { }

@@ -31,8 +31,9 @@ namespace SteeLog.Vistas
         private bool panelesVisibles = false;
         private int panelDashboardHeight;
         private ReporteStockPresenter presenter;
-        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
-        private Func<bool> esAdmin = () => SessionManager.Role == UserRole.Admin;
+        private readonly IServiciosVista servicios;
+        private Func<object> identidadActual;
+        private Func<bool> esAdmin;
         private Func<string> elegirPdf = ElegirDestinoPdf;
         private Action<string> abrirPdf = ruta => System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ruta) { UseShellExecute = true });
         private Action<string> avisarError = mensaje => ToastNotification.ShowError(mensaje);
@@ -53,8 +54,11 @@ namespace SteeLog.Vistas
             try { carga?.Cancel(); } catch (ObjectDisposedException) { }
         }
 
-        public Vista_ReporteStock()
+        public Vista_ReporteStock(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            identidadActual = () => this.servicios.Sesion.Email;
+            esAdmin = () => this.servicios.Sesion.Role == UserRole.Admin;
             InitializeComponent();
             Tema.SinEscala(this);
             AplicarEstiloUI();
@@ -65,7 +69,7 @@ namespace SteeLog.Vistas
             Disposed += (s, e) => CancelarOperaciones();
         }
 
-        internal Vista_ReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Func<bool> esAdmin, Func<string> elegirPdf, Action<string> abrirPdf, Action<string> avisarError, Action<string> avisarExito) : this()
+        internal Vista_ReporteStock(IServiciosVista servicios, ReporteStockPresenter presenter, Func<object> identidadActual, Func<bool> esAdmin, Func<string> elegirPdf, Action<string> abrirPdf, Action<string> avisarError, Action<string> avisarExito) : this(servicios)
         {
             this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
@@ -78,7 +82,7 @@ namespace SteeLog.Vistas
 
         private void Vista_ReporteStock_Load(object sender, EventArgs e)
         {
-            if (presenter == null) presenter = new ReporteStockPresenter(LocalServices.Current.Executor, LocalServices.Current.ReporteStockPdf);
+            if (presenter == null) presenter = new ReporteStockPresenter(servicios.Executor, servicios.ReporteStockPdf);
             CrearBotonTogglePaneles();
             CargarMateriales();
             panelDashboardHeight = panelDashboard.Height;
@@ -216,7 +220,7 @@ namespace SteeLog.Vistas
 
         private void BtnConfigurarSecciones_Click(object sender, EventArgs e)
         {
-            using (var modal = new Reportes.ModalConfigReporteStock(presenter))
+            using (var modal = new Reportes.ModalConfigReporteStock(servicios, presenter))
                 modal.ShowDialog(this);
             CargarMateriales(txtFiltroMaterial.Text.Trim(), toggleStockBajo.Checked);
         }
@@ -440,7 +444,7 @@ namespace SteeLog.Vistas
                     if (!esAdmin()
                         && dgvMateriales.Columns[e.ColumnIndex].Name == "stockActual")
                     {
-                        e.Value = SessionManager.ObtenerEstadoStockMaterial(item.stockActual);
+                        e.Value = servicios.Sesion.ObtenerEstadoStockMaterial(item.stockActual);
                         e.FormattingApplied = true;
                     }
 
@@ -645,7 +649,7 @@ namespace SteeLog.Vistas
                             {
                                 object cellValue = dgvMateriales.Rows[i].Cells[visibleColumns[j].Index].Value;
                                 if (!esAdmin() && visibleColumns[j].Name == "stockActual")
-                                    cellValue = SessionManager.ObtenerEstadoStockMaterial(material.stockActual);
+                                    cellValue = servicios.Sesion.ObtenerEstadoStockMaterial(material.stockActual);
                                 ws.Cells[i + 2, j + 1].Value = cellValue;
 
                                 // Formato moneda si es precio

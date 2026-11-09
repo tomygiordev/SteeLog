@@ -94,7 +94,7 @@ namespace SteeLog.Tests
                 };
                 foreach (var tipo in tipos)
                 {
-                    using (var form = (Form)Activator.CreateInstance(tipo))
+                    using (var form = (Form)Activator.CreateInstance(tipo, tipo.GetConstructor(new[] { typeof(SteeLog.Presentation.IServiciosVista) }) != null ? new object[] { new ServiciosVistaDePrueba() } : new object[0]))
                     {
                         Assert.NotNull(form);
                         Assert.False(form.IsDisposed);

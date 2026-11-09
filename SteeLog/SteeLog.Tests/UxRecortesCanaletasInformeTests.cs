@@ -93,7 +93,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
-                using (var form = (Form)Activator.CreateInstance(tipo))
+                using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()))
                 {
                     var label = Campo<Label>(form, "lblVacio");
                     var grilla = Campo<DataGridView>(form, "dgvDatos");
@@ -139,7 +139,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
-                using (var form = (Form)Activator.CreateInstance(tipo))
+                using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()))
                 {
                     foreach (var n in new[] { "btnDescargar", "btnTabMovimientos", "btnTabHerramientas", "btnTabInsumos", "btnTabMateriales", "btnTabEventuales", "btnTabCanaletasPlegados" })
                     {

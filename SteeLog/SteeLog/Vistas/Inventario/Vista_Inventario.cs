@@ -51,10 +51,13 @@ namespace SteeLog.Vistas.Inventario
         // Grid
         private Guna2DataGridView dgvInventario;
 
-        public Vista_Inventario() : this(LocalServices.Current.Executor) { }
+        private readonly IServiciosVista servicios;
 
-        public Vista_Inventario(IUseCaseExecutor executor)
+        public Vista_Inventario(IServiciosVista servicios) : this(servicios, (servicios ?? throw new ArgumentNullException(nameof(servicios))).Executor) { }
+
+        public Vista_Inventario(IServiciosVista servicios, IUseCaseExecutor executor)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             presenter = new InventarioPresenter(executor);
             InitializeComponent();
             Tema.SinEscala(this);
@@ -456,8 +459,8 @@ namespace SteeLog.Vistas.Inventario
         {
             var items = await presenter.MaterialesAsync(busqueda, categoria, estado, cierre.Token);
             if (cierre.IsCancellationRequested || IsDisposed || version != versionLista) return;
-            bool mostrarPrecios = SessionManager.Role == UserRole.Admin;
-            bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+            bool mostrarPrecios = servicios.Sesion.Role == UserRole.Admin;
+            bool ocultarCantidades = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
             DataTable dt = new DataTable();
             dt.Columns.Add("Nombre", typeof(string));
             dt.Columns.Add("Categoría", typeof(string));
@@ -477,14 +480,14 @@ namespace SteeLog.Vistas.Inventario
                 if (mostrarPrecios)
                 {
                     if (ocultarCantidades)
-                        dt.Rows.Add(m.nombre, m.categoria, SessionManager.ObtenerEstadoStockMaterial(m.stock_actual), m.precio_unitario, m.stock_actual * m.precio_unitario, m.estado_stock, m.proveedores);
+                        dt.Rows.Add(m.nombre, m.categoria, servicios.Sesion.ObtenerEstadoStockMaterial(m.stock_actual), m.precio_unitario, m.stock_actual * m.precio_unitario, m.estado_stock, m.proveedores);
                     else
                         dt.Rows.Add(m.nombre, m.categoria, m.stock_actual, m.stock_minimo, m.precio_unitario, m.stock_actual * m.precio_unitario, m.estado_stock, m.proveedores);
                 }
                 else
                 {
                     if (ocultarCantidades)
-                        dt.Rows.Add(m.nombre, m.categoria, SessionManager.ObtenerEstadoStockMaterial(m.stock_actual), m.estado_stock, m.proveedores);
+                        dt.Rows.Add(m.nombre, m.categoria, servicios.Sesion.ObtenerEstadoStockMaterial(m.stock_actual), m.estado_stock, m.proveedores);
                     else
                         dt.Rows.Add(m.nombre, m.categoria, m.stock_actual, m.stock_minimo, m.estado_stock, m.proveedores);
                 }
@@ -629,13 +632,13 @@ namespace SteeLog.Vistas.Inventario
             switch (tabActual)
             {
                 case "materiales":
-                    bool ocultarCantidades = SessionManager.DebeOcultarCantidadesStockMateriales;
+                    bool ocultarCantidades = servicios.Sesion.DebeOcultarCantidadesStockMateriales;
                     dt.Columns.Add("Nombre", typeof(string));
                     dt.Columns.Add("Categoría", typeof(string));
                     dt.Columns.Add(ocultarCantidades ? "Disponibilidad" : "Stock Actual", ocultarCantidades ? typeof(string) : typeof(decimal));
                     if (!ocultarCantidades)
                         dt.Columns.Add("Stock Mínimo", typeof(decimal));
-                    if (SessionManager.Role == UserRole.Admin)
+                    if (servicios.Sesion.Role == UserRole.Admin)
                     {
                         dt.Columns.Add("P. Unitario", typeof(decimal));
                         dt.Columns.Add("Valor Total", typeof(decimal));

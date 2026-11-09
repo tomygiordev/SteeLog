@@ -37,8 +37,9 @@ namespace SteeLog.Vistas
         private KardexMaterial _materialSeleccionado = null;
 
         private KardexPresenter presenter;
-        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
-        private Func<bool> ocultarSaldo = () => SessionManager.DebeOcultarCantidadesStockMateriales;
+        private readonly IServiciosVista servicios;
+        private Func<object> identidadActual;
+        private Func<bool> ocultarSaldo;
         private Action<string> abrirPdf = ruta => Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
         private Action<string> avisarPdfFallido = mensaje => ToastNotification.ShowError(mensaje);
         private readonly CancellationTokenSource vida = new CancellationTokenSource();
@@ -57,8 +58,11 @@ namespace SteeLog.Vistas
             _timerDebounce?.Stop();
         }
 
-        public Vista_Kardex()
+        public Vista_Kardex(IServiciosVista servicios)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            identidadActual = () => this.servicios.Sesion.Email;
+            ocultarSaldo = () => this.servicios.Sesion.DebeOcultarCantidadesStockMateriales;
             InitializeComponent();
             Tema.SinEscala(this);
             InitializeCustomControls();
@@ -67,7 +71,7 @@ namespace SteeLog.Vistas
             FormClosed += (s, e) => CancelarOperaciones();
         }
 
-        internal Vista_Kardex(KardexPresenter presenter, Func<object> identidadActual, Func<bool> ocultarSaldo, Action<string> abrirPdf) : this()
+        internal Vista_Kardex(IServiciosVista servicios, KardexPresenter presenter, Func<object> identidadActual, Func<bool> ocultarSaldo, Action<string> abrirPdf) : this(servicios)
         {
             this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
@@ -552,7 +556,7 @@ namespace SteeLog.Vistas
 
         private void Vista_Kardex_Load(object sender, EventArgs e)
         {
-            if (presenter == null) presenter = new KardexPresenter(LocalServices.Current.Executor, LocalServices.Current.KardexPdf);
+            if (presenter == null) presenter = new KardexPresenter(servicios.Executor, servicios.KardexPdf);
             CargarMateriales();
             CargarKardex();
         }

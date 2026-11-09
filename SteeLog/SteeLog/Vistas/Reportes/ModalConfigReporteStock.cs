@@ -15,8 +15,9 @@ namespace SteeLog.Vistas.Reportes
 {
     public class ModalConfigReporteStock : Form
     {
+        private readonly IServiciosVista servicios;
         private readonly ReporteStockPresenter presenter;
-        private Func<object> identidadActual = () => LocalServices.Current.Session.Current;
+        private Func<object> identidadActual;
         private Action<string> avisarError = mensaje => ToastNotification.ShowError(mensaje);
         private Action<string> avisarExito = mensaje => ToastNotification.ShowSuccess(mensaje);
         private readonly CancellationTokenSource vida = new CancellationTokenSource();
@@ -84,8 +85,10 @@ namespace SteeLog.Vistas.Reportes
             if (btnGuardar != null) btnGuardar.Enabled = habilitado;
         }
 
-        public ModalConfigReporteStock(ReporteStockPresenter presenter)
+        public ModalConfigReporteStock(IServiciosVista servicios, ReporteStockPresenter presenter)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
+            identidadActual = () => this.servicios.Sesion.Email;
             this.presenter = presenter ?? throw new ArgumentNullException(nameof(presenter));
             Text = "Configurar secciones del reporte de stock";
             StartPosition = FormStartPosition.CenterParent;
@@ -100,7 +103,7 @@ namespace SteeLog.Vistas.Reportes
             Disposed += (s, e) => CancelarOperaciones();
         }
 
-        internal ModalConfigReporteStock(ReporteStockPresenter presenter, Func<object> identidadActual, Action<string> avisarError, Action<string> avisarExito) : this(presenter)
+        internal ModalConfigReporteStock(IServiciosVista servicios, ReporteStockPresenter presenter, Func<object> identidadActual, Action<string> avisarError, Action<string> avisarExito) : this(servicios, presenter)
         {
             this.identidadActual = identidadActual ?? throw new ArgumentNullException(nameof(identidadActual));
             this.avisarError = avisarError ?? throw new ArgumentNullException(nameof(avisarError));

@@ -179,7 +179,7 @@ namespace SteeLog
                     _mostrarStock(countBajoStock, () =>
                         {
                             if (token.IsCancellationRequested || IsDisposed || Disposing) return;
-                            using (var modal = new ModalStockBajo()) modal.ShowDialog(this);
+                            using (var modal = new ModalStockBajo(servicios)) modal.ShowDialog(this);
                         });
                 }
             }
@@ -302,19 +302,19 @@ namespace SteeLog
         #region ToolsSubMenu
         private void button13_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_ReporteStock());
+            openChildForm(() => new Vista_ReporteStock(servicios));
             hideSubMenu();
         }
 
         private void button12_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Kardex());
+            openChildForm(() => new Vista_Kardex(servicios));
             hideSubMenu();
         }
 
         private void button10_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_InformeObra());
+            openChildForm(() => new Vista_InformeObra(servicios));
             hideSubMenu();
         }
         #endregion
@@ -326,7 +326,7 @@ namespace SteeLog
 
         private void btnInventarioGeneral_Click(object sender, EventArgs e)
         {
-            openChildForm(() => new Vista_Inventario());
+            openChildForm(() => new Vista_Inventario(servicios));
             hideSubMenu();
         }
 
@@ -394,7 +394,7 @@ namespace SteeLog
             }
             else
             {
-                openChildForm(() => new Vista_Conteo());
+                openChildForm(() => new Vista_Conteo(servicios));
             }
         }
 

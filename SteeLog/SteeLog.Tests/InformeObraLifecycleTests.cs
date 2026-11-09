@@ -62,7 +62,7 @@ namespace SteeLog.Tests
                 var ejecutor = new Ejecutar();
                 var ca = new TaskCompletionSource<IReadOnlyList<CanaletaLectura>>(); var cb = new TaskCompletionSource<IReadOnlyList<CanaletaLectura>>();
                 ejecutor.Canaletas.Enqueue(ca); ejecutor.Canaletas.Enqueue(cb);
-                using (var form = (Form)Activator.CreateInstance(tipo, Private, null, new object[] { new CanaletasPresenter(ejecutor), cargar }, null)) {
+                using (var form = (Form)Activator.CreateInstance(tipo, Private, null, new object[] { new ServiciosVistaDePrueba(), new CanaletasPresenter(ejecutor), cargar }, null)) {
                     var handle = form.Handle;
                     var combo = (ComboBox)tipo.GetField("cmbObras", Private).GetValue(form);
                     var dt = new DataTable(); dt.Columns.Add("id", typeof(int)); dt.Columns.Add("nombre", typeof(string)); dt.Rows.Add(1, "A"); dt.Rows.Add(2, "B");
@@ -115,7 +115,7 @@ namespace SteeLog.Tests
         {
             Sta(() => {
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
-                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba())) {
                     var handle = form.Handle;
                     var pendiente = new TaskCompletionSource<int>();
                     int envios = 0, avisos = 0;
@@ -142,7 +142,7 @@ namespace SteeLog.Tests
         public void ReporteTerminadoTrasCierreOCambioNoAbreVisor(bool cerrar)
         {
             Sta(() => {
-                var tipo=Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra",true); var form=(Form)Activator.CreateInstance(tipo); var handle=form.Handle;
+                var tipo=Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra",true); var form=(Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba()); var handle=form.Handle;
                 var tcs=new TaskCompletionSource<bool>(); bool abierto=false;
                 Func<string,int,string,DateTime?,DateTime?,CancellationToken,Task> generar=(ruta,id,nombre,desde,hasta,token)=>tcs.Task;
                 tipo.GetField("GenerarInforme",Private).SetValue(form,generar); tipo.GetField("AbrirInforme",Private).SetValue(form,new Action<string>(_=>abierto=true));
@@ -156,7 +156,7 @@ namespace SteeLog.Tests
         {
             Sta(() => {
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
-                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba())) {
                     var handle = form.Handle; var rutas = new List<string>();
                     Func<string, int, string, DateTime?, DateTime?, CancellationToken, Task> generar = (ruta, id, nombre, desde, hasta, token) => { rutas.Add(ruta); return Task.CompletedTask; };
                     tipo.GetField("GenerarInforme", Private).SetValue(form, generar);
@@ -174,7 +174,7 @@ namespace SteeLog.Tests
         {
             Sta(() => {
                 var tipo = Assembly.Load("SteeLog").GetType("SteeLog.Vistas.Reportes.Vista_InformeObra", true);
-                using (var form = (Form)Activator.CreateInstance(tipo)) {
+                using (var form = (Form)Activator.CreateInstance(tipo, new ServiciosVistaDePrueba())) {
                     var handle = form.Handle;
                     var pendiente = new TaskCompletionSource<bool>();
                     int envios = 0, abiertos = 0;
