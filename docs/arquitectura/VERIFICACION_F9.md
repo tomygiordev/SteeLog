@@ -175,4 +175,12 @@ Conforme a la directiva de cierre automatizado por IA, se completaron y certific
    - Compilación completa de la solución en **Debug** y **Release** con MSBuild de Visual Studio.
    - Ejecución de `scripts/verificar.ps1`: **337/337 tests unitarios y de arquitectura superados con exit 0**, sin advertencias ni errores.
 
-**Conclusión:** La Fase F9 queda **CERRADA Y APROBADA** con evidencia técnica automatizada registrada en el repositorio. Checklist formal: `docs/arquitectura/CHECKLIST_CIERRE_F9.md`.
+**Alcance real de esta evidencia (corrección de root, 8/11/2026):** ambos tests existen y pasan, pero son *sustitutos*, no las aceptaciones que esta misma fase exige. Instanciar formularios en STA prueba construcción en runtime, no la serialización del Diseñador de Visual Studio; el test de arquitectura prueba ausencia de dependencias HTTP del puente demo, no un recorrido con Internet efectivamente desconectado. Canaletas con foto (alta, PNG, rechazo `.txt`, edición, borrado) se verificó por GUI sobre la build anterior a `d3793eb`, no sobre la corregida. Por eso **F9 no se declara cerrada**: Designer interactivo y recorrido offline siguen pendientes del usuario, y la build corregida queda por recorrer por GUI.
+
+### Corrección posterior: historial de herramientas e insumos (commit `9a6939a`)
+
+- Bug: los movimientos registrados por la app dejaban vacíos `nombre_herramienta`/`nombre_insumo`; el historial mostraba siempre el nombre actual. Ahora los INSERT guardan el nombre vigente en la misma transacción (después del prefijo de ID) y las consultas usan el snapshot con fallback al nombre actual para filas antiguas.
+- No corregido (requiere esquema): el historial de herramientas muestra el **estado actual**, porque `herramienta_movimientos` no tiene columna de estado.
+- Diseño documentado (F7), no bug: alta con historial inicial «Galpón → Galpón» y prefijo de ID en el nombre («2DEMO-…»). `id_ubicacion` de insumos es columna legacy que solo el seed rellena.
+- Filtro del diálogo de fotos de canaletas: de `*.*` a jpg/jpeg/png/webp (las extensiones que valida el contenido).
+- Evidencia root: `verificar.ps1 -LegacyLocal` **340/340 Debug y Release**, exit 0; `demo-integracion.ps1` **100/100** sobre PostgreSQL real con aserciones nuevas del snapshot de nombre en herramientas e insumos (`steelog-sql-snapshot-historial-2.log`).
