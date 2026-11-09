@@ -60,16 +60,16 @@
     <NoWin32Manifest>true</NoWin32Manifest>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestCertificateThumbprint>2077412A23C8CE24D6A85EAB7FCD872B4B7F3333</ManifestCertificateThumbprint>
+    <ManifestCertificateThumbprint Condition="Exists('SteeLog_TemporaryKey.pfx')">2077412A23C8CE24D6A85EAB7FCD872B4B7F3333</ManifestCertificateThumbprint>
   </PropertyGroup>
   <PropertyGroup>
-    <ManifestKeyFile>SteeLog_TemporaryKey.pfx</ManifestKeyFile>
+    <ManifestKeyFile Condition="Exists('SteeLog_TemporaryKey.pfx')">SteeLog_TemporaryKey.pfx</ManifestKeyFile>
   </PropertyGroup>
   <PropertyGroup>
     <GenerateManifests>true</GenerateManifests>
   </PropertyGroup>
   <PropertyGroup>
-    <SignManifests>true</SignManifests>
+    <SignManifests Condition="Exists('SteeLog_TemporaryKey.pfx')">true</SignManifests>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Costura, Version=6.0.0.0, Culture=neutral, PublicKeyToken=9919ef960d84173d, processorArchitecture=MSIL">
@@ -266,6 +266,7 @@
       <DependentUpon>ModalSeleccionProveedores.cs</DependentUpon>
     </Compile>
     <Compile Include="Program.cs" />
+    <Compile Include="Servicios\RegistroErrores.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Vistas\Gestión\Vista_Recortes.cs">
       <SubType>Form</SubType>
@@ -521,11 +522,6 @@
     <Error Condition="!Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets'))" />
   </Target>
   <Import Project="..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets" Condition="Exists('..\packages\Costura.Fody.6.0.0\build\Costura.Fody.targets')" />
-  <ItemGroup>
-    <Reference Include="Transitions">
-      <HintPath>packages\dot-net-transitions.1.2.1.0\lib\net40-full\Transitions.dll</HintPath>
-    </Reference>
-  </ItemGroup>
   <ItemGroup>
     <Compile Include="CompositionRoot\LocalServices.cs" />
     <Compile Include="CompositionRoot\RecursosPdfLocales.cs" />

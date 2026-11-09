@@ -1,0 +1,24 @@
+name: Build y tests
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  verificar:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: microsoft/setup-msbuild@v2
+      - name: Compilar y probar Debug y Release
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($configuration in @('Debug', 'Release')) {
+            msbuild SteeLog/SteeLog.sln /restore /p:RestorePackagesConfig=true /p:Configuration=$configuration /m /v:minimal /nologo
+            if ($LASTEXITCODE -ne 0) { throw "MSBuild $configuration falló: $LASTEXITCODE" }
+            $env:STEELOG_HOST_ASSEMBLY = Join-Path $env:GITHUB_WORKSPACE "SteeLog\SteeLog\bin\$configuration\SteeLog.exe"
+            dotnet test SteeLog/SteeLog.Tests/SteeLog.Tests.csproj --configuration $configuration --no-build --no-restore --filter "Category!=Integration" --logger "console;verbosity=normal"
+            if ($LASTEXITCODE -ne 0) { throw "Tests $configuration fallaron: $LASTEXITCODE" }
+          }

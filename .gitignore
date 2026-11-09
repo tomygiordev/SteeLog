@@ -41,6 +41,27 @@ packages/
 *.nupkg
 *.snupkg
 
+# Dependencias locales versionadas: los HintPath requieren estos paquetes y DLL.
+!SteeLog/packages/
+SteeLog/packages/*
+!SteeLog/packages/Guna.UI2.WinForms.2.0.4.7/
+!SteeLog/packages/Guna.UI2.WinForms.2.0.4.7/**
+!SteeLog/packages/Npgsql.5.0.18/
+!SteeLog/packages/Npgsql.5.0.18/**
+!SteeLog/packages/System.Threading.Channels.4.7.0/
+!SteeLog/packages/System.Threading.Channels.4.7.0/**
+!SteeLog/packages/System.ValueTuple.4.5.0/
+!SteeLog/packages/System.ValueTuple.4.5.0/**
+!SteeLog/SteeLog/packages/
+SteeLog/SteeLog/packages/*
+!SteeLog/SteeLog/packages/BouncyCastle.Crypto.dll
+!SteeLog/SteeLog/packages/EPPlus.dll
+!SteeLog/SteeLog/packages/itextsharp.dll
+!SteeLog/SteeLog/Guna.UI2.dll
+
+# Clave ClickOnce local: no distribuir en el repositorio.
+SteeLog/SteeLog/SteeLog_TemporaryKey.pfx
+
 # Archivos de salida temporales
 out.json
 error.log
@@ -53,7 +74,6 @@ error.log
 .env
 **/.env
 SteeLog/SteeLog/appsettings.json
-SteeLog/SteeLog/App.config
 SteeLog/SteeLog/migration.sql
 SteeLog/SteeLog/remitos_validacion.json
 

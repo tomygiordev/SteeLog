@@ -1,5 +1,8 @@
 using System;
 using System.Windows.Forms;
+using System.IO;
+using System.Threading.Tasks;
+using SteeLog.UI;
 using SteeLog.CompositionRoot;
 using SteeLog.Servicios;
 
@@ -10,6 +13,20 @@ namespace SteeLog
         [STAThread]
         static void Main()
         {
+            var registro = RegistroErroresFactory.Crear();
+            Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
+            Application.ThreadException += (sender, e) =>
+            {
+                registro.Registrar(e.Exception);
+                try { Dialogo.Error("Ocurrió un error inesperado. Revisá la operación antes de continuar."); }
+                catch (Exception errorDialogo) { registro.Registrar(errorDialogo); }
+            };
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) => registro.Registrar(e.ExceptionObject);
+            TaskScheduler.UnobservedTaskException += (sender, e) =>
+            {
+                registro.Registrar(e.Exception);
+                e.SetObserved();
+            };
             var services = LocalServices.Current;
             try
             {
@@ -58,6 +75,17 @@ namespace SteeLog
             var area = pantalla.WorkingArea;
             ventana.Location = new System.Drawing.Point(area.Left + Math.Max(0, (area.Width - ventana.Width) / 2), area.Top + Math.Max(0, (area.Height - ventana.Height) / 2));
             ventana.WindowState = estado;
+        }
+    }
+}
+
+namespace SteeLog.CompositionRoot
+{
+    internal static class RegistroErroresFactory
+    {
+        internal static RegistroErrores Crear()
+        {
+            return new RegistroErrores(() => Path.GetDirectoryName(LocalServices.Current.Paths.StorageDirectory));
         }
     }
 }

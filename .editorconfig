@@ -1,0 +1,16 @@
+root = true
+
+[*]
+charset = utf-8
+# .gitattributes solo fija LF para demo/actualizaciones/paquete-demo.txt.
+# En el resto se conserva el fin de línea existente (checkout Windows: CRLF).
+
+[*.cs]
+indent_style = space
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_prefer_braces = true:suggestion
+dotnet_diagnostic.IDE0055.severity = none
+
+[demo/actualizaciones/paquete-demo.txt]
+end_of_line = lf
