@@ -605,7 +605,7 @@ namespace SteeLog.Vistas
         private async void btnAgregarFoto_Click(object sender, EventArgs e)
         {
             if (_inicializando || _cargandoFotos || _guardando || _errorFotos) return;
-            using (var dialogo = new OpenFileDialog { Title = "Seleccionar fotos", Filter = "Imágenes|*.*", Multiselect = true })
+            using (var dialogo = new OpenFileDialog { Title = "Seleccionar fotos", Filter = SteeLog.Core.Application.Canaletas.OperacionesCanaleta.FiltroDialogoFotos, Multiselect = true })
             {
                 if (dialogo.ShowDialog() != DialogResult.OK) return;
                 int version = _versionSeleccion, id = _idSeleccionado, agregadas = 0, rechazadas = 0;

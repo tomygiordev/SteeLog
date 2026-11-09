@@ -22,7 +22,7 @@ namespace SteeLog.Infrastructure.Activos
         }
         public async Task<IReadOnlyList<HistorialHerramientaLectura>> HistorialAsync(CancellationToken token=default)
         {
-            var lista=new List<HistorialHerramientaLectura>(); using(var con=factory.Create()) { await con.OpenAsync(token).ConfigureAwait(false); using(var c=Cmd("SELECT hm.id,h.id_herramienta,h.nombre,h.estado,hm.obra_origen,hm.obra_destino,hm.fecha FROM public.herramienta_movimientos hm JOIN public.herramientas h ON h.id_herramienta=hm.id_herramienta ORDER BY hm.fecha DESC",con)) using(var r=await c.ExecuteReaderAsync(token).ConfigureAwait(false)) while(await r.ReadAsync(token).ConfigureAwait(false)) lista.Add(new HistorialHerramientaLectura { Id=r.GetInt32(0),HerramientaId=r.GetInt32(1),Nombre=r.GetString(2),Estado=r.IsDBNull(3)?"":r.GetString(3),Origen=r.GetString(4),Destino=r.GetString(5),Fecha=r.GetDateTime(6) }); } return lista;
+            var lista=new List<HistorialHerramientaLectura>(); using(var con=factory.Create()) { await con.OpenAsync(token).ConfigureAwait(false); using(var c=Cmd("SELECT hm.id,h.id_herramienta,COALESCE(NULLIF(hm.nombre_herramienta,''),h.nombre),h.estado,hm.obra_origen,hm.obra_destino,hm.fecha FROM public.herramienta_movimientos hm JOIN public.herramientas h ON h.id_herramienta=hm.id_herramienta ORDER BY hm.fecha DESC",con)) using(var r=await c.ExecuteReaderAsync(token).ConfigureAwait(false)) while(await r.ReadAsync(token).ConfigureAwait(false)) lista.Add(new HistorialHerramientaLectura { Id=r.GetInt32(0),HerramientaId=r.GetInt32(1),Nombre=r.GetString(2),Estado=r.IsDBNull(3)?"":r.GetString(3),Origen=r.GetString(4),Destino=r.GetString(5),Fecha=r.GetDateTime(6) }); } return lista;
         }
     }
 }

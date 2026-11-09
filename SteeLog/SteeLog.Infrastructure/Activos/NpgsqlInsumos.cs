@@ -25,9 +25,11 @@ namespace SteeLog.Infrastructure.Activos
         { using(var c=Cmd("INSERT INTO public.insumos(nombre,id_obra,consumido,observaciones) VALUES(@nombre,@obra::integer,@consumido,@observaciones::text) RETURNING id_insumo")) { Agregar(c,i); return Convert.ToInt32(await c.ExecuteScalarAsync(token).ConfigureAwait(false)); } }
         public async Task ActualizarAsync(Insumo i,CancellationToken token=default)
         { using(var c=Cmd("UPDATE public.insumos SET nombre=@nombre,id_obra=@obra::integer,consumido=@consumido,observaciones=@observaciones::text WHERE id_insumo=@id")) { Agregar(c,i); c.Parameters.AddWithValue("id",i.Id); if(await c.ExecuteNonQueryAsync(token).ConfigureAwait(false)!=1) throw new InvalidOperationException("No se encontró el insumo."); } }
+        // Guarda snapshot del nombre (nombre_insumo) al momento del movimiento.
+        public const string SqlRegistrarHistorial=@"INSERT INTO public.insumo_movimientos(id_insumo,obra_origen,obra_destino,id_obra_origen_snapshot,id_obra_destino_snapshot,consumido_origen_snapshot,consumido_destino_snapshot,snapshot_completo,nombre_insumo) VALUES(@id,COALESCE((SELECT nombre FROM public.obras WHERE id=@origen::integer),'Galpón'),COALESCE((SELECT nombre FROM public.obras WHERE id=@destino::integer),'Galpón'),@origen::integer,@destino::integer,@cons_origen,@cons_destino,true,(SELECT nombre FROM public.insumos WHERE id_insumo=@id))";
         public async Task RegistrarHistorialAsync(int id,int? origen,int? destino,bool consumidoOrigen,bool consumidoDestino,CancellationToken token=default)
         {
-            using(var c=Cmd(@"INSERT INTO public.insumo_movimientos(id_insumo,obra_origen,obra_destino,id_obra_origen_snapshot,id_obra_destino_snapshot,consumido_origen_snapshot,consumido_destino_snapshot,snapshot_completo) VALUES(@id,COALESCE((SELECT nombre FROM public.obras WHERE id=@origen::integer),'Galpón'),COALESCE((SELECT nombre FROM public.obras WHERE id=@destino::integer),'Galpón'),@origen::integer,@destino::integer,@cons_origen,@cons_destino,true)"))
+            using(var c=Cmd(SqlRegistrarHistorial))
             { c.Parameters.AddWithValue("id",id); c.Parameters.AddWithValue("origen",Db(origen)); c.Parameters.AddWithValue("destino",Db(destino)); c.Parameters.AddWithValue("cons_origen",consumidoOrigen); c.Parameters.AddWithValue("cons_destino",consumidoDestino); await c.ExecuteNonQueryAsync(token).ConfigureAwait(false); }
         }
         public async Task EliminarAsync(int id,CancellationToken token=default)

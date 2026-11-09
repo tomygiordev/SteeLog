@@ -195,6 +195,8 @@ public sealed class InventarioIntegrationTests
     {
         int origen = Obra(), destino = Obra(), otro = Obra(), insumo = Insumo(origen), material = Material(10m);
         int id = await Crear(ConInsumo(material, insumo, destino)); Assert.Equal(destino, ObraInsumo(insumo)); Assert.Equal(8m, Stock(material)); Assert.Equal(1L, Historial(insumo));
+        // Recorrido F9: el traslado guarda el nombre del insumo en su historial (antes quedaba vacío).
+        Assert.Equal(Sql("SELECT nombre FROM public.insumos WHERE id_insumo=@id", new NpgsqlParameter("id", insumo)), Sql("SELECT nombre_insumo FROM public.insumo_movimientos WHERE id_insumo=@id", new NpgsqlParameter("id", insumo)));
         Sql("UPDATE public.obras SET nombre='renombrada' WHERE id=@id RETURNING id", new NpgsqlParameter("id", origen));
         Assert.Equal(id, await Editar(id, ConInsumo(material, insumo, otro))); Assert.Equal(otro, ObraInsumo(insumo)); Assert.Equal(8m, Stock(material)); Assert.Equal(1L, Historial(insumo));
         Assert.Equal(id, await Eliminar(id)); Assert.Equal(origen, ObraInsumo(insumo)); Assert.Equal(10m, Stock(material)); Assert.Equal(0L, Historial(insumo));

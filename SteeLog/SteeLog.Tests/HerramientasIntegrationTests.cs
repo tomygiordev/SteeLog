@@ -33,6 +33,9 @@ public sealed class HerramientasIntegrationTests
         await Run(x=>x.EnviarAGalponAsync(id)); Assert.Equal(DBNull.Value,Campo(id,"id_obra")); Assert.Equal(2,Hist(id));
         Assert.Equal(n,Sql("SELECT obra_origen FROM public.herramienta_movimientos WHERE id_herramienta=@id ORDER BY id DESC LIMIT 1",P("id",id)));
         Assert.Equal("Galpón",Sql("SELECT obra_destino FROM public.herramienta_movimientos WHERE id_herramienta=@id ORDER BY id DESC LIMIT 1",P("id",id)));
+        // Recorrido F9: el historial guarda el nombre vigente en cada movimiento (antes quedaba vacío).
+        Assert.Equal(id+"Taladro",Sql("SELECT nombre_herramienta FROM public.herramienta_movimientos WHERE id_herramienta=@id ORDER BY id LIMIT 1",P("id",id)));
+        Assert.Equal("nuevo",Sql("SELECT nombre_herramienta FROM public.herramienta_movimientos WHERE id_herramienta=@id ORDER BY id DESC LIMIT 1",P("id",id)));
         var q=new ConsultarHerramientas(Actor(),new NpgsqlHerramientasConsulta(Factory())); Assert.Contains(await q.HerramientasAsync(),x=>x.Id==id && x.Nombre=="nuevo");
         await Run(x=>x.EliminarAsync(id)); Assert.Equal(0,Hist(id)); Assert.Equal(0L,Convert.ToInt64(Sql("SELECT count(*) FROM public.herramientas WHERE id_herramienta=@id",P("id",id))));
         int numerico=await Run(x=>x.CrearAsync("123 taladro","Óptima",null,null)); Assert.Equal("123 taladro",Campo(numerico,"nombre"));

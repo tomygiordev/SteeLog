@@ -26,7 +26,7 @@ namespace SteeLog.Infrastructure.Movimientos
                     FROM public.movimientos m JOIN public.movimientomaterial mm ON mm.id_movimiento=m.id_movimiento LEFT JOIN public.tipo_movimiento tm ON tm.id_tipomovimiento=m.id_tipomovimiento LEFT JOIN public.materiales mat ON mat.id=mm.id_material
                     WHERE (@desde IS NULL OR m.fecha>=@desde) AND (@hasta IS NULL OR m.fecha<=@hasta) AND (@tipo IS NULL OR tm.nombre=@tipo)
                     UNION ALL
-                    SELECT m.id_movimiento,i.id_insumo,m.fecha,m.nroremito,tm.nombre,i.nombre,1::numeric,im.obra_origen,im.obra_destino,m.observaciones,false,NULL::numeric,true,false,0::numeric,0::numeric,NULL::integer
+                    SELECT m.id_movimiento,i.id_insumo,m.fecha,m.nroremito,tm.nombre,COALESCE(NULLIF(im.nombre_insumo,''),i.nombre),1::numeric,im.obra_origen,im.obra_destino,m.observaciones,false,NULL::numeric,true,false,0::numeric,0::numeric,NULL::integer
                     FROM public.movimientos m JOIN public.insumo_movimientos im ON im.id_movimiento=m.id_movimiento JOIN public.insumos i ON i.id_insumo=im.id_insumo LEFT JOIN public.tipo_movimiento tm ON tm.id_tipomovimiento=m.id_tipomovimiento
                     WHERE (@desde IS NULL OR m.fecha>=@desde) AND (@hasta IS NULL OR m.fecha<=@hasta) AND (@tipo IS NULL OR tm.nombre=@tipo)
                     ) x ORDER BY 3 DESC,1 DESC",cn))

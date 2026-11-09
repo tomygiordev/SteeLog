@@ -275,6 +275,8 @@ namespace SteeLog.Core.Application.Canaletas
 
         private static uint LittleEndian(byte[] b, int i) => b[i] | ((uint)b[i + 1] << 8) | ((uint)b[i + 2] << 16) | ((uint)b[i + 3] << 24);
 
+        public const string FiltroDialogoFotos = "Imágenes (*.jpg;*.jpeg;*.png;*.webp)|*.jpg;*.jpeg;*.png;*.webp";
+
         public static string ValidarTipoFoto(byte[] b)
         {
             if (b == null || b.Length == 0 || b.Length > 8388608)
