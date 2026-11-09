@@ -20,11 +20,7 @@ namespace SteeLog.Presentation
     public interface IServiciosVista
     {
         IUseCaseExecutor Executor { get; }
-        Session Session { get; }
         SesionVista Sesion { get; }
-        ICredentialStore Credentials { get; }
-        IAuthentication Authentication { get; }
-        BorradorMovimiento BorradorMovimiento { get; }
         CredencialesVista Credenciales { get; }
         AutenticacionVista Autenticacion { get; }
         ActualizacionesVista Actualizaciones { get; }

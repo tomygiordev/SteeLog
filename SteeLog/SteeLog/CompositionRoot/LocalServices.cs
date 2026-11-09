@@ -32,15 +32,6 @@ namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IServiciosVista, IDisposable
     {
-        private static readonly Lazy<LocalServices> instance = new Lazy<LocalServices>(Create);
-        private static LocalServices registered;
-        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
-        internal static LocalServices Current => ObtenerCompatible();
-        internal static LocalServices ObtenerCompatible() => registered ?? instance.Value;
-        internal static void Registrar(LocalServices services)
-        {
-            registered = services ?? throw new ArgumentNullException(nameof(services));
-        }
         internal IAuthentication Authentication { get; } = new DemoAuthService();
         internal Session Session { get; } = new Session();
         internal ICredentialStore Credentials { get; }
@@ -169,12 +160,9 @@ namespace SteeLog.CompositionRoot
         internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
         internal OrdenesPresenter CrearOrdenesPresenter(IOrdenesVista vista) => new OrdenesPresenter(Executor, vista, OrdenesPdf);
         internal string ConnectionString => Configuration.ConnectionString;
+        internal string DataDirectory => Path.GetDirectoryName(Paths.StorageDirectory);
 
         IUseCaseExecutor IServiciosVista.Executor => Executor;
-        Session IServiciosVista.Session => Session;
-        ICredentialStore IServiciosVista.Credentials => Credentials;
-        IAuthentication IServiciosVista.Authentication => Authentication;
-        BorradorMovimiento IServiciosVista.BorradorMovimiento => BorradorMovimiento;
         IInformeObraPdf IServiciosVista.InformeObraPdf => InformeObraPdf;
         IKardexPdf IServiciosVista.KardexPdf => KardexPdf;
         IReporteStockPdf IServiciosVista.ReporteStockPdf => ReporteStockPdf;

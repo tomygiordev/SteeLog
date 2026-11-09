@@ -14,7 +14,7 @@ public sealed class VistaGeneralUpdateTests
     public void VerificacionPendienteNoPublicaNiAbreModalTrasDisponer(bool falla)
     {
         Sta(() => {
-            var vista = new SteeLog.VistaGeneral();
+            var vista = new SteeLog.VistaGeneral(new SteeLog.Tests.ServiciosVistaDePrueba());
             using (var boton = new Button())
             {
                 var pendiente = new TaskCompletionSource<UpdateInfo>();
@@ -34,7 +34,7 @@ public sealed class VistaGeneralUpdateTests
     public void VerificacionEsSingleFlightYPermiteReintentarTrasError()
     {
         Sta(() => {
-            using (var vista = new SteeLog.VistaGeneral())
+            using (var vista = new SteeLog.VistaGeneral(new SteeLog.Tests.ServiciosVistaDePrueba()))
             using (var boton = new Button())
             {
                 var pendiente = new TaskCompletionSource<UpdateInfo>();

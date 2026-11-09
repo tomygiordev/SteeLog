@@ -194,8 +194,7 @@ public class ArchitectureTests
             Assert.Contains(guarded, t => t.FullName == "SteeLog.Vistas.Vista_CanaletasPlegados");
             Assert.Contains(guarded, t => t.FullName == "SteeLog.Presentation.CanaletasPresenter");
             var offenders = guarded.SelectMany(t => References(t).Select(r => new { owner = Owner(t), dependency = r }))
-                .Where(x => Forbidden(x.dependency)
-                    || x.dependency.FullName == "SteeLog.Servicios.AutenticacionLocal")
+                .Where(x => Forbidden(x.dependency))
                 .Select(x => x.owner + " -> " + x.dependency.FullName).Distinct().ToArray();
             Assert.Empty(offenders);
 
@@ -203,8 +202,7 @@ public class ArchitectureTests
                 Owner(t) == "SteeLog.Vistas.Reportes.Vista_InformeObra"
                 || Owner(t) == "SteeLog.Reportes.InformeObraPDF");
             Assert.DoesNotContain(reports.SelectMany(References), t =>
-                t.FullName == "SteeLog.Servicios.AutenticacionLocal"
-                || t.FullName == "SteeLog.Datos.CanaletaPlegadoDatos"
+                t.FullName == "SteeLog.Datos.CanaletaPlegadoDatos"
                 || t.FullName == "SteeLog.Datos.CanaletaPlegadoFotoDatos");
         }
         using (var infrastructure = Read(typeof(SteeLog.Infrastructure.Pdf.InformeObraPDF).Assembly.Location))
@@ -240,12 +238,36 @@ public class ArchitectureTests
         }
     }
     [Fact]
+    public void Production_code_outside_composition_root_does_not_use_service_locators_or_static_facades()
+    {
+        var projectDirectory = Directory.GetParent(Path.GetDirectoryName(HostPath)).Parent.FullName;
+        var prohibited = new[]
+        {
+            new System.Text.RegularExpressions.Regex(@"(?<![A-Za-z0-9_])LocalServices[.]", System.Text.RegularExpressions.RegexOptions.CultureInvariant),
+            new System.Text.RegularExpressions.Regex(@"(?<![A-Za-z0-9_])(SessionManager|CredentialStore|AutenticacionLocal|UpdaterService|MovimientoDraftService|ServiciosCompatibles)(?![A-Za-z0-9_])", System.Text.RegularExpressions.RegexOptions.CultureInvariant),
+            new System.Text.RegularExpressions.Regex(@"Fase DI", System.Text.RegularExpressions.RegexOptions.CultureInvariant)
+        };
+        var scanned = 0;
+        var offenders = new List<string>();
+        foreach (var file in Directory.EnumerateFiles(projectDirectory, "*.cs", SearchOption.AllDirectories))
+        {
+            var relative = file.Substring(projectDirectory.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var segments = relative.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (segments.Any(x => x.Equals("obj", StringComparison.OrdinalIgnoreCase) || x.Equals("bin", StringComparison.OrdinalIgnoreCase))) continue;
+            if (segments[0].Equals("CompositionRoot", StringComparison.OrdinalIgnoreCase)) continue;
+            if (segments.Length == 1 && segments[0].Equals("Program.cs", StringComparison.OrdinalIgnoreCase)) continue;
+            scanned++;
+            var text = File.ReadAllText(file);
+            foreach (var pattern in prohibited)
+                if (pattern.IsMatch(text)) offenders.Add(relative + " -> " + pattern.Match(text).Value);
+        }
+        Assert.True(scanned > 100, "El escaneo de código fuente no encontró el proyecto UI en " + projectDirectory);
+        Assert.Empty(offenders);
+    }
+    [Fact]
     public void Demo_bridges_have_no_http_or_process_launch_dependencies()
     {
-        var guarded = new HashSet<string> {
-            "SteeLog.Servicios.AutenticacionLocal",
-            "SteeLog.Servicios.UpdaterService", "SteeLog.CompositionRoot.LocalServices"
-        };
+        var guarded = new HashSet<string> { "SteeLog.CompositionRoot.LocalServices" };
         using (var host = Read(HostPath))
         {
             var actual = Types(host.MainModule.Types).Where(t => guarded.Contains(Owner(t)))

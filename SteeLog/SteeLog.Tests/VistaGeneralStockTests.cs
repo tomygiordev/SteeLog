@@ -31,7 +31,7 @@ namespace SteeLog.Tests
         {
             var tipo = typeof(SteeLog.VistaGeneral);
             return (Form)Activator.CreateInstance(tipo, Privado, null,
-                new object[] { consulta, new Func<CancellationToken, Task>(_ => Task.CompletedTask), aviso }, null);
+                new object[] { new ServiciosVistaDePrueba(), consulta, new Func<CancellationToken, Task>(_ => Task.CompletedTask), aviso }, null);
         }
         private static void Iniciar(Form vista) => vista.GetType().GetMethod("VistaGeneral_Shown", Privado).Invoke(vista, new object[] { vista, EventArgs.Empty });
 

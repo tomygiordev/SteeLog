@@ -64,7 +64,7 @@ namespace SteeLog.Tests
         {
             EnSta(() => {
                 var creadores = new Func<Form>[] {
-                    () => new Vista_Login(),
+                    () => new Vista_Login(new ServiciosVistaDePrueba()),
                     () => new Vista_Movimientos(new ServiciosVistaDePrueba()),
                     () => new Vista_HistorialMovimientos(new ServiciosVistaDePrueba()),
                     () => new SteeLog.Vistas.Inventario.Vista_Conteo(new ServiciosVistaDePrueba()),

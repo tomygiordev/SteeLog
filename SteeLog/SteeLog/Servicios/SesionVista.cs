@@ -2,6 +2,7 @@
 
 namespace SteeLog.Servicios
 {
+    public enum UserRole { None = 0, Galpon = 1, Admin = 2 }
 
     public sealed class SesionVista
     {

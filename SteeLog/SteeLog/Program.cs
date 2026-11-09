@@ -13,7 +13,9 @@ namespace SteeLog
         [STAThread]
         static void Main()
         {
-            var registro = RegistroErroresFactory.Crear();
+            // Los servicios se crean más abajo; el registro resuelve la carpeta de datos recién al primer error.
+            LocalServices services = null;
+            var registro = new RegistroErrores(() => services.DataDirectory);
             Application.SetUnhandledExceptionMode(UnhandledExceptionMode.CatchException);
             Application.ThreadException += (sender, e) =>
             {
@@ -27,8 +29,7 @@ namespace SteeLog
                 registro.Registrar(e.Exception);
                 e.SetObserved();
             };
-            var services = LocalServices.Create();
-            LocalServices.Registrar(services);
+            services = LocalServices.Create();
             try
             {
                 Application.EnableVisualStyles();
@@ -76,17 +77,6 @@ namespace SteeLog
             var area = pantalla.WorkingArea;
             ventana.Location = new System.Drawing.Point(area.Left + Math.Max(0, (area.Width - ventana.Width) / 2), area.Top + Math.Max(0, (area.Height - ventana.Height) / 2));
             ventana.WindowState = estado;
-        }
-    }
-}
-
-namespace SteeLog.CompositionRoot
-{
-    internal static class RegistroErroresFactory
-    {
-        internal static RegistroErrores Crear()
-        {
-            return new RegistroErrores(() => Path.GetDirectoryName(LocalServices.ObtenerCompatible().Paths.StorageDirectory));
         }
     }
 }

@@ -26,6 +26,7 @@ namespace SteeLog.Tests
         private static Form Crear()
             => (Form)Activator.CreateInstance(typeof(SteeLog.VistaGeneral), Privado, null,
                 new object[] {
+                    new ServiciosVistaDePrueba(),
                     new Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>>(_ => Task.FromResult<IReadOnlyList<MaterialInventarioLectura>>(new MaterialInventarioLectura[0])),
                     new Func<CancellationToken, Task>(_ => Task.CompletedTask),
                     new Action<int, Action>((n, a) => { }) }, null);

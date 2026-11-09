@@ -46,17 +46,13 @@ namespace SteeLog
         private bool _disposed;
         private int _searchVersion = 0;
 
-        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
-        public BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
-            : this(CompositionRoot.ServiciosCompatibles.Obtener(), parentForm, panelMaximizar, openChildForm) { }
-
         public BusquedaGlobal(IServiciosVista servicios, Form parentForm, Panel panelMaximizar, Action<Form> openChildForm)
-            : this(servicios, parentForm, panelMaximizar, openChildForm, null)
+            : this(servicios, parentForm, panelMaximizar, openChildForm, (Func<Task<Snapshot>>)null)
         {
         }
 
-        internal BusquedaGlobal(Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Snapshot> loader)
-            : this(CompositionRoot.ServiciosCompatibles.Obtener(), parentForm, panelMaximizar, openChildForm, loader == null ? null : (Func<Task<Snapshot>>)(() => Task.Run(loader))) { }
+        internal BusquedaGlobal(IServiciosVista servicios, Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Snapshot> loader)
+            : this(servicios, parentForm, panelMaximizar, openChildForm, loader == null ? null : (Func<Task<Snapshot>>)(() => Task.Run(loader))) { }
 
         private BusquedaGlobal(IServiciosVista servicios, Form parentForm, Panel panelMaximizar, Action<Form> openChildForm, Func<Task<Snapshot>> loader)
         {

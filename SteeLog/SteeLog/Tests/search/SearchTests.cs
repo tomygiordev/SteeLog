@@ -19,7 +19,9 @@ class SearchTests {
   using(var parent=new Form()) using(var top=new Panel{Width=1000,Height=50}) {
    parent.Controls.Add(top); var handle=parent.Handle;
    var type=asm.GetType("SteeLog.BusquedaGlobal");
-   object search=Activator.CreateInstance(type,new object[]{parent,top,new Action<Form>(f=>f.Dispose())});
+   var root=System.IO.Path.Combine(System.IO.Path.GetTempPath(),"steelog-search-demo-"+Guid.NewGuid().ToString("N")); System.IO.Directory.CreateDirectory(root); System.IO.File.WriteAllText(System.IO.Path.Combine(root,".steelog-demo"),"steelog-demo-v1");
+   var services=asm.GetType("SteeLog.CompositionRoot.LocalServices").GetMethod("CreateForEnvironment",BindingFlags.Static|BindingFlags.NonPublic).Invoke(null,new object[]{AppDomain.CurrentDomain.BaseDirectory,root});
+   object search=Activator.CreateInstance(type,new object[]{services,parent,top,new Action<Form>(f=>f.Dispose())});
    var snap=Activator.CreateInstance(type.GetNestedType("Snapshot",BindingFlags.NonPublic),true);
    foreach(string part in new[]{"Materiales","Recortes","Herramientas","Insumos"}) {
     string model=part=="Materiales"?"MaterialInventarioLectura":part=="Recortes"?"RecorteLectura":part=="Herramientas"?"HerramientaLectura":"InsumoLectura";

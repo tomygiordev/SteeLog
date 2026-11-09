@@ -183,7 +183,6 @@
     <Compile Include="UI\Controles.cs" />
     <Compile Include="IRefrescable.cs" />
     <Compile Include="IRecargaCatalogos.cs" />
-    <Compile Include="MovimientoDraftService.cs" />
     <Compile Include="ToastNotification.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -192,10 +191,6 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="AppVersion.cs" />
-    <Compile Include="Servicios\UpdaterService.cs" />
-    <Compile Include="Servicios\AutenticacionLocal.cs" />
-    <Compile Include="Servicios\SessionManager.cs" />
-    <Compile Include="Servicios\CredentialStore.cs" />
     <Compile Include="Vistas\Vista_Login.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -257,7 +252,6 @@
       <DependentUpon>ModalSeleccionProveedores.cs</DependentUpon>
     </Compile>
     <Compile Include="Presentation\IServiciosVista.cs" />
-    <Compile Include="CompositionRoot\ServiciosCompatibles.cs" />
     <Compile Include="Servicios\SesionVista.cs" />
     <Compile Include="Servicios\CredencialesVista.cs" />
     <Compile Include="Servicios\AutenticacionVista.cs" />

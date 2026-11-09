@@ -3,6 +3,13 @@ using SteeLog.Core.Application.Identidad;
 
 namespace SteeLog.Servicios
 {
+    public class AuthResult
+    {
+        public bool Success { get; set; }
+        public string Email { get; set; }
+        public string ErrorMessage { get; set; }
+    }
+
     public sealed class AutenticacionVista
     {
         private readonly IAuthentication authentication;

@@ -24,14 +24,8 @@ namespace SteeLog.Vistas
         private Label lblVersion;
 
         private readonly SteeLog.Presentation.IServiciosVista servicios;
-        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
-        public Vista_Login() : this(CompositionRoot.ServiciosCompatibles.Obtener()) { }
-
         public Vista_Login(SteeLog.Presentation.IServiciosVista servicios)
             : this(servicios, servicios == null ? null : (Func<string, string, Task<AuthResult>>)servicios.Autenticacion.SignInAsync) { }
-
-        internal Vista_Login(Func<string, string, Task<AuthResult>> authenticate)
-            : this(CompositionRoot.ServiciosCompatibles.Obtener(), authenticate) { }
 
         internal Vista_Login(SteeLog.Presentation.IServiciosVista servicios, Func<string, string, Task<AuthResult>> authenticate)
         {

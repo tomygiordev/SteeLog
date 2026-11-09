@@ -8,10 +8,13 @@ using System.Runtime.ExceptionServices;
 
 class ConfigurationTests
 {
+    static object services;
     static object Services()
     {
+        if (services != null) return services;
         var type = typeof(SteeLog.VistaGeneral).Assembly.GetType("SteeLog.CompositionRoot.LocalServices", true);
-        return Read(type.GetProperty("Current", BindingFlags.Static | BindingFlags.NonPublic), null);
+        try { return services = type.GetMethod("Create", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null); }
+        catch (TargetInvocationException error) { ExceptionDispatchInfo.Capture(error.InnerException).Throw(); throw; }
     }
     static object Read(PropertyInfo property, object instance)
     {

@@ -39,7 +39,10 @@ internal static class BrandingSmoke
             Check(reader.ReadUInt16() == 0 && reader.ReadUInt16() == 1 && reader.ReadUInt16() == 7, "ICO header");
             foreach (int size in new[] {16,24,32,48,64,128,256}) { int w = reader.ReadByte(), h = reader.ReadByte(); Check((w == 0 ? 256 : w) == size && (h == 0 ? 256 : h) == size, "ICO size " + size); reader.ReadBytes(14); }
         }
-        foreach (Form form in new Form[] { new Vista_Login(), new VistaGeneral() })
+        var servicesType = asm.GetType("SteeLog.CompositionRoot.LocalServices", true);
+        var services = servicesType.GetMethod("Create", BindingFlags.Static | BindingFlags.NonPublic).Invoke(null, null);
+        var serviciosVista = (SteeLog.Presentation.IServiciosVista)services;
+        foreach (Form form in new Form[] { new Vista_Login(serviciosVista), new VistaGeneral(serviciosVista) })
         using (form)
         {
             if (form is VistaGeneral)
@@ -93,8 +96,6 @@ internal static class BrandingSmoke
         }
         var now = DateTime.Today;
         string ordenes = Path.Combine(output, "Ordenes-pendientes-real.pdf");
-        var servicesType = asm.GetType("SteeLog.CompositionRoot.LocalServices", true);
-        var services = servicesType.GetProperty("Current", BindingFlags.Static | BindingFlags.NonPublic).GetValue(null, null);
         foreach (var property in new[] { "KardexPdf", "ReporteStockPdf" })
         {
             var report = servicesType.GetProperty(property, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(services, null);

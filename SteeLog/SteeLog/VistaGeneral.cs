@@ -22,14 +22,7 @@ namespace SteeLog
     public partial class VistaGeneral : Form
     {
         private readonly SteeLog.Presentation.IServiciosVista servicios;
-        [Obsolete("Fase DI: recibir IServiciosVista por constructor")]
-        public VistaGeneral() : this(CompositionRoot.ServiciosCompatibles.Obtener()) { }
-
         public VistaGeneral(SteeLog.Presentation.IServiciosVista servicios) : this(servicios, null, null, null) { }
-
-        internal VistaGeneral(Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
-            Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock)
-            : this(CompositionRoot.ServiciosCompatibles.Obtener(), consultarStock, esperarStock, mostrarStock) { }
 
         internal VistaGeneral(SteeLog.Presentation.IServiciosVista servicios,
             Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
@@ -785,7 +778,7 @@ namespace SteeLog
         {
             var btn = sender as Button;
             await VerificarActualizacionesAsync(btn, () => servicios.Actualizaciones.CheckForUpdateAsync(throwOnError: true),
-                update => { using (var modal = new ModalActualizacion(update)) modal.ShowDialog(this); },
+                update => { using (var modal = new ModalActualizacion(servicios, update)) modal.ShowDialog(this); },
                 mensaje => ToastNotification.ShowSuccess(mensaje), mensaje => ToastNotification.ShowError(mensaje));
         }
 

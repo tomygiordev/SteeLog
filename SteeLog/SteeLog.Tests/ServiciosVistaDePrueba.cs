@@ -16,11 +16,7 @@ namespace SteeLog.Tests
     public sealed class ServiciosVistaDePrueba : IServiciosVista
     {
         public IUseCaseExecutor Executor { get; }
-        public Session Session { get; } = new Session();
         public SesionVista Sesion { get; }
-        public ICredentialStore Credentials { get; }
-        public IAuthentication Authentication { get; }
-        public BorradorMovimiento BorradorMovimiento { get; }
         public CredencialesVista Credenciales { get; }
         public AutenticacionVista Autenticacion { get; }
         public ActualizacionesVista Actualizaciones { get; }
@@ -38,14 +34,11 @@ namespace SteeLog.Tests
             ICredentialStore credentials = null, IDraftStore drafts = null, Func<DateTime> ahora = null)
         {
             Executor = executor ?? new ExecutorSinConfigurar();
-            Authentication = authentication ?? new AutenticacionDenegada();
-            Credentials = credentials ?? new CredencialesEnMemoria();
-            BorradorMovimiento = new BorradorMovimiento(drafts ?? new BorradorEnMemoria(), ahora ?? (() => DateTime.Now));
-            Sesion = new SesionVista(Session);
-            Credenciales = new CredencialesVista(Credentials);
-            Autenticacion = new AutenticacionVista(Authentication);
+            Sesion = new SesionVista(new Session());
+            Credenciales = new CredencialesVista(credentials ?? new CredencialesEnMemoria());
+            Autenticacion = new AutenticacionVista(authentication ?? new AutenticacionDenegada());
             Actualizaciones = new ActualizacionesVista(Executor);
-            Borrador = new BorradorMovimientoVista(BorradorMovimiento);
+            Borrador = new BorradorMovimientoVista(new BorradorMovimiento(drafts ?? new BorradorEnMemoria(), ahora ?? (() => DateTime.Now)));
             var root = Path.Combine(Path.GetTempPath(), "steelog-vista-test-" + Guid.NewGuid().ToString("N"));
             Paths = new RutasVista(root, Path.Combine(root, "Storage"));
             ReportsDirectory = Path.Combine(root, "Reportes");

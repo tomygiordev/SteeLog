@@ -22,7 +22,7 @@ namespace SteeLog.Tests
             Assert.Equal(UserRole.None, servicios.Sesion.Rol);
             Assert.True(servicios.Sesion.DebeOcultarCantidadesStockMateriales);
             servicios.Sesion.SetSession(email);
-            Assert.True(servicios.Session.IsAuthenticated);
+            Assert.True(servicios.Sesion.IsLoggedIn);
             Assert.True(servicios.Sesion.IsLoggedIn);
             Assert.Equal(role, servicios.Sesion.Rol);
             Assert.Equal(role, servicios.Sesion.Role);
@@ -32,7 +32,7 @@ namespace SteeLog.Tests
             Assert.Throws<InvalidOperationException>(() => servicios.Sesion.SetSession("otro@tesis.local"));
             Assert.Equal(role, servicios.Sesion.Rol);
             servicios.Sesion.Clear();
-            Assert.False(servicios.Session.IsAuthenticated);
+            Assert.False(servicios.Sesion.IsLoggedIn);
             Assert.Equal(UserRole.None, servicios.Sesion.Rol);
         }
 
@@ -44,7 +44,7 @@ namespace SteeLog.Tests
             servicios.Sesion.SetSession("admin@tesis.local");
             var primera = servicios.Sesion.Identidad;
             Assert.NotNull(primera);
-            Assert.Same(servicios.Session.Current, primera);
+            Assert.Same(servicios.Sesion.Identidad, primera);
             Assert.Same(primera, servicios.Sesion.Identidad);
             servicios.Sesion.Clear();
             Assert.Null(servicios.Sesion.Identidad);
@@ -105,50 +105,6 @@ namespace SteeLog.Tests
             hilo.Start();
             Assert.True(hilo.Join(TimeSpan.FromSeconds(15)));
             Assert.Null(error);
-        }
-        [Fact]
-        public void CodigoMigradoNoConsultaCurrentNiFachadasEstaticas()
-        {
-            var migrados = new System.Collections.Generic.HashSet<string> {
-                "SteeLog.Program", "SteeLog.VistaGeneral", "SteeLog.BusquedaGlobal",
-                "SteeLog.Vistas.Vista_Login", "SteeLog.Reportes.InformeObraPDF",
-                "SteeLog.Servicios.SesionVista", "SteeLog.Servicios.CredencialesVista",
-                "SteeLog.Servicios.AutenticacionVista", "SteeLog.Servicios.ActualizacionesVista",
-                "SteeLog.Servicios.BorradorMovimientoVista"
-            };
-            var fachadas = new System.Collections.Generic.HashSet<string> {
-                "SteeLog.Servicios.SessionManager", "SteeLog.Servicios.CredentialStore",
-                "SteeLog.Servicios.AutenticacionLocal", "SteeLog.Servicios.UpdaterService",
-                "SteeLog.MovimientoDraftService"
-            };
-            using (var host = Mono.Cecil.AssemblyDefinition.ReadAssembly(typeof(SteeLog.VistaGeneral).Assembly.Location))
-                foreach (var tipo in Tipos(host.MainModule.Types))
-                {
-                    var owner = tipo;
-                    while (owner.DeclaringType != null) owner = owner.DeclaringType;
-                    if (!migrados.Contains(owner.FullName)) continue;
-                    foreach (var metodo in tipo.Methods)
-                    {
-                        if (!metodo.HasBody) continue;
-                        foreach (var instruccion in metodo.Body.Instructions)
-                        {
-                            var miembro = instruccion.Operand as Mono.Cecil.MemberReference;
-                            if (miembro?.DeclaringType == null) continue;
-                            Assert.DoesNotContain(miembro.DeclaringType.FullName, fachadas);
-                            Assert.False(miembro.DeclaringType.FullName == "SteeLog.CompositionRoot.LocalServices"
-                                && miembro.Name == "get_Current", metodo.FullName);
-                        }
-                    }
-                }
-        }
-        private static System.Collections.Generic.IEnumerable<Mono.Cecil.TypeDefinition> Tipos(
-            System.Collections.Generic.IEnumerable<Mono.Cecil.TypeDefinition> tipos)
-        {
-            foreach (var tipo in tipos)
-            {
-                yield return tipo;
-                foreach (var anidado in Tipos(tipo.NestedTypes)) yield return anidado;
-            }
         }
         private sealed class AutenticacionAceptada : IAuthentication
         {

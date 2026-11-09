@@ -23,8 +23,11 @@ namespace SteeLog.Vistas
         private readonly UpdateInfo _update;
         private readonly CancellationTokenSource cancellation = new CancellationTokenSource();
 
-        public ModalActualizacion(UpdateInfo update)
+        private readonly SteeLog.Presentation.IServiciosVista servicios;
+
+        public ModalActualizacion(SteeLog.Presentation.IServiciosVista servicios, UpdateInfo update)
         {
+            this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             _update = update;
             InitUI();
         }
@@ -151,7 +154,7 @@ namespace SteeLog.Vistas
 
             try
             {
-                var path = await UpdaterService.PrepareAsync(_update, progress, cancellation.Token);
+                var path = await servicios.Actualizaciones.PrepareAsync(_update, progress, cancellation.Token);
                 if (IsDisposed) return;
                 lblProgreso.Text = "Paquete demo preparado; no se instaló ninguna actualización.";
                 btnCancelar.Text = "Cerrar";
