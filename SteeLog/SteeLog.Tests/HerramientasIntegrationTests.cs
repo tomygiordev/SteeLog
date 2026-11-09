@@ -24,6 +24,10 @@ public sealed class HerramientasIntegrationTests
     static long Hist(int id)=>Convert.ToInt64(Sql("SELECT count(*) FROM public.herramienta_movimientos WHERE id_herramienta=@id",P("id",id)));
     static object Campo(int id,string campo)=>Sql("SELECT "+campo+" FROM public.herramientas WHERE id_herramienta=@id",P("id",id));
     static Task<int> Crear(int? obra=null)=>Run(x=>x.CrearAsync("Taladro","Óptima",obra,"nota"));
+    [Fact] public void DefaultDeEstadoEsOptimaSinMojibake()
+    {
+        Assert.Equal("'Óptima'::character varying",Sql("SELECT column_default FROM information_schema.columns WHERE table_schema='public' AND table_name='herramientas' AND column_name='estado'"));
+    }
     [Fact] public async Task AltaPrefijoHistorialInicialTrasladoEdicionYEliminacion()
     {
         string n="obra-"+Guid.NewGuid().ToString("N"); int obra=Obra(n), id=await Crear(obra);

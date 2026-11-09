@@ -203,7 +203,7 @@ ALTER SEQUENCE public.herramienta_movimientos_id_seq OWNED BY public.herramienta
 CREATE TABLE public.herramientas (
     id_herramienta integer NOT NULL,
     nombre character varying(255) NOT NULL,
-    estado character varying(50) DEFAULT 'Ã“ptima'::character varying NOT NULL,
+    estado character varying(50) DEFAULT 'Óptima'::character varying NOT NULL,
     id_obra integer,
     observaciones character varying(500),
     id_ubicacion integer

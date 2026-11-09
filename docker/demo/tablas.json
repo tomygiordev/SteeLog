@@ -1,6 +1,6 @@
 {
   "origen": "docker/init/01-schema.sql",
-  "sha256_origen": "5268f3f38d97b1388fa9cd2d707dc19e30d4d7b2f493622f9db625d2f79acbc1",
+  "sha256_origen": "612ab0652f62a5bf01977e6d33c7408895ae034cca138d25bc59454e41d623d3",
   "tablas": [
     "canaletas_plegados",
     "canaletas_plegados_fotos",

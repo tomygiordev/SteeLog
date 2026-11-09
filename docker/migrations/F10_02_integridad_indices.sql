@@ -1,6 +1,6 @@
 -- F10: integridad exigida por el dominio y acceso por FK. No corrige datos.
 BEGIN;
--- Excluir escrituras concurrentes entre el diagnÃ³stico y la creaciÃ³n de restricciones.
+-- Excluir escrituras concurrentes entre el diagnóstico y la creación de restricciones.
 LOCK TABLE public.materiales, public.movimientomaterial, public.movimientos, public.tipo_movimiento IN SHARE ROW EXCLUSIVE MODE;
 DO $$
 DECLARE item record; conflictos bigint;
@@ -45,13 +45,14 @@ BEGIN
         IF conflictos > 0 THEN RAISE EXCEPTION 'F10: f10_movimiento_importes_no_negativos: % filas en conflicto; no se modificaron datos',conflictos; END IF;
         ALTER TABLE public.movimientos ADD CONSTRAINT f10_movimiento_importes_no_negativos CHECK (costoflete >= 0 AND precio_total >= 0);
     END IF;
-    -- cantidad tambiÃ©n registra ajustes internos CON SIGNO hasta el mÃ¡ximo de Material.
-    -- numeric(10,4) no alcanzaba para el delta vÃ¡lido de 99999999.99.
+    -- cantidad también registra ajustes internos CON SIGNO hasta el máximo de Material.
+    -- numeric(10,4) no alcanzaba para el delta válido de 99999999.99.
     IF EXISTS (SELECT FROM information_schema.columns WHERE table_schema='public' AND table_name='movimientomaterial' AND column_name='cantidad' AND numeric_precision=10 AND numeric_scale=4) THEN
         ALTER TABLE public.movimientomaterial ALTER COLUMN cantidad TYPE numeric(12,4);
     END IF;
 END $$;
 ALTER TABLE public.movimientos ALTER COLUMN costoflete SET DEFAULT 0;
+ALTER TABLE public.herramientas ALTER COLUMN estado SET DEFAULT 'Óptima';
 CREATE INDEX IF NOT EXISTS idx_f10_materiales_categoria ON public.materiales (id_categoria);
 CREATE INDEX IF NOT EXISTS idx_f10_materiales_ubicacion ON public.materiales (id_ubicacion);
 CREATE INDEX IF NOT EXISTS idx_f10_proveedores_materiales ON public.materiales_proveedores (id_proveedor);
