@@ -255,11 +255,11 @@ namespace SteeLog.Vistas
                 return;
             }
 
-            string inputAncho = txtAncho.Text.Replace(',', '.');
-            string inputAltura = txtAltura.Text.Replace(',', '.');
+            string inputAncho = txtAncho.Text;
+            string inputAltura = txtAltura.Text;
 
-            bool hasAncho = decimal.TryParse(inputAncho, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal ancho) && ancho > 0;
-            bool hasAltura = decimal.TryParse(inputAltura, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal altura) && altura > 0;
+            bool hasAncho = NumeroDecimal.TryParse(inputAncho, out decimal ancho) && ancho > 0;
+            bool hasAltura = NumeroDecimal.TryParse(inputAltura, out decimal altura) && altura > 0;
 
             if (!hasAncho && !hasAltura)
             {
@@ -267,8 +267,8 @@ namespace SteeLog.Vistas
                 return;
             }
 
-            string inputCantidad = txtCantidad.Text.Replace(',', '.');
-            bool hasCantidad = decimal.TryParse(inputCantidad, System.Globalization.NumberStyles.Any, System.Globalization.CultureInfo.InvariantCulture, out decimal cantidad) && cantidad > 0;
+            string inputCantidad = txtCantidad.Text;
+            bool hasCantidad = NumeroDecimal.TryParse(inputCantidad, out decimal cantidad) && cantidad > 0;
 
             if (!hasCantidad)
             {

@@ -166,6 +166,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Presentation\NumeroDecimal.cs" />
     <Compile Include="Presentation\SortableBindingList.cs" />
     <Compile Include="Modelos\Categoria.cs" />
     <Compile Include="Modelos\Flete.cs" />

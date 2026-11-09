@@ -360,7 +360,7 @@ namespace SteeLog.Vistas.Movimientos
             decimal precioUnitario = 0;
             if (esCompraEventual && txtPrecioMaterial != null)
             {
-                decimal.TryParse(txtPrecioMaterial.Text.Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out precioUnitario);
+                NumeroDecimal.TryParse(txtPrecioMaterial.Text.Trim(), out precioUnitario);
             }
 
             string detalleDim = "";

@@ -1091,7 +1091,7 @@ namespace SteeLog.Vistas.Movimientos
                     tipo_destino = itemDestino.Tipo,
                     id_tipomovimiento = Convert.ToInt32(cmbMovimientos.SelectedValue),
                     id_obra = cmbObras.SelectedIndex != -1 ? Convert.ToInt32(cmbObras.SelectedValue) : 0, 
-                    costoflete = decimal.TryParse((costoFleteTxt.Text ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal costo) ? costo : 0,
+                    costoflete = NumeroDecimal.TryParse((costoFleteTxt.Text ?? "").Trim(), out decimal costo) ? costo : 0,
                     id_flete = (cmbFlete.SelectedValue != null && Convert.ToInt32(cmbFlete.SelectedValue) > 0) ? Convert.ToInt32(cmbFlete.SelectedValue) : (int?)null,
                     observaciones = txtCategoria.Text,
                     precio_total = precioTotal

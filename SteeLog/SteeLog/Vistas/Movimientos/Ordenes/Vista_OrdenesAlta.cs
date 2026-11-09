@@ -710,7 +710,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
         private decimal ParseCantidad(string texto, string nombreCampo)
         {
             decimal valor;
-            if (!decimal.TryParse((texto ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out valor) || valor <= 0)
+            if (!NumeroDecimal.TryParse((texto ?? "").Trim(), out valor) || valor <= 0)
                 throw new Exception(nombreCampo + " debe ser un número mayor a cero.");
 
             return valor;
@@ -727,7 +727,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 return 0;
 
             decimal valor;
-            if (!decimal.TryParse(texto.Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out valor))
+            if (!NumeroDecimal.TryParse(texto.Trim(), out valor))
                 throw new Exception("El costo de flete no tiene un formato válido.");
 
             if (valor < 0)

@@ -377,7 +377,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 if (nombreColumna == "colRecibida")
                 {
                     decimal recibida;
-                    if (!decimal.TryParse(Convert.ToString(dgvDetalles.Rows[e.RowIndex].Cells[e.ColumnIndex].Value).Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out recibida))
+                    if (!NumeroDecimal.TryParse(Convert.ToString(dgvDetalles.Rows[e.RowIndex].Cells[e.ColumnIndex].Value).Trim(), out recibida))
                     {
                         // Valor no numérico: revertir al valor actual sin perder la edición
                         dgvDetalles.Rows[e.RowIndex].Cells[e.ColumnIndex].Value = detalle.cantidad_recibida;
@@ -629,7 +629,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 return false;
 
             decimal cantidadASumar;
-            if (!decimal.TryParse(texto.Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out cantidadASumar) || cantidadASumar <= 0)
+            if (!NumeroDecimal.TryParse(texto, out cantidadASumar) || cantidadASumar <= 0)
             {
                 ToastNotification.ShowWarning("La cantidad rápida pendiente debe ser mayor a cero.");
                 txtCantidadRapida.Focus();
@@ -783,7 +783,7 @@ namespace SteeLog.Vistas.Movimientos.Ordenes
                 return;
 
             decimal cantidadASumar;
-            if (!decimal.TryParse((txtCantidadRapida.Text ?? "").Trim().Replace(',', '.'), NumberStyles.Any, CultureInfo.InvariantCulture, out cantidadASumar) || cantidadASumar <= 0)
+            if (!NumeroDecimal.TryParse((txtCantidadRapida.Text ?? "").Trim(), out cantidadASumar) || cantidadASumar <= 0)
             {
                 ToastNotification.ShowWarning("Ingresá una cantidad mayor a cero para sumar.");
                 txtCantidadRapida.Focus();

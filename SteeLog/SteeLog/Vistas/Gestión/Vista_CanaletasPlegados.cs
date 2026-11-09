@@ -147,8 +147,8 @@ namespace SteeLog.Vistas
         private void AplicarFiltros()
         {
             string busqueda = NormalizarTextoBusqueda(txtBusqueda.Text);
-            string precioFiltroTexto = txtFiltroPrecio.Text.Replace(',', '.').Trim();
-            decimal.TryParse(precioFiltroTexto, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal precioFiltro);
+            string precioFiltroTexto = txtFiltroPrecio.Text.Trim();
+            NumeroDecimal.TryParse(precioFiltroTexto, out decimal precioFiltro);
 
             int idObraFiltro = 0;
             if (cmbFiltroObra.SelectedItem is Obra obraFiltro)
@@ -459,7 +459,7 @@ namespace SteeLog.Vistas
             if (!(cmbObra.SelectedItem is Obra obra) || obra.id <= 0) { ToastNotification.ShowWarning("Seleccione una obra válida."); return; }
             string descripcion = txtDescripcion.Text.Trim();
             if (string.IsNullOrWhiteSpace(descripcion)) { ToastNotification.ShowWarning("Ingrese una descripción."); return; }
-            if (!decimal.TryParse(txtPrecio.Text.Replace(',', '.').Trim(), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal precio) || precio < 0) { ToastNotification.ShowWarning("Ingrese un precio válido (mayor o igual a 0)."); return; }
+            if (!NumeroDecimal.TryParse(txtPrecio.Text.Trim(), out decimal precio) || precio < 0) { ToastNotification.ShowWarning("Ingrese un precio válido (mayor o igual a 0)."); return; }
             if (!GestionUi.Confirmar(_idSeleccionado < 0 ? "¿Registrar este trabajo?" : "¿Actualizar este trabajo?", "Confirmar", MessageBoxIcon.Question)) return;
             await GuardarCoreAsync(obra.id, descripcion, precio, chkPagado.Checked);
         }

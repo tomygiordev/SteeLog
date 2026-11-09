@@ -151,12 +151,12 @@ namespace SteeLog.Vistas.Movimientos
 
             decimal? ancho = null, altura = null;
 
-            string inputAncho = txtAnchoBuscado.Text.Replace(',', '.');
-            if (hasAncho && decimal.TryParse(inputAncho, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal anchoVal))
+            string inputAncho = txtAnchoBuscado.Text;
+            if (hasAncho && NumeroDecimal.TryParse(inputAncho, out decimal anchoVal))
                 ancho = anchoVal;
 
-            string inputAltura = txtAlturaBuscada.Text.Replace(',', '.');
-            if (hasAltura && decimal.TryParse(inputAltura, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal alturaVal))
+            string inputAltura = txtAlturaBuscada.Text;
+            if (hasAltura && NumeroDecimal.TryParse(inputAltura, out decimal alturaVal))
                 altura = alturaVal;
 
             CargarRecortes(ancho, altura);
@@ -221,11 +221,11 @@ namespace SteeLog.Vistas.Movimientos
 
         private void btnCrearNuevo_Click(object sender, EventArgs e)
         {
-            string inputAncho = txtAnchoBuscado.Text.Replace(',', '.');
-            string inputAltura = txtAlturaBuscada.Text.Replace(',', '.');
+            string inputAncho = txtAnchoBuscado.Text;
+            string inputAltura = txtAlturaBuscada.Text;
 
-            bool hasAncho = decimal.TryParse(inputAncho, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal ancho) && ancho > 0;
-            bool hasAltura = decimal.TryParse(inputAltura, NumberStyles.Any, CultureInfo.InvariantCulture, out decimal altura) && altura > 0;
+            bool hasAncho = NumeroDecimal.TryParse(inputAncho, out decimal ancho) && ancho > 0;
+            bool hasAltura = NumeroDecimal.TryParse(inputAltura, out decimal altura) && altura > 0;
 
             if (!hasAncho && !hasAltura)
             {

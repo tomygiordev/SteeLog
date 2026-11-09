@@ -209,7 +209,7 @@ namespace SteeLog.Vistas.Reportes
                 AutoSize = false,
                 TextAlign = ContentAlignment.MiddleCenter,
                 Font = Tema.Fuente(11f),
-                ForeColor = Tema.TextoApagado,
+                ForeColor = Tema.TextoSecundario,
                 BackColor = Tema.Fondo,
                 Height = 90,
                 Anchor = AnchorStyles.Top | AnchorStyles.Left | AnchorStyles.Right,
@@ -943,13 +943,13 @@ namespace SteeLog.Vistas.Reportes
             btnDescargar.Enabled = false;
             try
             {
-                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
+                lblEstado.ForeColor = Tema.TextoSecundario;
                 lblEstado.Text = "Generando...";
                 string ruta = Path.Combine(Path.GetTempPath(), $"InformeObra_{Guid.NewGuid():N}.pdf");
                 if (GenerarInforme != null) await GenerarInforme(ruta, idObra, nombreObra, desde, hasta, token);
                 else await new InformeObraPDF().GenerarAsync(ruta, idObra, nombreObra, desde, hasta, token);
                 if (token.IsCancellationRequested || IsDisposed || version != versionObra) return;
-                lblEstado.ForeColor = Color.FromArgb(25, 135, 84);
+                lblEstado.ForeColor = Tema.TextoSecundario;
                 lblEstado.Text = "✓ PDF generado";
                 if (AbrirInforme != null) AbrirInforme(ruta);
                 else Process.Start(new ProcessStartInfo(ruta) { UseShellExecute = true });
