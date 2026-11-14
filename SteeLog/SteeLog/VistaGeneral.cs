@@ -820,7 +820,7 @@ namespace SteeLog
             {
                 Name = "btnSistema",
                 Text = "Sistema",
-                Dock = DockStyle.Top,
+                Dock = DockStyle.Bottom,
                 FlatStyle = FlatStyle.Flat,
                 ForeColor = Color.Silver,
                 Font = btnReportes.Font,
@@ -837,14 +837,14 @@ namespace SteeLog
             btnSistema.FlatAppearance.MouseOverBackColor = btnReportes.FlatAppearance.MouseOverBackColor;
             btnSistema.Click += (s, e) => showSubMenu(panelSistema);
 
-            panelSistema = new Panel { Name = "panelSistema", Dock = DockStyle.Top, BackColor = panelReportes.BackColor, Visible = false };
+            panelSistema = new Panel { Name = "panelSistema", Dock = DockStyle.Bottom, BackColor = panelReportes.BackColor, Visible = false };
             // Dock.Top apila al revés del orden de alta: se agrega primero el que queda abajo.
             panelSistema.Controls.Add(CrearBotonSubmenu("btnBitacora", "Bitácora", () => openChildForm(() => new Vista_Bitacora(servicios))));
             panelSistema.Controls.Add(CrearBotonSubmenu("btnRespaldos", "Copias de seguridad", () => openChildForm(() => new Vista_Respaldos(servicios))));
 
             panelSideMenu.Controls.Add(panelSistema);
             panelSideMenu.Controls.Add(btnSistema);
-            // Al final del menú, justo antes de los botones de abajo (Salir, actualizaciones, cerrar sesión).
+            // Al fondo del menú, justo arriba de Salir.
             OrdenarSeccionSistema();
             // El orden vuelve a fijarse al crearse la ventana: WinForms lo reacomoda al crear el handle del menú.
             Load += (s, e) => OrdenarSeccionSistema();
@@ -855,8 +855,9 @@ namespace SteeLog
 
         private void OrdenarSeccionSistema()
         {
+            // Dock.Bottom: el índice más bajo queda más arriba, así que Sistema (botón y luego su panel) cae justo arriba de Salir.
             panelSideMenu.Controls.SetChildIndex(panelSistema, 0);
-            panelSideMenu.Controls.SetChildIndex(btnSistema, 1);
+            panelSideMenu.Controls.SetChildIndex(btnSistema, 0);
         }
 
         private void AjustarAlturaPanelSistema()

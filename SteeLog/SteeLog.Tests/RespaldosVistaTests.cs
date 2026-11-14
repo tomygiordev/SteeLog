@@ -281,6 +281,28 @@ namespace SteeLog.Tests
             });
         }
 
+        [Fact]
+        public void SistemaQuedaAlFondoDelMenuJustoArribaDeSalir()
+        {
+            Sta(() =>
+            {
+                var servicios = new ServiciosVistaDePrueba();
+                servicios.Sesion.SetSession("admin@tesis.local");
+                using (var vista = new SteeLog.VistaGeneral(servicios))
+                {
+                    var menu = vista.Controls.Find("panelSideMenu", true).Single();
+                    var boton = menu.Controls.Find("btnSistema", false).Single();
+                    var panel = menu.Controls.Find("panelSistema", false).Single();
+                    var salir = menu.Controls.Find("btnSalir", false).Single();
+                    Assert.Equal(DockStyle.Bottom, boton.Dock);
+                    Assert.Equal(DockStyle.Bottom, panel.Dock);
+                    var i = menu.Controls.GetChildIndex(boton);
+                    Assert.Equal(i + 1, menu.Controls.GetChildIndex(panel));
+                    Assert.Equal(i + 2, menu.Controls.GetChildIndex(salir));
+                }
+            });
+        }
+
         // ---- Respaldo automático ----
 
         private static readonly MethodInfo MetodoAviso = typeof(SteeLog.VistaGeneral).GetMethod("AvisoRespaldoAutomatico", BindingFlags.Static | BindingFlags.NonPublic);
