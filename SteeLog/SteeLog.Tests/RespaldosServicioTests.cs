@@ -44,6 +44,7 @@ public sealed class RespaldosServicioTests : IDisposable
             : new InfoBase { Conectada = false, Mensaje = "No se pudo conectar a la base de datos: sin red" });
         public Task<IReadOnlyDictionary<string, long>> ContarFilasAsync(IReadOnlyList<string> tablas, CancellationToken token)
             => Task.FromResult<IReadOnlyDictionary<string, long>>(tablas.ToDictionary(t => t, t => (long)t.Length));
+        public Task<bool> RestauracionEsperaBloqueoAsync(CancellationToken token) => Task.FromResult(false);
         public void LiberarConexiones() => Llamadas?.Add("liberar");
     }
 

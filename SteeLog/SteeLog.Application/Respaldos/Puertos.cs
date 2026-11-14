@@ -29,6 +29,8 @@ namespace SteeLog.Core.Application.Respaldos
         Task<InfoBase> ConsultarAsync(CancellationToken token);
         /// <summary>Filas de cada tabla (esquema public). Las tablas inexistentes se omiten.</summary>
         Task<IReadOnlyDictionary<string, long>> ContarFilasAsync(IReadOnlyList<string> tablas, CancellationToken token);
+        /// <summary>True si hay un pg_restore de esta base esperando un bloqueo de otra sesión (para no esperar sin límite).</summary>
+        Task<bool> RestauracionEsperaBloqueoAsync(CancellationToken token);
         /// <summary>Cierra las conexiones agrupadas de este proceso (antes de restaurar).</summary>
         void LiberarConexiones();
     }

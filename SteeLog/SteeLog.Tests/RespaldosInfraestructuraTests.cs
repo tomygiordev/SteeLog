@@ -36,14 +36,16 @@ public sealed class RespaldosInfraestructuraTests : IDisposable
     }
     sealed class BaseFalsa : IBaseRespaldo
     {
-        public int VersionMayor = 17;
+        public int VersionMayor = 17; public bool EsperaBloqueo;
         public Task<InfoBase> ConsultarAsync(CancellationToken t) => Task.FromResult(new InfoBase { Conectada = true, VersionMayor = VersionMayor, Version = VersionMayor + ".2", Nombre = "inventario_db" });
         public Task<IReadOnlyDictionary<string, long>> ContarFilasAsync(IReadOnlyList<string> tablas, CancellationToken t) => Task.FromResult<IReadOnlyDictionary<string, long>>(new Dictionary<string, long>());
+        public Task<bool> RestauracionEsperaBloqueoAsync(CancellationToken t) => Task.FromResult(EsperaBloqueo);
         public void LiberarConexiones() { }
     }
 
-    MotorPostgresRespaldo Motor(EjecutorFalso ej, int versionServidor = 17)
-        => new MotorPostgresRespaldo(ej, () => Cadena, new LocalizadorHerramientas(ej, null, @"C:\App", @"C:\Program Files", f => true, d => new[] { @"C:\Program Files\PostgreSQL\18" }), new BaseFalsa { VersionMayor = versionServidor });
+    MotorPostgresRespaldo Motor(EjecutorFalso ej, int versionServidor = 17, bool esperaBloqueo = false, int esperaMs = 20000)
+        => new MotorPostgresRespaldo(ej, () => Cadena, new LocalizadorHerramientas(ej, null, @"C:\App", @"C:\Program Files", f => true, d => new[] { @"C:\Program Files\PostgreSQL\18" }),
+            new BaseFalsa { VersionMayor = versionServidor, EsperaBloqueo = esperaBloqueo }, esperaMs);
 
     // ---------- argumentos y contraseña ----------
     [Fact]
@@ -61,8 +63,7 @@ public sealed class RespaldosInfraestructuraTests : IDisposable
         Assert.DoesNotContain(todos, a => a.Contains("Cl4ve") || a.Contains("Secreta") || a.IndexOf("password=", StringComparison.OrdinalIgnoreCase) >= 0);
         Assert.Contains("--no-password", MotorPostgresRespaldo.ArgumentosDump(c, "x"));
         Assert.Equal("Cl4ve Secreta", MotorPostgresRespaldo.Entorno(c)["PGPASSWORD"]);
-        Assert.DoesNotContain("PGOPTIONS", MotorPostgresRespaldo.Entorno(c).Keys);
-        Assert.Contains("lock_timeout", MotorPostgresRespaldo.Entorno(c, esperarBloqueos: true)["PGOPTIONS"]);
+        Assert.Equal(new[] { "PGPASSWORD", "PGSSLMODE" }, MotorPostgresRespaldo.Entorno(c).Keys.OrderBy(k => k).ToArray());
     }
 
     [Fact]
@@ -91,7 +92,7 @@ public sealed class RespaldosInfraestructuraTests : IDisposable
         r = await motor.RestaurarAsync(@"C:\x\a.dump", null, CancellationToken.None);
         Assert.True(r.Ok);
         var restore = ej.Solicitudes.Last();
-        Assert.EndsWith("pg_restore.exe", restore.Ejecutable); Assert.Contains("PGOPTIONS", restore.Entorno.Keys); Assert.DoesNotContain("Cl4ve", EjecutorProcesos.ArmarArgumentos(restore.Argumentos));
+        Assert.EndsWith("pg_restore.exe", restore.Ejecutable); Assert.Equal("Cl4ve Secreta", restore.Entorno["PGPASSWORD"]); Assert.DoesNotContain("Cl4ve", EjecutorProcesos.ArmarArgumentos(restore.Argumentos));
     }
 
     [Fact]
@@ -104,9 +105,22 @@ public sealed class RespaldosInfraestructuraTests : IDisposable
         Assert.Contains("tiempo máximo", (await Motor(ej).CrearAsync("x", null, CancellationToken.None)).Detalle);
         ej.Respuesta = s => throw new System.ComponentModel.Win32Exception("no se pudo iniciar");
         Assert.Contains("No se pudo ejecutar pg_dump", (await Motor(ej).CrearAsync("x", null, CancellationToken.None)).Detalle);
-        ej.Respuesta = s => new ResultadoProceso { CodigoSalida = 1, Error = "pg_restore: error: ERROR:  canceling statement due to lock timeout" };
+        ej.Respuesta = s => new ResultadoProceso { CodigoSalida = 1, Error = "pg_restore: error: could not execute query: ERROR:  syntax error" };
         var rest = await Motor(ej).RestaurarAsync("x.dump", null, CancellationToken.None);
-        Assert.False(rest.Ok); Assert.Contains("otras sesiones", rest.Detalle);
+        Assert.False(rest.Ok); Assert.Contains("código 1", rest.Detalle); Assert.Contains("syntax error", rest.Detalle);
+    }
+
+    [Fact]
+    public async Task SiPgRestoreQuedaEsperandoUnBloqueoDeOtraSesionSeCortaConUnMensajeClaro()
+    {
+        var ej = new EjecutorFalso { Asincrona = async (s, t) => { await Task.Delay(30000, t); return new ResultadoProceso(); } };
+        var sw = Stopwatch.StartNew();
+        var r = await Motor(ej, esperaBloqueo: true, esperaMs: 300).RestaurarAsync("x.dump", null, CancellationToken.None);
+        Assert.False(r.Ok); Assert.Contains("otras sesiones", r.Detalle); Assert.Contains("transacciones abiertas", r.Detalle);
+        Assert.True(sw.Elapsed < TimeSpan.FromSeconds(10), "tardó " + sw.Elapsed);
+        // Si el usuario cancela por su cuenta, se propaga la cancelación (no se confunde con el bloqueo).
+        using (var cts = new CancellationTokenSource(200))
+            await Assert.ThrowsAnyAsync<OperationCanceledException>(() => Motor(ej).RestaurarAsync("x.dump", null, cts.Token));
     }
 
     [Fact]

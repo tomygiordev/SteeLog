@@ -72,6 +72,17 @@ namespace SteeLog.Infrastructure.Respaldos
             return resultado;
         }
 
+        public async Task<bool> RestauracionEsperaBloqueoAsync(CancellationToken token)
+        {
+            using (var c = Crear())
+            {
+                await c.OpenAsync(token).ConfigureAwait(false);
+                using (var q = new NpgsqlCommand("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid() " +
+                    "AND application_name = 'pg_restore' AND wait_event_type = 'Lock')", c))
+                    return (bool)await q.ExecuteScalarAsync(token).ConfigureAwait(false);
+            }
+        }
+
         public void LiberarConexiones() => NpgsqlConnection.ClearAllPools();
     }
 }

@@ -42,15 +42,17 @@ namespace SteeLog.Infrastructure.Respaldos
     /// <summary>Crea, lista y restaura copias con los pg_dump / pg_restore oficiales. La clave viaja solo por PGPASSWORD.</summary>
     public sealed class MotorPostgresRespaldo : IMotorRespaldo
     {
-        /// <summary>Tiempo que pg_restore espera un bloqueo de otra sesión antes de fallar (milisegundos).</summary>
+        /// <summary>Tiempo que se tolera que pg_restore siga esperando un bloqueo de otra sesión antes de cortarlo (milisegundos).</summary>
         public const int EsperaBloqueoMs = 20000;
         public static readonly TimeSpan TiempoMaximoCopia = TimeSpan.FromMinutes(60);
 
         private readonly IEjecutorProcesos ejecutor; private readonly Func<string> cadenaConexion;
-        private readonly LocalizadorHerramientas localizador; private readonly IBaseRespaldo bd;
+        private readonly LocalizadorHerramientas localizador; private readonly IBaseRespaldo bd; private readonly int esperaBloqueoMs;
 
-        public MotorPostgresRespaldo(IEjecutorProcesos ejecutor, Func<string> cadenaConexion, LocalizadorHerramientas localizador, IBaseRespaldo bd)
+        /// <param name="esperaBloqueoMs">Cuánto se deja a pg_restore esperando un bloqueo de otra sesión antes de cortarlo (por defecto 20 s).</param>
+        public MotorPostgresRespaldo(IEjecutorProcesos ejecutor, Func<string> cadenaConexion, LocalizadorHerramientas localizador, IBaseRespaldo bd, int esperaBloqueoMs = EsperaBloqueoMs)
         {
+            this.esperaBloqueoMs = esperaBloqueoMs > 0 ? esperaBloqueoMs : EsperaBloqueoMs;
             this.ejecutor = ejecutor ?? throw new ArgumentNullException(nameof(ejecutor));
             this.cadenaConexion = cadenaConexion ?? throw new ArgumentNullException(nameof(cadenaConexion));
             this.localizador = localizador ?? throw new ArgumentNullException(nameof(localizador));
@@ -74,13 +76,11 @@ namespace SteeLog.Infrastructure.Respaldos
         public static IReadOnlyList<string> ArgumentosListar(string archivo) => new[] { "--list", archivo };
 
         /// <summary>Variables del proceso hijo: la contraseña va solo acá, nunca en los argumentos.</summary>
-        public static IReadOnlyDictionary<string, string> Entorno(ConexionRespaldo c, bool esperarBloqueos = false)
+        public static IReadOnlyDictionary<string, string> Entorno(ConexionRespaldo c)
         {
             var d = new Dictionary<string, string>();
             if (!string.IsNullOrEmpty(c.Clave)) d["PGPASSWORD"] = c.Clave;
             if (!string.IsNullOrEmpty(c.ModoSsl)) d["PGSSLMODE"] = c.ModoSsl;
-            // Evita que pg_restore espere sin límite si otra sesión tiene bloqueadas las tablas.
-            if (esperarBloqueos) d["PGOPTIONS"] = "-c lock_timeout=" + EsperaBloqueoMs.ToString(CultureInfo.InvariantCulture);
             return d;
         }
 
@@ -145,27 +145,47 @@ namespace SteeLog.Infrastructure.Respaldos
             ConexionRespaldo c;
             try { c = ConexionRespaldo.Desde(cadenaConexion()); }
             catch (Exception) { return Falla("La cadena de conexión de la base no es válida."); }
-            ResultadoProceso r;
-            try
+            ResultadoProceso r = null;
+            var bloqueado = false;
+            // El propio dump trae "SET lock_timeout = 0", así que no se puede limitar la espera por configuración del cliente:
+            // un vigilante revisa si pg_restore quedó esperando un bloqueo de otra sesión y, pasado el tiempo, lo corta.
+            using (var corte = CancellationTokenSource.CreateLinkedTokenSource(token))
+            using (var fin = new CancellationTokenSource())
             {
-                r = await ejecutor.EjecutarAsync(new SolicitudProceso
+                var vigilante = Task.Run(async () =>
                 {
-                    Ejecutable = h.PgRestore, Argumentos = ArgumentosRestore(c, archivo), Entorno = Entorno(c, esperarBloqueos: true), TiempoMaximo = TiempoMaximoCopia, CapturarSalida = false,
-                    AlRecibirLineaError = linea => Informar(progreso, linea, "Restaurando")
-                }, token).ConfigureAwait(false);
+                    DateTime? desde = null;
+                    var intervalo = Math.Min(1000, Math.Max(50, esperaBloqueoMs / 2));
+                    while (!fin.IsCancellationRequested)
+                    {
+                        try { await Task.Delay(intervalo, fin.Token).ConfigureAwait(false); } catch (OperationCanceledException) { return; }
+                        bool espera;
+                        try { espera = await bd.RestauracionEsperaBloqueoAsync(fin.Token).ConfigureAwait(false); }
+                        catch (OperationCanceledException) { return; }
+                        catch (Exception) { espera = false; }
+                        if (!espera) { desde = null; continue; }
+                        if (desde == null) desde = DateTime.UtcNow;
+                        else if (DateTime.UtcNow - desde.Value >= TimeSpan.FromMilliseconds(esperaBloqueoMs)) { bloqueado = true; corte.Cancel(); return; }
+                    }
+                });
+                try
+                {
+                    r = await ejecutor.EjecutarAsync(new SolicitudProceso
+                    {
+                        Ejecutable = h.PgRestore, Argumentos = ArgumentosRestore(c, archivo), Entorno = Entorno(c), TiempoMaximo = TiempoMaximoCopia, CapturarSalida = false,
+                        AlRecibirLineaError = linea => Informar(progreso, linea, "Restaurando")
+                    }, corte.Token).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException) when (bloqueado && !token.IsCancellationRequested) { r = null; }
+                catch (OperationCanceledException) { throw; }
+                catch (Exception ex) { return Falla("No se pudo ejecutar pg_restore: " + ex.Message); }
+                finally { fin.Cancel(); try { await vigilante.ConfigureAwait(false); } catch (Exception) { } }
             }
-            catch (OperationCanceledException) { throw; }
-            catch (Exception ex) { return Falla("No se pudo ejecutar pg_restore: " + ex.Message); }
+            if (bloqueado)
+                return Falla("Hay otras sesiones conectadas con transacciones abiertas que bloquean tablas de la base (se esperó " + Math.Max(1, esperaBloqueoMs / 1000) +
+                             " segundos y se canceló). Cerrá las demás instancias de la aplicación y reintentá.");
             if (r.TiempoAgotado) return Falla("pg_restore superó el tiempo máximo (" + (int)TiempoMaximoCopia.TotalMinutes + " minutos) y se canceló.");
-            if (r.CodigoSalida != 0)
-            {
-                var texto = r.Error ?? string.Empty;
-                var bloqueo = texto.IndexOf("lock timeout", StringComparison.OrdinalIgnoreCase) >= 0 || texto.IndexOf("tiempo de espera", StringComparison.OrdinalIgnoreCase) >= 0
-                              || texto.IndexOf("55P03", StringComparison.Ordinal) >= 0;
-                return Falla((bloqueo
-                    ? "Hay otras sesiones conectadas que bloquean tablas de la base (esperó " + (EsperaBloqueoMs / 1000) + " segundos). Cerrá las demás instancias de la aplicación y reintentá. "
-                    : "pg_restore falló (código " + r.CodigoSalida + "). ") + Cola(r.Error));
-            }
+            if (r.CodigoSalida != 0) return Falla("pg_restore falló (código " + r.CodigoSalida + "). " + Cola(r.Error));
             return new ResultadoMotor { Ok = true };
         }
 
@@ -199,10 +219,13 @@ namespace SteeLog.Infrastructure.Respaldos
         private static void Informar(IProgress<ProgresoRespaldo> progreso, string linea, string prefijo)
         {
             if (progreso == null || string.IsNullOrWhiteSpace(linea)) return;
-            // Ej.: pg_dump: dumping contents of table "public.materiales"
-            var i = linea.IndexOf("table ", StringComparison.OrdinalIgnoreCase);
-            if (i < 0) return;
-            progreso.Report(new ProgresoRespaldo(prefijo + " " + linea.Substring(i).Trim().Replace("\"", string.Empty), null));
+            // Ej.: "pg_dump: dumping contents of table "public.materiales"" (el idioma depende de la instalación de PostgreSQL).
+            var texto = linea.Trim();
+            var i = texto.IndexOf(": ", StringComparison.Ordinal);
+            if (i > 0 && i < 20 && texto.StartsWith("pg_", StringComparison.Ordinal)) texto = texto.Substring(i + 2).Trim();
+            if (texto.Length == 0) return;
+            if (texto.Length > 120) texto = texto.Substring(0, 117) + "...";
+            progreso.Report(new ProgresoRespaldo(prefijo + ": " + texto.Replace("\"", string.Empty), null));
         }
     }
 }
