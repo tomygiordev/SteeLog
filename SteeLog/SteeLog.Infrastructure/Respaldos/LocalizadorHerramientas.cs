@@ -31,13 +31,18 @@ namespace SteeLog.Infrastructure.Respaldos
         private static readonly Regex Version = new Regex(@"\)\s*(?<mayor>\d+)(?:\.(?<menor>\d+))?", RegexOptions.CultureInvariant, TimeSpan.FromSeconds(1));
 
         private readonly IEjecutorProcesos ejecutor; private readonly string carpetaConfigurada; private readonly string carpetaEjecutable;
-        private readonly string carpetaProgramFiles; private readonly Func<string, bool> existeArchivo; private readonly Func<string, IEnumerable<string>> subcarpetas;
+        private readonly IReadOnlyList<string> carpetasProgramFiles; private readonly Func<string, bool> existeArchivo; private readonly Func<string, IEnumerable<string>> subcarpetas;
 
         public LocalizadorHerramientas(IEjecutorProcesos ejecutor, string carpetaConfigurada, string carpetaEjecutable, string carpetaProgramFiles,
             Func<string, bool> existeArchivo = null, Func<string, IEnumerable<string>> subcarpetas = null)
+            : this(ejecutor, carpetaConfigurada, carpetaEjecutable, new[] { carpetaProgramFiles }, existeArchivo, subcarpetas) { }
+
+        /// <param name="carpetasProgramFiles">Varias raíces (Program Files de 64 y 32 bits); se buscan todas y se prefiere la versión mayor.</param>
+        public LocalizadorHerramientas(IEjecutorProcesos ejecutor, string carpetaConfigurada, string carpetaEjecutable, IEnumerable<string> carpetasProgramFiles,
+            Func<string, bool> existeArchivo = null, Func<string, IEnumerable<string>> subcarpetas = null)
         {
             this.ejecutor = ejecutor ?? throw new ArgumentNullException(nameof(ejecutor));
-            this.carpetaConfigurada = carpetaConfigurada; this.carpetaEjecutable = carpetaEjecutable; this.carpetaProgramFiles = carpetaProgramFiles;
+            this.carpetaConfigurada = carpetaConfigurada; this.carpetaEjecutable = carpetaEjecutable; this.carpetasProgramFiles = (carpetasProgramFiles ?? new string[0]).Where(c => !string.IsNullOrWhiteSpace(c)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
             this.existeArchivo = existeArchivo ?? File.Exists;
             this.subcarpetas = subcarpetas ?? (d => Directory.Exists(d) ? Directory.GetDirectories(d) : new string[0]);
         }
@@ -53,16 +58,15 @@ namespace SteeLog.Infrastructure.Respaldos
                 var propia = Path.Combine(carpetaEjecutable, "herramientas", "postgresql");
                 Agregar(propia); Agregar(Path.Combine(propia, "bin"));
             }
-            if (!string.IsNullOrWhiteSpace(carpetaProgramFiles))
+            var instaladas = new List<Tuple<int, string>>();
+            foreach (var pf in carpetasProgramFiles)
             {
-                var raiz = Path.Combine(carpetaProgramFiles, "PostgreSQL");
                 IEnumerable<string> versiones;
-                try { versiones = subcarpetas(raiz).ToList(); } catch { versiones = new string[0]; }
-                foreach (var v in versiones
-                    .Select(d => new { d, n = int.TryParse(Path.GetFileName(d), NumberStyles.None, CultureInfo.InvariantCulture, out var n) ? n : -1 })
-                    .Where(x => x.n > 0).OrderByDescending(x => x.n))
-                    Agregar(Path.Combine(v.d, "bin"));
+                try { versiones = subcarpetas(Path.Combine(pf, "PostgreSQL")).ToList(); } catch { versiones = new string[0]; }
+                foreach (var d in versiones)
+                    if (int.TryParse(Path.GetFileName(d), NumberStyles.None, CultureInfo.InvariantCulture, out var n) && n > 0) instaladas.Add(Tuple.Create(n, d));
             }
+            foreach (var v in instaladas.OrderByDescending(x => x.Item1)) Agregar(Path.Combine(v.Item2, "bin"));
             return lista;
         }
 

@@ -194,6 +194,42 @@ public sealed class RespaldosInfraestructuraTests : IDisposable
     }
 
     [Fact]
+    public async Task Proceso_de_32_bits_encuentra_PostgreSQL_en_la_raiz_de_64_bits()
+    {
+        // En 32 bits "ProgramFiles" apunta a (x86); la raíz real está en ProgramW6432.
+        var e = new Escenario();
+        Poner(e, @"C:\Program Files\PostgreSQL\18\bin", "18.0");
+        var loc = new LocalizadorHerramientas(new VersionPorRuta(e.Versiones), null, @"C:\App",
+            new[] { @"C:\Program Files (x86)", @"C:\Program Files", @"C:\Program Files (x86)" }, f => e.Existen.Contains(f),
+            d => d == @"C:\Program Files\PostgreSQL" ? new[] { Path.Combine(d, "18") } : new string[0]);
+        var r = await loc.ResolverAsync(18, CancellationToken.None);
+        Assert.True(r.Disponibles);
+        Assert.Equal(@"C:\Program Files\PostgreSQL\18\bin\pg_dump.exe", r.PgDump);
+    }
+
+    [Fact]
+    public async Task Varias_raices_prefieren_la_version_mayor_sin_duplicados()
+    {
+        var e = new Escenario();
+        Poner(e, @"C:\Program Files\PostgreSQL\15\bin", "15.4"); Poner(e, @"C:\Program Files (x86)\PostgreSQL\17\bin", "17.5");
+        var loc = new LocalizadorHerramientas(new VersionPorRuta(e.Versiones), null, @"C:\App", new[] { @"C:\Program Files", @"C:\Program Files (x86)", @"c:\program files" },
+            f => e.Existen.Contains(f), d => d == @"C:\Program Files (x86)\PostgreSQL" ? new[] { Path.Combine(d, "17") } : new[] { Path.Combine(d, "15") });
+        var c = loc.Candidatas();
+        Assert.Equal(@"C:\Program Files (x86)\PostgreSQL\17\bin", c[c.Count - 2]);
+        Assert.Equal(c.Count, c.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+        Assert.Equal(17, (await loc.ResolverAsync(0, CancellationToken.None)).VersionMayor);
+    }
+
+    [Fact]
+    public async Task Sin_herramientas_el_mensaje_nombra_la_carpeta_propia_junto_al_ejecutable()
+    {
+        var loc = new LocalizadorHerramientas(new VersionPorRuta(new Dictionary<string, string>()), null, @"C:\App", new[] { @"C:\Program Files" }, f => false, d => new string[0]);
+        var r = await loc.ResolverAsync(18, CancellationToken.None);
+        Assert.False(r.Disponibles);
+        Assert.Contains(@"C:\App\herramientas\postgresql", r.Mensaje);
+    }
+
+    [Fact]
     public async Task SiLaVersionDeLasHerramientasEsMenorQueLaDelServidorSeBuscaOtraOSeInforma()
     {
         var e = new Escenario { PostgresInstalados = new[] { "15", "18" } };
