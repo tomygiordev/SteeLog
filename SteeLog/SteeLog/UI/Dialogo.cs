@@ -27,6 +27,7 @@ namespace SteeLog.UI
             MessageBoxButtons botones = MessageBoxButtons.OK, MessageBoxIcon icono = MessageBoxIcon.None,
             MessageBoxDefaultButton def = MessageBoxDefaultButton.Button1)
         {
+            if (icono == MessageBoxIcon.Error) NotificarError(mensaje, owner);
             return Ejecutar(owner, mensaje, titulo, botones, TipoDe(icono), def, false);
         }
 
@@ -45,7 +46,51 @@ namespace SteeLog.UI
 
         public static void Error(string mensaje, string titulo = null, IWin32Window owner = null)
         {
+            NotificarError(mensaje, owner);
             Ejecutar(owner, mensaje, titulo ?? "Error", MessageBoxButtons.OK, TipoDialogo.Error, MessageBoxDefaultButton.Button1, false);
+        }
+
+        /// <summary>Muestra un error que ya quedó registrado por otro camino (p. ej. una excepción no controlada): no lo vuelve a notificar.</summary>
+        public static void ErrorYaRegistrado(string mensaje, string titulo = null, IWin32Window owner = null)
+        {
+            Ejecutar(owner, mensaje, titulo ?? "Error", MessageBoxButtons.OK, TipoDialogo.Error, MessageBoxDefaultButton.Button1, false);
+        }
+
+        /// <summary>
+        /// Punto de enganche de la bitácora: recibe (descripción, pantalla) cada vez que se muestra un error al usuario.
+        /// Se asigna al iniciar la aplicación; nunca debe romper la interfaz.
+        /// </summary>
+        public static Action<string, string> AlMostrarError;
+
+        /// <summary>Avisa al enganche de errores. Nunca lanza: un fallo de la bitácora no puede impedir mostrar el error.</summary>
+        public static void NotificarError(string mensaje, IWin32Window owner = null)
+        {
+            try
+            {
+                var enganche = AlMostrarError;
+                if (enganche == null) return;
+                enganche(mensaje, PantallaActiva(owner));
+            }
+            catch { }
+        }
+
+        /// <summary>Nombre de la pantalla en uso: la vista hija abierta en la ventana principal, o el formulario del owner / activo.</summary>
+        public static string PantallaActiva(IWin32Window owner = null)
+        {
+            try
+            {
+                foreach (Form f in Application.OpenForms)
+                {
+                    var general = f as VistaGeneral;
+                    var hija = general == null ? null : general.PantallaActual;
+                    if (!string.IsNullOrEmpty(hija)) return hija;
+                }
+                var c = owner as Control;
+                Form form = c == null ? owner as Form : (c.FindForm() ?? c as Form);
+                if (form == null) form = Form.ActiveForm;
+                return form == null ? null : form.GetType().Name;
+            }
+            catch { return null; }
         }
 
         /// <summary>

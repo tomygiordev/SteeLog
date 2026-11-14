@@ -20,15 +20,22 @@ namespace SteeLog
             Application.ThreadException += (sender, e) =>
             {
                 registro.Registrar(e.Exception);
-                try { Dialogo.Error("Ocurrió un error inesperado. Revisá la operación antes de continuar."); }
+                RegistrarEnBitacora(services, e.Exception);
+                try { Dialogo.ErrorYaRegistrado("Ocurrió un error inesperado. Revisá la operación antes de continuar."); }
                 catch (Exception errorDialogo) { registro.Registrar(errorDialogo); }
             };
-            AppDomain.CurrentDomain.UnhandledException += (sender, e) => registro.Registrar(e.ExceptionObject);
+            AppDomain.CurrentDomain.UnhandledException += (sender, e) =>
+            {
+                registro.Registrar(e.ExceptionObject);
+                RegistrarEnBitacora(services, e.ExceptionObject);
+            };
             TaskScheduler.UnobservedTaskException += (sender, e) =>
             {
                 registro.Registrar(e.Exception);
                 e.SetObserved();
             };
+            // Cada error mostrado al usuario (diálogo o aviso) queda en la bitácora con la pantalla en uso.
+            Dialogo.AlMostrarError = (descripcion, pantalla) => services?.ErroresBitacora?.Error(descripcion, pantalla);
             services = LocalServices.Create();
             try
             {
@@ -44,7 +51,7 @@ namespace SteeLog
                 if (saved.email != null && saved.password != null)
                 {
                     var result = services.Autenticacion.SignInAsync(saved.email, saved.password).GetAwaiter().GetResult();
-                    if (result.Success) { services.Sesion.SetSession(result.Email); loggedIn = true; }
+                    if (result.Success) { services.Sesion.SetSession(result.Email); services.ErroresBitacora.ReintentarPendientes(); loggedIn = true; }
                     else services.Credenciales.Clear();
                 }
                 if (!loggedIn)
@@ -62,6 +69,13 @@ namespace SteeLog
                 }
             }
             finally { services.Dispose(); }
+        }
+
+        /// <summary>Deja el error no controlado en la bitácora. Puede llamarse antes de crear los servicios y nunca lanza.</summary>
+        private static void RegistrarEnBitacora(LocalServices services, object error)
+        {
+            try { services?.ErroresBitacora?.ErrorNoControlado(error, Dialogo.PantallaActiva()); }
+            catch { }
         }
 
         internal static void ConfigurarPantallaDemo(Form ventana, string raizDemo, string nombrePantalla)

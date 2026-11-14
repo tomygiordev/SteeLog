@@ -367,6 +367,7 @@ namespace SteeLog
         /// </summary>
         public static void ShowError(string message, Action onClick = null)
         {
+            SteeLog.UI.Dialogo.NotificarError(message);
             var owner = GetActiveOwner();
             var toast = new ToastNotification(message, ToastType.Error, false, onClick);
             toast.ShowToast(owner);
@@ -394,6 +395,7 @@ namespace SteeLog
 
         public static void ShowCenterToast(string title, string details, ToastType type, Action onClick = null)
         {
+            if (type == ToastType.Error) SteeLog.UI.Dialogo.NotificarError(title + (string.IsNullOrWhiteSpace(details) ? "" : " - " + details));
             var owner = GetActiveOwner();
             // Formatear el texto para que se muestre en varias líneas
             string message = $"{title}\n\n{details}";

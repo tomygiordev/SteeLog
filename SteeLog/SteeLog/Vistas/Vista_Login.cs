@@ -249,6 +249,7 @@ namespace SteeLog.Vistas
                 if (result.Success)
                 {
                     servicios.Sesion.SetSession(result.Email);
+                    servicios.ErroresBitacora.ReintentarPendientes();
                     servicios.Credenciales.Save(email, password);
                     DialogResult = DialogResult.OK;
                     Close();

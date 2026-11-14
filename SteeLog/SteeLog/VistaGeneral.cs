@@ -438,6 +438,9 @@ namespace SteeLog
             openChildForm(form);
         }
 
+        /// <summary>Nombre del tipo de la vista hija visible (para registrar en qué pantalla ocurrió un error).</summary>
+        internal string PantallaActual { get { var f = activeForm; return f != null && !f.IsDisposed ? f.GetType().Name : null; } }
+
         public void openChildForm<T>(Func<T> factory) where T : Form
         {
             var form = SteeLog.Presentation.NavigationCache.GetOrCreate(childFormsCache, factory, cached => cached.IsDisposed);
@@ -724,6 +727,33 @@ namespace SteeLog
             panelGestion.Controls.Add(btnCanaletasPlegados);
 
             panelGestion.Controls.SetChildIndex(btnCanaletasPlegados, 0);
+
+            // Bitácora: solo Admin. Se crea únicamente para ese rol, así la altura del panel (que suma los botones visibles) no deja huecos.
+            if (servicios.Sesion.Role == Servicios.UserRole.Admin)
+            {
+                var btnBitacora = new Button
+                {
+                    Name = "btnBitacora",
+                    Text = "Bitácora",
+                    Dock = DockStyle.Top,
+                    FlatStyle = FlatStyle.Flat,
+                    ForeColor = Color.Silver,
+                    Height = 40,
+                    Padding = new Padding(35, 0, 0, 0),
+                    TextAlign = ContentAlignment.MiddleLeft,
+                    UseVisualStyleBackColor = true
+                };
+                btnBitacora.FlatAppearance.BorderSize = 0;
+                btnBitacora.FlatAppearance.MouseDownBackColor = Color.FromArgb(15, 15, 20);
+                btnBitacora.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
+                btnBitacora.Click += (s, e) =>
+                {
+                    openChildForm(() => new Vista_Bitacora(servicios));
+                    hideSubMenu();
+                };
+                panelGestion.Controls.Add(btnBitacora);
+                panelGestion.Controls.SetChildIndex(btnBitacora, 0);
+            }
 
             panelGestion.VisibleChanged += (s, e) =>
             {
