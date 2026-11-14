@@ -34,7 +34,26 @@ namespace SteeLog.Tests
 
         // Dialogo es internal: se accede por reflexión, como en DialogoTests.
         private static Type TipoDialogo => typeof(SteeLog.VistaGeneral).Assembly.GetType("SteeLog.UI.Dialogo", true);
-        private static void AsignarEnganche(Action<string, string> accion) => TipoDialogo.GetField("AlMostrarError", Todos).SetValue(null, accion);
+        private static Action<string, string> AsignarEnganche(Action<string, string> accion)
+        {
+            var campo = TipoDialogo.GetField("AlMostrarError", Todos);
+            var anterior = (Action<string, string>)campo.GetValue(null);
+            campo.SetValue(null, accion);
+            return anterior;
+        }
+
+        // AlMostrarError es estático y otros tests (en paralelo) también muestran errores: se conservan solo los mensajes con la marca propia
+        // y siempre se restaura el enganche anterior.
+        private static List<string> Capturar(string marca, Action cuerpo)
+        {
+            var capturados = new System.Collections.Concurrent.ConcurrentQueue<string>();
+            var anterior = AsignarEnganche((d, p) => { if (d != null && d.Contains(marca)) capturados.Enqueue(d); });
+            try { cuerpo(); }
+            finally { AsignarEnganche(anterior); }
+            return capturados.ToList();
+        }
+
+        private static string Marca() => Guid.NewGuid().ToString("N");
         private static void Llamar(string metodo, params object[] args) => TipoDialogo.GetMethod(metodo, Todos).Invoke(null, args);
 
         private sealed class Ejecutor : IUseCaseExecutor
@@ -56,12 +75,9 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                string descripcion = null; int llamadas = 0;
-                AsignarEnganche((d, p) => { descripcion = d; llamadas++; });
-                try { Llamar("NotificarError", "Se rompió algo", null); }
-                finally { AsignarEnganche(null); }
-                Assert.Equal(1, llamadas);
-                Assert.Equal("Se rompió algo", descripcion);
+                var texto = "Se rompió algo " + Marca();
+                var capturados = Capturar(texto, () => Llamar("NotificarError", texto, null));
+                Assert.Equal(new[] { texto }, capturados);
             });
         }
 
@@ -70,16 +86,21 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                AsignarEnganche((d, p) => { throw new InvalidOperationException("falla la bitácora"); });
+                var anterior = AsignarEnganche((d, p) => { throw new InvalidOperationException("falla la bitácora"); });
                 try { Llamar("NotificarError", "x", null); }
-                finally { AsignarEnganche(null); }
+                finally { AsignarEnganche(anterior); }
             });
         }
 
         [Fact]
         public void NotificarErrorSinEngancheNoHaceNada()
         {
-            Sta(() => { AsignarEnganche(null); Llamar("NotificarError", "x", null); });
+            Sta(() =>
+            {
+                var anterior = AsignarEnganche(null);
+                try { Llamar("NotificarError", "x", null); }
+                finally { AsignarEnganche(anterior); }
+            });
         }
 
         [Fact]
@@ -125,16 +146,16 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                var descripciones = new List<string>();
-                AsignarEnganche((d, p) => descripciones.Add(d));
-                try
+                var marca = Marca();
+                var registrado = "Falló el guardado " + marca;
+                var yaRegistrado = "Ya registrado " + marca;
+                var capturados = Capturar(marca, () =>
                 {
-                    using (var owner = CrearOwner()) Mostrar(() => Llamar("Error", "Falló el guardado", null, owner));
-                    Assert.Equal(new[] { "Falló el guardado" }, descripciones);
-                    using (var owner = CrearOwner()) Mostrar(() => Llamar("ErrorYaRegistrado", "Ya registrado", null, owner));
-                    Assert.Single(descripciones);
-                }
-                finally { AsignarEnganche(null); }
+                    using (var owner = CrearOwner()) Mostrar(() => Llamar("Error", registrado, null, owner));
+                    using (var owner = CrearOwner()) Mostrar(() => Llamar("ErrorYaRegistrado", yaRegistrado, null, owner));
+                });
+                Assert.Equal(new[] { registrado }, capturados);
+                Assert.DoesNotContain(yaRegistrado, capturados);
             });
         }
 
@@ -143,7 +164,7 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                AsignarEnganche((d, p) => { throw new InvalidOperationException("falla"); });
+                var anterior = AsignarEnganche((d, p) => { throw new InvalidOperationException("falla"); });
                 bool abierto = false;
                 try
                 {
@@ -154,7 +175,7 @@ namespace SteeLog.Tests
                         using (var owner = CrearOwner()) Mostrar(() => Llamar("Error", "x", null, owner));
                     }
                 }
-                finally { AsignarEnganche(null); }
+                finally { AsignarEnganche(anterior); }
                 Assert.True(abierto);
             });
         }
@@ -164,22 +185,19 @@ namespace SteeLog.Tests
         {
             Sta(() =>
             {
-                var descripciones = new List<string>();
-                AsignarEnganche((d, p) => descripciones.Add(d));
-                try
+                var marca = Marca();
+                var antes = new HashSet<Form>(Application.OpenForms.Cast<Form>());
+                var capturados = Capturar(marca, () =>
                 {
                     // El aviso se registra antes de mostrarse; sin escritorio interactivo la ventana puede no crearse y no importa.
-                    foreach (var mostrar in new Action[] { () => ToastNotification.ShowError("Algo falló"), () => ToastNotification.ShowSuccess("Todo bien"), () => ToastNotification.ShowWarning("Ojo") })
+                    foreach (var mostrar in new Action[] { () => ToastNotification.ShowError("Algo falló " + marca), () => ToastNotification.ShowSuccess("Todo bien " + marca), () => ToastNotification.ShowWarning("Ojo " + marca) })
                     {
                         try { mostrar(); } catch (System.ComponentModel.Win32Exception) { }
                     }
-                }
-                finally
-                {
-                    AsignarEnganche(null);
-                    foreach (Form f in Application.OpenForms.Cast<Form>().ToList()) f.Dispose();
-                }
-                Assert.Equal(new[] { "Algo falló" }, descripciones);
+                });
+                // Solo se descartan los carteles creados por este test.
+                foreach (var f in Application.OpenForms.Cast<Form>().Where(f => f is ToastNotification && !antes.Contains(f)).ToList()) f.Dispose();
+                Assert.Equal(new[] { "Algo falló " + marca }, capturados);
             });
         }
 
