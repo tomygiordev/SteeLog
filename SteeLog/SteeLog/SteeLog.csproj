@@ -457,6 +457,7 @@
     <Compile Include="Presentation\HerramientasPresenter.cs" />
     <Compile Include="Presentation\CatalogosPresenter.cs" />
     <Compile Include="Presentation\KardexPresenter.cs" />
+    <Compile Include="Presentation\BitacoraPresenter.cs" />
     <Compile Include="Presentation\InformeObraPresenter.cs" />
     <Compile Include="Presentation\ReporteStockPresenter.cs" />
     <Compile Include="Presentation\RecortesPresenter.cs" />

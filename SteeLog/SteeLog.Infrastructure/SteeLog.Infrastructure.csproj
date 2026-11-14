@@ -11,6 +11,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="System.Security" />
+    <Reference Include="System.Runtime.Serialization" />
     <Reference Include="itextsharp"><HintPath>..\SteeLog\packages\itextsharp.dll</HintPath></Reference>
     <Reference Include="BouncyCastle.Crypto"><HintPath>..\SteeLog\packages\BouncyCastle.Crypto.dll</HintPath></Reference>
   </ItemGroup>

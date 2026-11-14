@@ -28,6 +28,8 @@ using SteeLog.Infrastructure.Canaletas;
 using SteeLog.Core.Application.Catalogos;
 using SteeLog.Infrastructure.Catalogos;
 using SteeLog.Infrastructure.Reportes;
+using SteeLog.Core.Application.Bitacora;
+using SteeLog.Infrastructure.Bitacora;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IServiciosVista, IDisposable
@@ -44,6 +46,7 @@ namespace SteeLog.CompositionRoot
         internal IRemitoPdf RemitoPdf { get; }
         internal IConteoPdf ConteoPdf { get; }
         internal IInformeObraPdf InformeObraPdf { get; }
+        internal IRegistroErroresBitacora ErroresBitacora { get; }
         internal IKardexPdf KardexPdf { get; }
         internal IReporteStockPdf ReporteStockPdf { get; }
         private readonly ServiceProvider provider;
@@ -64,7 +67,7 @@ namespace SteeLog.CompositionRoot
             Credentials = new OptionalCredentialStore(new DpapiCredentialStore(Path.Combine(localApplicationData, "SteeLog", "session.dat")));
             Updates = new LocalDemoUpdateSource(Path.Combine(executableDirectory, "demo", "actualizaciones"), Path.Combine(localApplicationData, "SteeLog", "ActualizacionesDemo"));
             configuration = new Lazy<LocalConfiguration>(() => LocalConfiguration.Load(Paths.ExecutableDirectory, () => typeof(LocalServices).Assembly.GetManifestResourceStream("SteeLog.appsettings.json")));
-            connections = new Lazy<PostgresConnectionFactory>(() => new PostgresConnectionFactory(Configuration.ConnectionString));
+            connections = new Lazy<PostgresConnectionFactory>(() => new PostgresConnectionFactory(Configuration.ConnectionString, IdentificarConexion));
             var registrations = new ServiceCollection();
             OrdenesPdf = new OrdenesPendientesPDF(new RecursosPdfLocales());
             RemitoPdf = new SteeLog.Infrastructure.Pdf.MovimientoPDF(new RecursosPdfLocales());
@@ -79,6 +82,8 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<ConsultarCanaletas>();
             registrations.AddScoped<OperacionesCanaleta>();
             registrations.AddSingleton(Session);
+            registrations.AddScoped<IBitacoraConsulta>(_ => new NpgsqlBitacoraConsulta(Connections));
+            registrations.AddScoped<ConsultarBitacora>();
             registrations.AddSingleton<IClock>(_ => new BusinessClock(TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time"), () => DateTimeOffset.UtcNow));
             registrations.AddScoped(_ => new NpgsqlUnitOfWork(Connections));
             registrations.AddScoped<IUnitOfWork>(scope => scope.GetRequiredService<NpgsqlUnitOfWork>());
@@ -149,11 +154,19 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<PrepareDemoUpdate>();
             provider = registrations.BuildServiceProvider();
             Executor = new UseCaseExecutor(provider.GetRequiredService<IServiceScopeFactory>());
+            ErroresBitacora = new RegistroErroresBitacora(Session, new NpgsqlBitacoraEscritura(() => Connections), new ColaBitacoraArchivo(DataDirectory),
+                () => DateTimeOffset.UtcNow, Environment.MachineName, AppVersion.Current);
             Sesion = new SteeLog.Servicios.SesionVista(Session);
             Credenciales = new SteeLog.Servicios.CredencialesVista(Credentials);
             Autenticacion = new SteeLog.Servicios.AutenticacionVista(Authentication);
             Actualizaciones = new SteeLog.Servicios.ActualizacionesVista(Executor);
             Borrador = new SteeLog.Servicios.BorradorMovimientoVista(BorradorMovimiento);
+        }
+        // Se evalúa en cada conexión nueva: el usuario es el de la sesión en ese momento (vacío sin sesión).
+        private IdentificacionConexion IdentificarConexion()
+        {
+            var actual = Session.Current;
+            return new IdentificacionConexion { Usuario = actual?.Email, Rol = actual?.Role.ToString(), Equipo = Environment.MachineName, Version = AppVersion.Current };
         }
         internal InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
         internal HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista) => new HerramientasPresenter(Executor, vista);
@@ -165,6 +178,7 @@ namespace SteeLog.CompositionRoot
         IUseCaseExecutor IServiciosVista.Executor => Executor;
         IInformeObraPdf IServiciosVista.InformeObraPdf => InformeObraPdf;
         IKardexPdf IServiciosVista.KardexPdf => KardexPdf;
+        IRegistroErroresBitacora IServiciosVista.ErroresBitacora => ErroresBitacora;
         IReporteStockPdf IServiciosVista.ReporteStockPdf => ReporteStockPdf;
         IConteoPdf IServiciosVista.ConteoPdf => ConteoPdf;
         string IServiciosVista.ReportsDirectory => ReportsDirectory;

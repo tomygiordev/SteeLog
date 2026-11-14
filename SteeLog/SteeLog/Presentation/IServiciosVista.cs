@@ -2,6 +2,7 @@
 using SteeLog.Core.Application.Borradores;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Core.Application.Conteos;
+using SteeLog.Core.Application.Bitacora;
 using SteeLog.Servicios;
 
 namespace SteeLog.Presentation
@@ -27,6 +28,8 @@ namespace SteeLog.Presentation
         BorradorMovimientoVista Borrador { get; }
         IInformeObraPdf InformeObraPdf { get; }
         IKardexPdf KardexPdf { get; }
+        /// <summary>Registra ERROR / ERROR_NO_CONTROLADO en la bitácora (segundo plano, nunca lanza).</summary>
+        IRegistroErroresBitacora ErroresBitacora { get; }
         IReporteStockPdf ReporteStockPdf { get; }
         IConteoPdf ConteoPdf { get; }
         string ReportsDirectory { get; }

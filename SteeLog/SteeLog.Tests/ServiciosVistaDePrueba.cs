@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using System.Threading.Tasks;
+using SteeLog.Core.Application.Bitacora;
 using SteeLog.Core.Application.Borradores;
 using SteeLog.Core.Application.Conteos;
 using SteeLog.Core.Application.Identidad;
@@ -23,6 +24,7 @@ namespace SteeLog.Tests
         public BorradorMovimientoVista Borrador { get; }
         public IInformeObraPdf InformeObraPdf { get; set; }
         public IKardexPdf KardexPdf { get; set; }
+        public IRegistroErroresBitacora ErroresBitacora { get; set; } = RegistroErroresBitacoraNulo.Instancia;
         public IReporteStockPdf ReporteStockPdf { get; set; }
         public IConteoPdf ConteoPdf { get; set; }
         public IOrdenesPendientesPdf OrdenesPdf { get; set; }
