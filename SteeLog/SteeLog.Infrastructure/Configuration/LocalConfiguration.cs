@@ -6,7 +6,9 @@ namespace SteeLog.Infrastructure.Configuration
     public sealed class LocalConfiguration
     {
         public string ConnectionString { get; }
-        private LocalConfiguration(string connectionString) { ConnectionString = connectionString; }
+        /// <summary>Carpeta opcional con pg_dump/pg_restore (clave Respaldos:CarpetaHerramientas); null si no se configuró.</summary>
+        public string CarpetaHerramientasRespaldo { get; }
+        private LocalConfiguration(string connectionString, string carpetaHerramientas) { ConnectionString = connectionString; CarpetaHerramientasRespaldo = carpetaHerramientas; }
         public static LocalConfiguration Load(string executableDirectory)
         {
             return Load(executableDirectory, null);
@@ -31,7 +33,7 @@ namespace SteeLog.Infrastructure.Configuration
             {
                 throw new InvalidOperationException("No se pudo leer la configuración JSON de PostgreSQL (appsettings.json).");
             }
-            try { return new LocalConfiguration(root.GetConnectionString("DefaultConnection")); }
+            try { return new LocalConfiguration(root.GetConnectionString("DefaultConnection"), root["Respaldos:CarpetaHerramientas"]); }
             finally { (root as IDisposable)?.Dispose(); }
         }
     }

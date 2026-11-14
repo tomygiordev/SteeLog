@@ -49,6 +49,8 @@ namespace SteeLog.Core.Application.Bitacora
         void Error(string descripcion, string entidad = null);
         /// <summary>Excepción no controlada. Accion = ERROR_NO_CONTROLADO.</summary>
         void ErrorNoControlado(object error, string entidad = null);
+        /// <summary>Evento genérico de la aplicación (origen 'APP') con la acción indicada (p. ej. RESPALDO). Misma cola que los errores.</summary>
+        void Evento(string accion, string descripcion, string entidad = null);
         /// <summary>Intenta subir en segundo plano los eventos que quedaron en la cola local (p. ej. al iniciar sesión).</summary>
         void ReintentarPendientes();
     }
@@ -58,6 +60,7 @@ namespace SteeLog.Core.Application.Bitacora
         public static readonly RegistroErroresBitacoraNulo Instancia = new RegistroErroresBitacoraNulo();
         public void Error(string descripcion, string entidad = null) { }
         public void ErrorNoControlado(object error, string entidad = null) { }
+        public void Evento(string accion, string descripcion, string entidad = null) { }
         public void ReintentarPendientes() { }
     }
 
@@ -111,6 +114,12 @@ namespace SteeLog.Core.Application.Bitacora
 
         public void ErrorNoControlado(object error, string entidad = null)
             => Registrar(AccionErrorNoControlado, error == null ? "Error sin detalle." : SafeToString(error), entidad);
+
+        public void Evento(string accion, string descripcion, string entidad = null)
+        {
+            if (string.IsNullOrWhiteSpace(accion)) return;
+            Registrar(accion.Trim().ToUpperInvariant(), descripcion, entidad);
+        }
 
         public void ReintentarPendientes() => Subir(forzar: true);
 

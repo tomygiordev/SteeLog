@@ -3,6 +3,7 @@ using SteeLog.Core.Application.Borradores;
 using SteeLog.Core.Application.Reportes;
 using SteeLog.Core.Application.Conteos;
 using SteeLog.Core.Application.Bitacora;
+using SteeLog.Core.Application.Respaldos;
 using SteeLog.Servicios;
 
 namespace SteeLog.Presentation
@@ -38,5 +39,7 @@ namespace SteeLog.Presentation
         MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista);
         InsumosPresenter CrearInsumosPresenter(IInsumosVista vista);
         HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista);
+        /// <summary>Copias de seguridad (solo Admin, salvo el automático). Incluye EjecutarAutomaticoAsync para llamarlo tras el login.</summary>
+        RespaldosPresenter CrearRespaldosPresenter();
     }
 }

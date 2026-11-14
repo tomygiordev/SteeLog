@@ -30,6 +30,8 @@ using SteeLog.Infrastructure.Catalogos;
 using SteeLog.Infrastructure.Reportes;
 using SteeLog.Core.Application.Bitacora;
 using SteeLog.Infrastructure.Bitacora;
+using SteeLog.Core.Application.Respaldos;
+using SteeLog.Infrastructure.Respaldos;
 namespace SteeLog.CompositionRoot
 {
     internal sealed class LocalServices : IServiciosVista, IDisposable
@@ -51,6 +53,10 @@ namespace SteeLog.CompositionRoot
         internal IReporteStockPdf ReporteStockPdf { get; }
         private readonly ServiceProvider provider;
         internal LocalPaths Paths { get; }
+        /// <summary>Carpeta por defecto de las copias de seguridad; en modo demo queda dentro de la raíz demo.</summary>
+        internal string RespaldosDirectory { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SteeLog", "Copias de seguridad");
+        /// <summary>Solo en modo demo: la carpeta de copias no puede salir de esta raíz.</summary>
+        internal string RespaldosRaizPermitida { get; private set; }
         internal string ReportsDirectory { get; private set; } = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments), "SteeLog", "Reportes");
         private readonly Lazy<LocalConfiguration> configuration;
         private readonly Lazy<PostgresConnectionFactory> connections;
@@ -82,6 +88,7 @@ namespace SteeLog.CompositionRoot
             registrations.AddScoped<ConsultarCanaletas>();
             registrations.AddScoped<OperacionesCanaleta>();
             registrations.AddSingleton(Session);
+            registrations.AddScoped(_ => CrearServicioRespaldos());
             registrations.AddScoped<IBitacoraConsulta>(_ => new NpgsqlBitacoraConsulta(Connections));
             registrations.AddScoped<ConsultarBitacora>();
             registrations.AddSingleton<IClock>(_ => new BusinessClock(TimeZoneInfo.FindSystemTimeZoneById("Argentina Standard Time"), () => DateTimeOffset.UtcNow));
@@ -168,6 +175,18 @@ namespace SteeLog.CompositionRoot
             var actual = Session.Current;
             return new IdentificacionConexion { Usuario = actual?.Email, Rol = actual?.Role.ToString(), Equipo = Environment.MachineName, Version = AppVersion.Current };
         }
+        // Se arma recién al usarse: la carpeta por defecto y la raíz demo se fijan después de construir el objeto.
+        private ServicioRespaldos CrearServicioRespaldos()
+        {
+            var ejecutor = new EjecutorProcesos();
+            var bd = new NpgsqlBaseRespaldo(() => ConnectionString);
+            var localizador = new LocalizadorHerramientas(ejecutor, Configuration.CarpetaHerramientasRespaldo, Paths.ExecutableDirectory, Environment.GetEnvironmentVariable("ProgramFiles"));
+            var motor = new MotorPostgresRespaldo(ejecutor, () => ConnectionString, localizador, bd);
+            var configuracionRespaldos = new ConfiguracionRespaldoArchivo(Path.Combine(DataDirectory, "respaldos.json"), RespaldosDirectory);
+            return new ServicioRespaldos(Session, configuracionRespaldos, new AlmacenArchivosRespaldos(), motor, bd, ErroresBitacora,
+                () => DateTimeOffset.UtcNow, AppVersion.Current, RespaldosRaizPermitida);
+        }
+        internal RespaldosPresenter CrearRespaldosPresenter() => new RespaldosPresenter(Executor);
         internal InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
         internal HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista) => new HerramientasPresenter(Executor, vista);
         internal MovimientosPresenter CrearMovimientosPresenter(IMovimientosVista vista) => new MovimientosPresenter(Executor, vista, RemitoPdf);
@@ -192,6 +211,7 @@ namespace SteeLog.CompositionRoot
         MovimientosPresenter IServiciosVista.CrearMovimientosPresenter(IMovimientosVista vista) => CrearMovimientosPresenter(vista);
         InsumosPresenter IServiciosVista.CrearInsumosPresenter(IInsumosVista vista) => CrearInsumosPresenter(vista);
         HerramientasPresenter IServiciosVista.CrearHerramientasPresenter(IHerramientasVista vista) => CrearHerramientasPresenter(vista);
+        RespaldosPresenter IServiciosVista.CrearRespaldosPresenter() => CrearRespaldosPresenter();
         public void Dispose() => provider.Dispose();
         internal static LocalServices Create() => CreateForEnvironment(AppDomain.CurrentDomain.BaseDirectory, Environment.GetEnvironmentVariable("STEELOG_DEMO_ROOT"));
         internal static LocalServices CreateForEnvironment(string executableDirectory, string demoRoot)
@@ -203,7 +223,7 @@ namespace SteeLog.CompositionRoot
             var marker = Path.Combine(root, ".steelog-demo");
             if (!File.Exists(marker) || File.ReadAllText(marker).Trim() != "steelog-demo-v1")
                 throw new InvalidOperationException("Falta el marcador del directorio de datos demo. No se usará el perfil personal como fallback.");
-            return new LocalServices(executableDirectory, root, root) { ReportsDirectory = Path.Combine(root, "SteeLog", "Reportes") };
+            return new LocalServices(executableDirectory, root, root) { ReportsDirectory = Path.Combine(root, "SteeLog", "Reportes"), RespaldosDirectory = Path.Combine(root, "SteeLog", "Copias de seguridad"), RespaldosRaizPermitida = root };
         }
     }
 }

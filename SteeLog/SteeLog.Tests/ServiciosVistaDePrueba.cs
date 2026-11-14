@@ -52,6 +52,7 @@ namespace SteeLog.Tests
             => new MovimientosPresenter(Executor, vista, RemitoPdf ?? throw new InvalidOperationException("Configurar RemitoPdf en el test."));
         public InsumosPresenter CrearInsumosPresenter(IInsumosVista vista) => new InsumosPresenter(Executor, vista);
         public HerramientasPresenter CrearHerramientasPresenter(IHerramientasVista vista) => new HerramientasPresenter(Executor, vista);
+        public RespaldosPresenter CrearRespaldosPresenter() => new RespaldosPresenter(Executor);
 
         private sealed class ExecutorSinConfigurar : IUseCaseExecutor
         {
