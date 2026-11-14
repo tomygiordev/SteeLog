@@ -85,3 +85,6 @@ INSERT INTO public.materiales (id, id_categoria, nombre, preciounitario, stockac
 ON CONFLICT (id) DO NOTHING;
 
 SELECT setval('public.materiales_id_seq', COALESCE((SELECT MAX(id) FROM public.materiales), 1));
+
+-- La bitácora no debe nacer con las altas generadas por la carga inicial.
+TRUNCATE public.bitacora_auditoria RESTART IDENTITY;

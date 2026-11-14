@@ -139,4 +139,6 @@ BEGIN
   END IF;
  END LOOP;
 END $sequences$;
+-- La bitácora no debe nacer con las altas generadas por la carga inicial.
+TRUNCATE public.bitacora_auditoria RESTART IDENTITY;
 COMMIT;
