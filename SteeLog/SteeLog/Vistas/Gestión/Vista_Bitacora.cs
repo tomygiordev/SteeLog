@@ -349,7 +349,7 @@ namespace SteeLog.Vistas
             MostrarDetalle();
         }
 
-        /// <summary>Tinte suave por tipo de acción: alta, modificación, baja y errores.</summary>
+        /// <summary>Tinte suave por tipo de acción: alta, modificación, baja, copias de seguridad y errores.</summary>
         internal static Color? ColorFila(string accion)
         {
             switch ((accion ?? string.Empty).ToUpperInvariant())
@@ -358,7 +358,10 @@ namespace SteeLog.Vistas
                 case "UPDATE": return Color.FromArgb(31, 48, 66);                // azul suave
                 case "DELETE": return Color.FromArgb(82, 58, 30);                // naranja suave
                 case "ERROR":
+                case "RESPALDO_ERROR":
                 case "ERROR_NO_CONTROLADO": return Color.FromArgb(78, 38, 38);   // rojo suave
+                case "RESPALDO":
+                case "RESTAURACION": return Tema.Mezclar(Tema.Fondo, Tema.TextoSecundario, 0.18); // gris verdoso discreto
                 default: return null;
             }
         }

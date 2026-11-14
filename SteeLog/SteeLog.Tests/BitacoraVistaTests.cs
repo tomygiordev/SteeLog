@@ -271,21 +271,26 @@ namespace SteeLog.Tests
 
         // ---- Menú ----
 
-        private static bool HayBotonBitacora(string email)
+        private static Control Boton(string email, string nombre)
         {
             var servicios = new ServiciosVistaDePrueba();
             servicios.Sesion.SetSession(email);
             using (var vista = new SteeLog.VistaGeneral(servicios))
-                return vista.Controls.Find("btnBitacora", true).Any();
+            {
+                var c = vista.Controls.Find(nombre, true).SingleOrDefault();
+                return c == null ? null : new Control { Name = c.Parent == null ? string.Empty : c.Parent.Name };
+            }
         }
 
         [Fact]
-        public void ElBotonBitacoraEsSoloParaAdmin()
+        public void LaBitacoraVaEnLaSeccionSistemaSoloParaAdmin()
         {
             Sta(() =>
             {
-                Assert.True(HayBotonBitacora("admin@tesis.local"));
-                Assert.False(HayBotonBitacora("galpon@tesis.local"));
+                var admin = Boton("admin@tesis.local", "btnBitacora");
+                Assert.NotNull(admin);
+                Assert.Equal("panelSistema", admin.Name);   // ya no está en Gestión
+                Assert.Null(Boton("galpon@tesis.local", "btnBitacora"));
             });
         }
     }

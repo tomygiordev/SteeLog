@@ -212,6 +212,9 @@
     <Compile Include="Vistas\Gestión\Vista_Bitacora.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Vistas\Sistema\Vista_Respaldos.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Vistas\Gestión\Vista_Fletes.cs">
       <SubType>Form</SubType>
     </Compile>

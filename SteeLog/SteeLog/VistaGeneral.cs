@@ -27,7 +27,14 @@ namespace SteeLog
         internal VistaGeneral(SteeLog.Presentation.IServiciosVista servicios,
             Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
             Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock)
+            : this(servicios, consultarStock, esperarStock, mostrarStock, null) { }
+
+        internal VistaGeneral(SteeLog.Presentation.IServiciosVista servicios,
+            Func<CancellationToken, Task<IReadOnlyList<MaterialInventarioLectura>>> consultarStock,
+            Func<CancellationToken, Task> esperarStock, Action<int, Action> mostrarStock,
+            Func<CancellationToken, Task<SteeLog.Core.Application.Respaldos.ResultadoAutomatico>> respaldoAutomatico)
         {
+            _respaldoAutomatico = respaldoAutomatico ?? (token => servicios.CrearRespaldosPresenter().EjecutarAutomaticoAsync(token));
             this.servicios = servicios ?? throw new ArgumentNullException(nameof(servicios));
             _tokenCierreStock = _cierreStock.Token;
             _consultarStock = consultarStock ?? ConsultarStockAsync;
@@ -132,9 +139,45 @@ namespace SteeLog
             ConfigurarSubmenuInventario();
             ConfigurarSubmenuOrdenes();
             ConfigurarSubmenuGestion();
+            ConfigurarSeccionSistema();
             AplicarRol();
 
             this.Shown += VistaGeneral_Shown;
+            this.Shown += VistaGeneral_ShownRespaldo;
+        }
+
+        // ---- Copia de seguridad automática: una sola vez por apertura de la ventana principal (cubre login manual y auto-login) ----
+        private readonly Func<CancellationToken, Task<SteeLog.Core.Application.Respaldos.ResultadoAutomatico>> _respaldoAutomatico;
+
+        /// <summary>Aviso a mostrar para el resultado del respaldo automático (null si no corresponde avisar).</summary>
+        internal static KeyValuePair<bool, string>? AvisoRespaldoAutomatico(SteeLog.Core.Application.Respaldos.ResultadoAutomatico r, bool esAdmin)
+        {
+            if (r == null || !r.Ejecutado) return null;
+            if (r.Ok) return new KeyValuePair<bool, string>(true, "Copia de seguridad automática creada");
+            if (!esAdmin) return null;
+            return new KeyValuePair<bool, string>(false, "No se pudo crear la copia de seguridad automática" + (string.IsNullOrWhiteSpace(r.Mensaje) ? "." : ": " + r.Mensaje));
+        }
+
+        private async void VistaGeneral_ShownRespaldo(object sender, EventArgs e)
+        {
+            try
+            {
+                var token = _tokenCierreStock;
+                // Un instante después de abrir, para no competir con el arranque; el trabajo pesado corre fuera del hilo de la interfaz.
+                await Task.Delay(1500, token);
+                var resultado = await Task.Run(() => _respaldoAutomatico(token), token);
+                if (token.IsCancellationRequested || IsDisposed || Disposing) return;
+                var aviso = AvisoRespaldoAutomatico(resultado, servicios.Sesion.Role == Servicios.UserRole.Admin);
+                if (!aviso.HasValue) return;
+                if (aviso.Value.Key) ToastNotification.ShowSuccess(aviso.Value.Value);
+                else ToastNotification.ShowWarning(aviso.Value.Value);
+            }
+            catch (OperationCanceledException) { }
+            catch (Exception ex)
+            {
+                // Nunca debe molestar al arranque.
+                Console.WriteLine("Error en la copia de seguridad automática: " + ex.Message);
+            }
         }
 
         private readonly CancellationTokenSource _cierreStock = new CancellationTokenSource();
@@ -227,6 +270,7 @@ namespace SteeLog
             panelMovimientos.Visible = false;
             panelReportes.Visible = false;
             panelInventario.Visible = false;
+            if (panelSistema != null) panelSistema.Visible = false;
         }
 
         private void showSubMenu(Panel subMenu)
@@ -238,6 +282,8 @@ namespace SteeLog
                     AjustarAlturaPanelMovimientos();
                 if (subMenu == panelInventario)
                     AjustarAlturaPanelInventario();
+                if (subMenu == panelSistema)
+                    AjustarAlturaPanelSistema();
                 subMenu.Visible = true;
             }
             else
@@ -728,33 +774,6 @@ namespace SteeLog
 
             panelGestion.Controls.SetChildIndex(btnCanaletasPlegados, 0);
 
-            // Bitácora: solo Admin. Se crea únicamente para ese rol, así la altura del panel (que suma los botones visibles) no deja huecos.
-            if (servicios.Sesion.Role == Servicios.UserRole.Admin)
-            {
-                var btnBitacora = new Button
-                {
-                    Name = "btnBitacora",
-                    Text = "Bitácora",
-                    Dock = DockStyle.Top,
-                    FlatStyle = FlatStyle.Flat,
-                    ForeColor = Color.Silver,
-                    Height = 40,
-                    Padding = new Padding(35, 0, 0, 0),
-                    TextAlign = ContentAlignment.MiddleLeft,
-                    UseVisualStyleBackColor = true
-                };
-                btnBitacora.FlatAppearance.BorderSize = 0;
-                btnBitacora.FlatAppearance.MouseDownBackColor = Color.FromArgb(15, 15, 20);
-                btnBitacora.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
-                btnBitacora.Click += (s, e) =>
-                {
-                    openChildForm(() => new Vista_Bitacora(servicios));
-                    hideSubMenu();
-                };
-                panelGestion.Controls.Add(btnBitacora);
-                panelGestion.Controls.SetChildIndex(btnBitacora, 0);
-            }
-
             panelGestion.VisibleChanged += (s, e) =>
             {
                 if (panelGestion.Visible)
@@ -765,6 +784,110 @@ namespace SteeLog
                     panelGestion.Height = altura;
                 }
             };
+        }
+
+        // ---- Sección "Sistema" (solo Admin): se crea por código, sin tocar el diseñador ----
+        private Button btnSistema;
+        private Panel panelSistema;
+
+        private Button CrearBotonSubmenu(string nombre, string texto, Action abrir)
+        {
+            var b = new Button
+            {
+                Name = nombre,
+                Text = texto,
+                Dock = DockStyle.Top,
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.Silver,
+                Height = 40,
+                Padding = new Padding(35, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                UseVisualStyleBackColor = true
+            };
+            b.FlatAppearance.BorderSize = 0;
+            b.FlatAppearance.MouseDownBackColor = Color.FromArgb(15, 15, 20);
+            b.FlatAppearance.MouseOverBackColor = Color.FromArgb(25, 34, 35);
+            b.Click += (s, e) => { abrir(); hideSubMenu(); };
+            return b;
+        }
+
+        private void ConfigurarSeccionSistema()
+        {
+            // Solo Admin: para otros roles ni se crea, así el menú no deja huecos.
+            if (servicios.Sesion.Role != Servicios.UserRole.Admin || btnSistema != null) return;
+
+            btnSistema = new Button
+            {
+                Name = "btnSistema",
+                Text = "Sistema",
+                Dock = DockStyle.Top,
+                FlatStyle = FlatStyle.Flat,
+                ForeColor = Color.Silver,
+                Font = btnReportes.Font,
+                Size = new Size(btnReportes.Width, btnReportes.Height),
+                Padding = new Padding(11, 0, 0, 0),
+                TextAlign = ContentAlignment.MiddleLeft,
+                Image = IconoSistema(),
+                ImageAlign = ContentAlignment.MiddleLeft,
+                TextImageRelation = TextImageRelation.ImageBeforeText,
+                UseVisualStyleBackColor = true
+            };
+            btnSistema.FlatAppearance.BorderSize = 0;
+            btnSistema.FlatAppearance.MouseDownBackColor = btnReportes.FlatAppearance.MouseDownBackColor;
+            btnSistema.FlatAppearance.MouseOverBackColor = btnReportes.FlatAppearance.MouseOverBackColor;
+            btnSistema.Click += (s, e) => showSubMenu(panelSistema);
+
+            panelSistema = new Panel { Name = "panelSistema", Dock = DockStyle.Top, BackColor = panelReportes.BackColor, Visible = false };
+            // Dock.Top apila al revés del orden de alta: se agrega primero el que queda abajo.
+            panelSistema.Controls.Add(CrearBotonSubmenu("btnBitacora", "Bitácora", () => openChildForm(() => new Vista_Bitacora(servicios))));
+            panelSistema.Controls.Add(CrearBotonSubmenu("btnRespaldos", "Copias de seguridad", () => openChildForm(() => new Vista_Respaldos(servicios))));
+
+            panelSideMenu.Controls.Add(panelSistema);
+            panelSideMenu.Controls.Add(btnSistema);
+            // Al final del menú, justo antes de los botones de abajo (Salir, actualizaciones, cerrar sesión).
+            OrdenarSeccionSistema();
+            // El orden vuelve a fijarse al crearse la ventana: WinForms lo reacomoda al crear el handle del menú.
+            Load += (s, e) => OrdenarSeccionSistema();
+
+            panelSistema.VisibleChanged += (s, e) => { if (panelSistema.Visible) AjustarAlturaPanelSistema(); };
+            AjustarAlturaPanelSistema();
+        }
+
+        private void OrdenarSeccionSistema()
+        {
+            panelSideMenu.Controls.SetChildIndex(panelSistema, 0);
+            panelSideMenu.Controls.SetChildIndex(btnSistema, 1);
+        }
+
+        private void AjustarAlturaPanelSistema()
+        {
+            if (panelSistema == null) return;
+            int altura = 0;
+            foreach (Control c in panelSistema.Controls)
+                if (c.Visible) altura += c.Height;
+            panelSistema.Height = altura;
+        }
+
+        /// <summary>Ícono de engranaje simple, dibujado en el color de los demás íconos del menú.</summary>
+        private static Image IconoSistema()
+        {
+            var bmp = new Bitmap(34, 34);
+            using (var g = Graphics.FromImage(bmp))
+            using (var pen = new Pen(Color.Silver, 2f))
+            using (var br = new SolidBrush(Color.Silver))
+            {
+                g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                for (int i = 0; i < 8; i++)
+                {
+                    g.TranslateTransform(17, 17);
+                    g.RotateTransform(i * 45);
+                    g.FillRectangle(br, -2.5f, -12, 5, 6);
+                    g.ResetTransform();
+                }
+                g.DrawEllipse(pen, 10, 10, 14, 14);
+                g.FillEllipse(br, 15, 15, 4, 4);
+            }
+            return bmp;
         }
 
         private void ConfigurarSubmenuInventario()
