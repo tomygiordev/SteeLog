@@ -1,7 +1,8 @@
 {
   "origen": "docker/init/01-schema.sql",
-  "sha256_origen": "612ab0652f62a5bf01977e6d33c7408895ae034cca138d25bc59454e41d623d3",
+  "sha256_origen": "59b66d448621dcd3775620625d5b7a5025ae917d8f7f956a6d9ad74f57172711",
   "tablas": [
+    "bitacora_auditoria",
     "canaletas_plegados",
     "canaletas_plegados_fotos",
     "categorias",
@@ -27,12 +28,15 @@
     "ubicacion"
   ],
   "funciones": [
+    "bitacora_activar",
+    "bitacora_registrar_cambio",
     "set_movimientos_timestamps",
     "set_ordenes_compra_updated_at"
   ],
   "migraciones_incorporadas": [
     "F4_insumo_movimientos_snapshot.sql",
     "F10_01_impacto_tipo_movimiento.sql",
-    "F10_02_integridad_indices.sql"
+    "F10_02_integridad_indices.sql",
+    "F11_bitacora.sql"
   ]
 }
