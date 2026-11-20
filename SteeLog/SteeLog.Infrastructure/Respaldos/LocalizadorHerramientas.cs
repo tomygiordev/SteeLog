@@ -47,6 +47,79 @@ namespace SteeLog.Infrastructure.Respaldos
             this.subcarpetas = subcarpetas ?? (d => Directory.Exists(d) ? Directory.GetDirectories(d) : new string[0]);
         }
 
+        /// <summary>
+        /// Raíces donde buscar PostgreSQL\N\bin en este equipo: las variables de Program Files (64 y 32 bits), "Program Files"
+        /// de cada disco fijo (PostgreSQL puede estar instalado en otro disco) y la raíz de los servicios de PostgreSQL registrados.
+        /// </summary>
+        public static IReadOnlyList<string> RaicesDelEquipo()
+        {
+            var raices = new List<string>
+            {
+                Environment.GetEnvironmentVariable("ProgramW6432"), Environment.GetEnvironmentVariable("ProgramFiles"), Environment.GetEnvironmentVariable("ProgramFiles(x86)")
+            };
+            try
+            {
+                foreach (var d in DriveInfo.GetDrives())
+                {
+                    try
+                    {
+                        if (d.DriveType != DriveType.Fixed || !d.IsReady) continue;
+                        raices.Add(Path.Combine(d.RootDirectory.FullName, "Program Files"));
+                        raices.Add(Path.Combine(d.RootDirectory.FullName, "Program Files (x86)"));
+                    }
+                    catch (Exception) { }
+                }
+            }
+            catch (Exception) { }
+            raices.AddRange(RaicesDeServicios());
+            return raices.Where(r => !string.IsNullOrWhiteSpace(r)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        }
+
+        // Servicios "postgresql*": ImagePath = "<raíz>\PostgreSQL\N\bin\pg_ctl.exe" runservice ... -> <raíz>. Lee la vista de 64 bits aunque la app corra en 32.
+        private static IEnumerable<string> RaicesDeServicios()
+        {
+            var lista = new List<string>();
+            try
+            {
+                using (var hklm = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64))
+                using (var servicios = hklm.OpenSubKey(@"SYSTEM\CurrentControlSet\Services"))
+                {
+                    if (servicios == null) return lista;
+                    foreach (var nombre in servicios.GetSubKeyNames().Where(n => n.StartsWith("postgresql", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        try
+                        {
+                            using (var k = servicios.OpenSubKey(nombre))
+                            {
+                                var ruta = RutaEjecutable(k?.GetValue("ImagePath") as string);
+                                if (ruta == null) continue;
+                                var bin = Path.GetDirectoryName(ruta);
+                                var postgres = Path.GetDirectoryName(Path.GetDirectoryName(bin));
+                                if (postgres != null && string.Equals(Path.GetFileName(postgres), "PostgreSQL", StringComparison.OrdinalIgnoreCase))
+                                    lista.Add(Path.GetDirectoryName(postgres));
+                            }
+                        }
+                        catch (Exception) { }
+                    }
+                }
+            }
+            catch (Exception) { }
+            return lista;
+        }
+
+        internal static string RutaEjecutable(string imagePath)
+        {
+            if (string.IsNullOrWhiteSpace(imagePath)) return null;
+            var t = imagePath.Trim();
+            if (t.StartsWith("\"", StringComparison.Ordinal))
+            {
+                var fin = t.IndexOf('"', 1);
+                return fin > 1 ? t.Substring(1, fin - 1) : null;
+            }
+            var exe = t.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+            return exe > 0 ? t.Substring(0, exe + 4) : null;
+        }
+
         /// <summary>Carpetas candidatas, en orden de preferencia.</summary>
         public IReadOnlyList<string> Candidatas()
         {

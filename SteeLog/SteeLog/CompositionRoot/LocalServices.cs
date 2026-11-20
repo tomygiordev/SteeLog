@@ -180,7 +180,7 @@ namespace SteeLog.CompositionRoot
         {
             var ejecutor = new EjecutorProcesos();
             var bd = new NpgsqlBaseRespaldo(() => ConnectionString);
-            var localizador = new LocalizadorHerramientas(ejecutor, Configuration.CarpetaHerramientasRespaldo, Paths.ExecutableDirectory, new[] { Environment.GetEnvironmentVariable("ProgramW6432"), Environment.GetEnvironmentVariable("ProgramFiles"), Environment.GetEnvironmentVariable("ProgramFiles(x86)") });
+            var localizador = new LocalizadorHerramientas(ejecutor, Configuration.CarpetaHerramientasRespaldo, Paths.ExecutableDirectory, LocalizadorHerramientas.RaicesDelEquipo());
             var motor = new MotorPostgresRespaldo(ejecutor, () => ConnectionString, localizador, bd);
             var configuracionRespaldos = new ConfiguracionRespaldoArchivo(Path.Combine(DataDirectory, "respaldos.json"), RespaldosDirectory);
             return new ServicioRespaldos(Session, configuracionRespaldos, new AlmacenArchivosRespaldos(), motor, bd, ErroresBitacora,

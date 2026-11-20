@@ -102,7 +102,7 @@ namespace SteeLog.Vistas
             cmbAccion = NuevoCombo();
             txtTexto = new Guna2TextBox { PlaceholderText = "Buscar en descripción, ID o datos..." };
             btnBuscar = new Guna2Button { Text = "Buscar" };
-            btnExportar = new Guna2Button { Text = "Exportar Excel" };
+            btnExportar = new Guna2Button { Text = "Exportar" };
 
             string[] etiquetas = { "Desde", "Hasta", "Usuario", "Entidad", "Acción", "Texto" };
             Control[] campos = { dtpDesde, dtpHasta, cmbUsuario, cmbEntidad, cmbAccion, txtTexto };
@@ -394,7 +394,7 @@ namespace SteeLog.Vistas
             grillaDetalle.ClearSelection();
         }
 
-        // ---------------------------------------------------------- Excel
+        // ---------------------------------------------------------- Exportar (Excel, TXT o Markdown)
         private void Exportar()
         {
             if (registros.Count == 0)
@@ -405,8 +405,9 @@ namespace SteeLog.Vistas
 
             using (var guardar = new SaveFileDialog())
             {
-                guardar.Filter = "Excel Files (*.xlsx)|*.xlsx";
-                guardar.FileName = "Bitacora_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".xlsx";
+                guardar.Filter = "Excel (*.xlsx)|*.xlsx|Texto (*.txt)|*.txt|Markdown (*.md)|*.md";
+                guardar.FileName = "Bitacora_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                guardar.AddExtension = true;
                 try
                 {
                     string carpeta = servicios.ReportsDirectory;
@@ -414,6 +415,23 @@ namespace SteeLog.Vistas
                 }
                 catch (Exception) { }
                 if (guardar.ShowDialog(this) != DialogResult.OK) return;
+                string extension = Path.GetExtension(guardar.FileName).ToLowerInvariant();
+                if (extension == ".txt" || extension == ".md")
+                {
+                    try
+                    {
+                        string contenido = extension == ".md"
+                            ? ExportacionBitacora.AMarkdown(registros, DateTime.Now)
+                            : ExportacionBitacora.ATexto(registros, DateTime.Now);
+                        File.WriteAllText(guardar.FileName, contenido, new System.Text.UTF8Encoding(true));
+                        ToastNotification.ShowSuccess("Exportación exitosa.");
+                    }
+                    catch (Exception ex)
+                    {
+                        ToastNotification.ShowError("Error al exportar: " + ex.Message);
+                    }
+                    return;
+                }
                 try
                 {
                     using (var excel = new OfficeOpenXml.ExcelPackage())
