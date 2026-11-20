@@ -576,6 +576,19 @@ namespace SteeLog.Vistas.Movimientos
             Tema.Fecha(guna2DateTimePicker1);
             guna2DateTimePicker1.Height = Tema.AltoControl;
             costoFleteTxt.Width = 220;
+            // Símbolo de pesos fijo a la izquierda (ícono): no entra en el texto, así el parseo del importe no cambia.
+            var simboloPesos = new Bitmap(18, 22);
+            using (var g = Graphics.FromImage(simboloPesos))
+            using (var f = new Font("Segoe UI", 11F, FontStyle.Bold))
+            using (var pincel = new SolidBrush(Tema.TextoSecundario))
+            {
+                g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                var formato = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+                g.DrawString("$", f, pincel, new RectangleF(0, 0, 18, 22), formato);
+            }
+            costoFleteTxt.IconLeft = simboloPesos;
+            costoFleteTxt.IconLeftSize = new Size(18, 22);
+            costoFleteTxt.IconLeftOffset = new Point(4, 0);
             txtBuscadorMaterial.Dock = DockStyle.None;
             txtBuscadorMaterial.Anchor = AnchorStyles.Left | AnchorStyles.Right;
             txtBuscadorMaterial.Margin = new Padding(3, 5, 8, 5);

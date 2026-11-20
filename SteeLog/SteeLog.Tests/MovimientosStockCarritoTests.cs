@@ -175,6 +175,9 @@ namespace SteeLog.Tests
                     var item = c.Carrito.Single();
                     Assert.True(item.EsRecorte);
                     Assert.Equal(19, item.cantidad);
+                    // Ancho x altura nuevo: la medida no se rellena con el ancho, o el motor lo rechaza por medida.
+                    Assert.Null(item.MedidaRecorte);
+                    new SteeLog.Domain.Inventario.Recorte(0, 1, item.AnchoRecorte ?? 0m, item.AlturaRecorte ?? 0m, item.MedidaRecorte ?? 0m, 0m, null);
                     Assert.Empty(avisosTope);
                     Assert.Equal(7m, (decimal)c.Vista.GetType().GetMethod("LimitarCantidadAStock", Flags).Invoke(c.Vista, new object[] { 7m }));
                     Assert.Empty(avisosTope);

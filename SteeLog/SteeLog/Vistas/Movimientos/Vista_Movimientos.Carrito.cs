@@ -62,7 +62,7 @@ namespace SteeLog.Vistas.Movimientos
                             (!m.IdRecorte.HasValue || m.IdRecorte == 0) &&
                             m.AnchoRecorte == recorte.ancho &&
                             m.AlturaRecorte == recorte.altura &&
-                            m.MedidaRecorte == recorte.medida);
+                            (m.MedidaRecorte ?? 0m) == recorte.medida);
                     }
 
                     if (existente != null)
@@ -85,7 +85,8 @@ namespace SteeLog.Vistas.Movimientos
                             IdRecorte = recorte.id > 0 ? (int?)recorte.id : null,
                             AnchoRecorte = recorte.ancho,
                             AlturaRecorte = recorte.altura,
-                            MedidaRecorte = recorte.medida > 0 ? recorte.medida : recorte.ancho
+                            // Un recorte nuevo (id 0) lleva su medida real: ancho x altura va con medida 0 o el motor lo rechaza.
+                            MedidaRecorte = recorte.medida > 0 ? recorte.medida : (recorte.id > 0 ? (decimal?)recorte.ancho : null)
                         };
 
                         materialesLista.Add(nuevoItem);
@@ -383,6 +384,12 @@ namespace SteeLog.Vistas.Movimientos
             decimal? anchoRec = _recorteSeleccionado != null ? (decimal?)_recorteSeleccionado.ancho : (_anchoRecorteSeleccionado > 0 ? (decimal?)_anchoRecorteSeleccionado : null);
             decimal? alturaRec = _recorteSeleccionado != null ? (decimal?)_recorteSeleccionado.altura : (_alturaRecorteSeleccionado > 0 ? (decimal?)_alturaRecorteSeleccionado : null);
             decimal? medidaRec = _recorteSeleccionado != null ? (_recorteSeleccionado.medida > 0 ? _recorteSeleccionado.medida : _recorteSeleccionado.ancho) : (_medidaRecorteSeleccionado > 0 ? (decimal?)_medidaRecorteSeleccionado : (_anchoRecorteSeleccionado > 0 ? (decimal?)_anchoRecorteSeleccionado : null));
+            if (tieneRecorteSel && !(idRec > 0))
+            {
+                // Recorte nuevo: sin el relleno con el ancho, que el motor rechaza para ancho x altura.
+                decimal medidaReal = _recorteSeleccionado?.medida ?? _medidaRecorteSeleccionado;
+                medidaRec = medidaReal > 0 ? (decimal?)medidaReal : null;
+            }
 
             if (!tieneRecorteSel && materialInfo != null)
             {
