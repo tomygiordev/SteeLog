@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<title>SteeLog · Documento técnico de arquitectura y funcionamiento</title>
+<style>
+:root{--ink:#17211c;--soft:#4a5a51;--dim:#7b8a81;--rule:#d5ddd8;--tint:#f2f6f3;--green:#178a4b;--green2:#27ae60;--deep:#12201a;
+  --display:"Bahnschrift","Segoe UI",sans-serif;--body:Cambria,"Constantia",Georgia,serif;--sans:"Segoe UI",system-ui,sans-serif;--mono:Consolas,"Cascadia Mono","Courier New",monospace}
+@page{size:A4;margin:24mm 21mm 23mm 21mm;
+  @top-left{content:"SteeLog · Documento técnico";font-family:"Segoe UI",sans-serif;font-size:8pt;color:#7b8a81;letter-spacing:.04em}
+  @top-right{content:"Taller de Integración · 2026";font-family:"Segoe UI",sans-serif;font-size:8pt;color:#7b8a81;letter-spacing:.04em}
+  @bottom-center{content:counter(page);font-family:"Bahnschrift","Segoe UI",sans-serif;font-size:9.5pt;color:#178a4b}}
+@page cover{margin:0;@top-left{content:none}@top-right{content:none}@bottom-center{content:none}}
+*{box-sizing:border-box}
+html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+body{margin:0;font-family:var(--body);font-size:11pt;line-height:1.52;color:var(--ink)}
+p{margin:0 0 8.5pt;text-align:justify;hyphens:auto;orphans:3;widows:3}
+strong{font-weight:700}
+code{font-family:var(--mono);font-size:.86em;background:var(--tint);padding:.5pt 3pt;border-radius:2.5pt;color:#0f5c33;white-space:nowrap}
+a{color:inherit;text-decoration:none}
+
+/* portada */
+.cover{page:cover;width:210mm;height:297mm;background:var(--deep);color:#e8efeb;position:relative;overflow:hidden;break-after:page;padding:34mm 24mm 24mm 26mm;display:flex;flex-direction:column}
+.cover::before{content:"";position:absolute;inset:0;background:
+  radial-gradient(150mm 110mm at 100% 0,rgba(39,174,96,.34),transparent 65%),
+  radial-gradient(120mm 90mm at 0 100%,rgba(106,214,160,.12),transparent 62%),
+  linear-gradient(rgba(255,255,255,.03) .25mm,transparent .25mm) 0 0/100% 9mm,
+  linear-gradient(90deg,rgba(255,255,255,.03) .25mm,transparent .25mm) 0 0/9mm 100%}
+.cover>*{position:relative}
+.cover .tagline{font-family:var(--mono);font-size:9pt;letter-spacing:.22em;text-transform:uppercase;color:#6ad6a0}
+.cover .brand{display:flex;align-items:center;gap:8mm;margin-top:52mm}
+.cover .brand img{width:30mm;height:30mm}
+.cover .brand span{font-family:var(--display);font-weight:700;font-size:78pt;letter-spacing:-.02em;line-height:.9}
+.cover h1{font-family:var(--display);font-weight:400;font-size:21pt;line-height:1.25;color:#a3bfae;margin:11mm 0 0;max-width:140mm}
+.cover .doc{margin-top:16mm;border-left:1.2mm solid #27ae60;padding-left:6mm}
+.cover .doc b{display:block;font-family:var(--display);font-size:16pt;font-weight:600;color:#fff}
+.cover .doc span{font-family:var(--sans);font-size:11pt;color:#a3bfae}
+.cover .meta{margin-top:auto;display:grid;grid-template-columns:repeat(3,1fr);gap:6mm;font-family:var(--sans);border-top:.3mm solid rgba(255,255,255,.16);padding-top:6mm}
+.cover .meta small{display:block;font-family:var(--mono);font-size:7.5pt;letter-spacing:.16em;text-transform:uppercase;color:#6f8779;margin-bottom:1.5mm}
+.cover .meta div{font-size:10.5pt;color:#e8efeb}
+
+/* títulos */
+h2{font-family:var(--display);font-weight:700;font-size:23pt;line-height:1.12;margin:0 0 6mm;padding:3mm 0 3.5mm;border-bottom:.5mm solid var(--green2);break-before:page;break-after:avoid;letter-spacing:-.005em}
+h2 .n{display:block;font-family:var(--mono);font-weight:400;font-size:9pt;letter-spacing:.2em;color:var(--green);margin-bottom:2mm;text-transform:uppercase}
+h3{font-family:var(--display);font-weight:600;font-size:14pt;margin:7mm 0 2.5mm;break-after:avoid;color:var(--ink)}
+h3 .n{color:var(--green);margin-right:2.2mm}
+h4{font-family:var(--sans);font-weight:600;font-size:10.5pt;margin:5mm 0 1.5mm;break-after:avoid}
+ul,ol{margin:0 0 8.5pt;padding-left:6mm}
+li{margin-bottom:2.5pt;text-align:justify;hyphens:auto}
+li::marker{color:var(--green)}
+
+/* índices */
+.toc{font-family:var(--sans);font-size:10pt}
+.toc a{display:flex;align-items:baseline;gap:2mm;padding:1.25mm 0}
+.toc a .t{flex:none;max-width:150mm}
+.toc a .d{flex:1;border-bottom:.25mm dotted #b4c1b9;transform:translateY(-1mm)}
+.toc a .p{flex:none;font-family:var(--display);color:var(--green);min-width:6mm;text-align:right}
+.toc a.l1{font-weight:600;margin-top:2.2mm;font-size:10.5pt}
+.toc a.l1 .k{color:var(--green);font-family:var(--display);display:inline-block;min-width:7mm}
+.toc a.l2{padding-left:7mm;color:var(--soft)}
+.toc a.l2 .k{display:inline-block;min-width:9mm;color:var(--dim)}
+.toc a.lf .k{display:inline-block;min-width:19mm;color:var(--green);font-weight:600}
+
+/* tablas */
+table{border-collapse:collapse;width:100%;font-family:var(--sans);font-size:9.2pt;line-height:1.38;margin:2mm 0 0}
+.tbl{break-inside:avoid;margin:5mm 0 7mm}
+.tbl.long{break-inside:auto}
+caption,figcaption{font-family:var(--sans);font-size:9pt;color:var(--soft);text-align:left;caption-side:top;padding-bottom:2mm}
+caption b,figcaption b{color:var(--green);font-weight:600}
+th{background:var(--deep);color:#e8efeb;font-weight:600;text-align:left;padding:2.1mm 2.6mm;font-size:8.6pt;letter-spacing:.02em}
+td{padding:2mm 2.6mm;border-bottom:.25mm solid var(--rule);vertical-align:top}
+tr:nth-child(even) td{background:#f7faf8}
+td.m,td code{font-family:var(--mono);font-size:8.6pt}
+td.m{color:#0f5c33;white-space:nowrap}
+td code{background:none;padding:0;white-space:normal}
+thead{display:table-header-group} tr{break-inside:avoid}
+
+figure{margin:5mm 0 7mm;break-inside:avoid;border:.25mm solid var(--rule);border-radius:2.5mm;padding:5mm 5mm 3.5mm;background:#fbfcfb}
+figure svg{display:block;width:100%;height:auto}
+figcaption{padding:3mm 0 0;border-top:.25mm solid var(--rule);margin-top:4mm}
+svg text{font-family:"Segoe UI",sans-serif}
+svg .mo{font-family:Consolas,monospace}
+
+pre{font-family:var(--mono);font-size:8.7pt;line-height:1.48;background:var(--tint);border-left:1mm solid var(--green2);border-radius:0 2mm 2mm 0;padding:3.5mm 4.5mm;margin:3mm 0 6mm;white-space:pre-wrap;break-inside:avoid;color:#1d2a23}
+pre .k{color:#0f7a43;font-weight:700} pre .t{color:#1c5f9c} pre .s{color:#9a5b00} pre .c{color:#7b8a81;font-style:italic}
+.pre-t{font-family:var(--sans);font-size:8.6pt;color:var(--soft);margin:4mm 0 -1.5mm;break-after:avoid}
+.pre-t b{color:var(--green);font-weight:600}
+
+.box{border:.3mm solid #bfe3cf;background:#eef8f2;border-radius:2.5mm;padding:4mm 5mm;margin:4mm 0 6mm;break-inside:avoid;font-family:var(--sans);font-size:9.6pt;line-height:1.48}
+.box b.h{display:block;font-family:var(--mono);font-size:7.8pt;letter-spacing:.16em;text-transform:uppercase;color:var(--green);margin-bottom:1.5mm;font-weight:400}
+.box p{text-align:left;margin:0;hyphens:manual}
+.abstract p{font-size:11.2pt}
+.kw{font-family:var(--sans);font-size:9.6pt;color:var(--soft);margin-top:5mm}
+.kw b{color:var(--green)}
+.refs p{text-align:left;padding-left:8mm;text-indent:-8mm;hyphens:manual;font-size:10.4pt}
+.tree{font-family:var(--mono);font-size:8.6pt;line-height:1.5;background:var(--tint);padding:4mm 5mm;border-radius:2mm;white-space:pre;break-inside:avoid;margin:3mm 0 6mm}
+.tree i{color:var(--dim);font-style:normal}
+dl{margin:0} dt{font-family:var(--sans);font-weight:600;font-size:10pt;margin-top:3mm;color:var(--ink)} dd{margin:0 0 0 0;text-align:justify}
+</style>
+</head>
+<body>
+
+<section class="cover">
+  <div class="tagline">Taller de Integración · Documentación técnica</div>
+  <div class="brand"><img src="%%SYMBOL%%" alt=""><span>SteeLog</span></div>
+  <h1>Sistema de gestión y logística de inventario para talleres de steel framing</h1>
+  <div class="doc"><b>Documento técnico de arquitectura y funcionamiento</b><span>Diseño del software, modelo de datos, flujos operativos y estrategia de verificación</span></div>
+  <div class="meta">%%COVERMETA%%</div>
+</section>
+
+<h2 class="nonum" id="resumen">Resumen</h2>
+<div class="abstract">
+<p>SteeLog es una aplicación de escritorio para administrar el inventario de un taller de construcción en seco (<em>steel framing</em>): materiales, recortes reutilizables, herramientas e insumos, órdenes de compra, conteos físicos y los movimientos que conectan el galpón con cada obra. El sistema se ejecuta de forma completamente local: una aplicación Windows Forms sobre .NET Framework 4.8 y una base de datos PostgreSQL 17 alojada en un contenedor Docker.</p>
+<p>Este documento describe la arquitectura del software y su funcionamiento. El código se organiza según los principios de la arquitectura limpia en cuatro proyectos —dominio, aplicación, infraestructura y presentación— cuyas dependencias apuntan siempre hacia el dominio. Esa regla no depende de la disciplina del equipo: un conjunto de pruebas inspecciona los ensamblados compilados y falla si alguna capa referencia a otra que no le corresponde.</p>
+<p>Se detallan además las decisiones que protegen la integridad del stock: transacciones por caso de uso, bloqueo ordenado de filas, registro del impacto real de cada línea de movimiento para poder revertirla con exactitud, y restricciones declaradas en la base de datos. A ellas se suman una bitácora de auditoría, que la propia base completa ante cada cambio, y un módulo de copias de seguridad con restauración verificada. El trabajo se respalda con 616 métodos de prueba automatizados (795 casos al ejecutarse), que incluyen pruebas unitarias, de arquitectura y de integración contra una instancia real de PostgreSQL.</p>
+</div>
+<p class="kw"><b>Palabras clave:</b> arquitectura limpia · inventario · steel framing · C# · .NET Framework · Windows Forms · PostgreSQL · Docker · puertos y adaptadores · unidad de trabajo · pruebas de arquitectura.</p>
+
+<h2 class="nonum" id="indice">Índice general</h2>
+<nav class="toc"><!--TOC--></nav>
+
+<h2 class="nonum" id="indice-figuras">Índice de figuras y tablas</h2>
+<h4 style="margin-top:0">Figuras</h4>
+<nav class="toc"><!--LOF--></nav>
+<h4 style="margin-top:7mm">Tablas</h4>
+<nav class="toc"><!--LOT--></nav>
+
+<!-- ============ 1 ============ -->
+<h2 id="introduccion">Introducción</h2>
+<h3 id="contexto">Contexto y problema</h3>
+<p>Un taller de steel framing compra perfiles, placas, aislantes y fijaciones, los almacena en un galpón y los envía a distintas obras. Parte del material vuelve: sobrantes enteros que se reingresan y recortes —tramos de perfil o porciones de placa— que conviene conservar porque pueden aprovecharse en otro trabajo. Junto con los materiales circulan herramientas e insumos que deben poder ubicarse en todo momento.</p>
+<p>Cuando ese circuito se lleva en planillas, aparecen tres problemas recurrentes. El stock deja de ser confiable, porque cada persona actualiza su copia. No hay trazabilidad: ante un faltante no es posible reconstruir qué movimiento lo originó. Y el costo de materiales de cada obra se calcula tarde y a mano.</p>
+<h3 id="objetivos">Objetivos</h3>
+<p>El objetivo general es disponer de un sistema que mantenga un inventario exacto y auditable del galpón, y que al mismo tiempo sirva como caso de estudio de un diseño de software verificable. De allí se desprenden los objetivos específicos:</p>
+<ul>
+<li>Registrar toda entrada y salida de material como un movimiento con remito, origen, destino y tipo, de modo que el saldo de cada material sea consecuencia de su historial.</li>
+<li>Garantizar que una operación se aplique completa o no se aplique, incluso cuando dos puestos operan al mismo tiempo o se interrumpe la conexión.</li>
+<li>Separar las reglas de negocio de la interfaz gráfica y de la base de datos, para poder probarlas de forma aislada.</li>
+<li>Demostrar las propiedades anteriores con pruebas automatizadas reproducibles.</li>
+</ul>
+<h3 id="alcance">Alcance</h3>
+<p>El sistema es un monolito modular de escritorio para un puesto de trabajo, con todos sus componentes en el mismo equipo. Quedan expresamente fuera del alcance el despliegue en la nube, una API web, la autenticación contra un proveedor de identidad y la distribución productiva de actualizaciones. El inicio de sesión con usuarios fijos y el módulo de actualizaciones son adaptadores de demostración, identificados como tales en el código y en este documento.</p>
+
+<!-- ============ 2 ============ -->
+<h2 id="requerimientos">Descripción funcional</h2>
+<h3 id="actores">Actores y roles</h3>
+<p>El sistema reconoce dos roles. El <strong>administrador</strong> tiene acceso completo: gestiona el catálogo de materiales, crea órdenes de compra, corrige movimientos ya registrados y consulta valorizaciones. El <strong>operador de galpón</strong> realiza la operación diaria —registrar movimientos, recibir mercadería, contar— y ve una versión del inventario sin precios ni cantidades reservadas.</p>
+<h3 id="modulos">Módulos</h3>
+<div class="tbl"><table><caption>Módulos funcionales del sistema</caption>
+<thead><tr><th style="width:27%">Módulo</th><th>Función principal</th></tr></thead><tbody>
+<tr><td><b>Inventario y materiales</b></td><td>Catálogo de materiales por categoría y ubicación, con stock actual, stock mínimo y alerta de reposición. Búsqueda global.</td></tr>
+<tr><td><b>Movimientos</b></td><td>Registro de entradas, envíos a obra, devoluciones, ventas y uso interno. Carrito de ítems, borrador persistente, historial y remito en PDF.</td></tr>
+<tr><td><b>Órdenes de compra</b></td><td>Pedido a proveedores y recepción parcial o completa, con registro del stock antes y después de cada recepción.</td></tr>
+<tr><td><b>Conteos físicos</b></td><td>Carga de cantidades contadas en el galpón y comparación contra el stock del sistema al momento de finalizar.</td></tr>
+<tr><td><b>Recortes</b></td><td>Sobrantes reutilizables identificados por material, medidas y estado de conservación.</td></tr>
+<tr><td><b>Herramientas e insumos</b></td><td>Ubicación actual de cada activo y su historial de traslados entre el galpón y las obras.</td></tr>
+<tr><td><b>Canaletas y plegados</b></td><td>Trabajos a medida asociados a una obra, con fotografías y estado de pago.</td></tr>
+<tr><td><b>Reportes</b></td><td>Reporte de stock configurable, Kardex por material e informe valorizado de obra, todos exportables a PDF.</td></tr>
+<tr><td><b>Bitácora de auditoría</b></td><td>Registro de quién cambió qué y cuándo en las tablas de negocio, junto con los errores que vio el usuario. Consulta con filtros y exportación a Excel, TXT y Markdown.</td></tr>
+<tr><td><b>Copias de seguridad</b></td><td>Copias manuales y automáticas de la base, verificación, retención configurable y restauración con copia previa de resguardo.</td></tr>
+</tbody></table></div>
+<h3 id="no-funcionales">Requisitos no funcionales</h3>
+<div class="tbl"><table><caption>Requisitos no funcionales y cómo se atienden</caption>
+<thead><tr><th style="width:24%">Atributo</th><th>Requisito</th><th style="width:36%">Mecanismo</th></tr></thead><tbody>
+<tr><td><b>Integridad</b></td><td>El stock nunca queda negativo ni en un estado intermedio.</td><td>Invariantes de dominio, transacción por caso de uso y restricciones <code>CHECK</code>.</td></tr>
+<tr><td><b>Concurrencia</b></td><td>Dos operaciones simultáneas sobre el mismo material no se pisan.</td><td>Bloqueo de filas <code>FOR UPDATE</code> en orden ascendente de identificador.</td></tr>
+<tr><td><b>Mantenibilidad</b></td><td>Las reglas de negocio no dependen de la interfaz ni de la base.</td><td>Cuatro capas con dependencias verificadas por pruebas.</td></tr>
+<tr><td><b>Verificabilidad</b></td><td>Cada regla relevante tiene una prueba automática.</td><td>616 métodos de prueba e integración continua.</td></tr>
+<tr><td><b>Trazabilidad</b></td><td>Todo cambio en los datos de negocio queda registrado con su autor.</td><td>Trigger de auditoría en la base; la identidad viaja con la conexión.</td></tr>
+<tr><td><b>Recuperabilidad</b></td><td>Los datos pueden volver a un estado anterior conocido.</td><td>Copias con <code>pg_dump</code>, verificación con <code>pg_restore</code> y restauración transaccional.</td></tr>
+<tr><td><b>Autonomía</b></td><td>Funciona sin conexión a Internet.</td><td>Aplicación, base de datos y archivos en el mismo equipo.</td></tr>
+<tr><td><b>Seguridad</b></td><td>Cada operación exige el rol adecuado.</td><td>Verificación en el caso de uso; credenciales cifradas con DPAPI.</td></tr>
+</tbody></table></div>
+
+<!-- ============ 3 ============ -->
+<h2 id="tecnologias">Tecnologías utilizadas</h2>
+<p>La selección de tecnologías responde a dos condiciones del proyecto: debe ejecutarse en un equipo Windows sin servicios externos, y debe conservar la interfaz de escritorio existente. La tabla siguiente resume cada componente y el papel que cumple.</p>
+<div class="tbl"><table><caption>Tecnologías y bibliotecas</caption>
+<thead><tr><th style="width:30%">Componente</th><th style="width:20%">Versión</th><th>Uso en el sistema</th></tr></thead><tbody>
+<tr><td><b>C# / .NET Framework</b></td><td>4.8</td><td>Plataforma de la aplicación de escritorio y de la capa de infraestructura.</td></tr>
+<tr><td><b>.NET Standard</b></td><td>2.0</td><td>Destino de compilación de dominio y aplicación; impide por construcción el uso de API de interfaz gráfica.</td></tr>
+<tr><td><b>Windows Forms + Guna UI2</b></td><td>2.0.4.7</td><td>Interfaz gráfica; un sistema de tema propio unifica colores, tipografías y diálogos.</td></tr>
+<tr><td><b>PostgreSQL</b></td><td>17</td><td>Persistencia relacional, transacciones y bloqueos de fila.</td></tr>
+<tr><td><b>Docker Compose</b></td><td>—</td><td>Ejecuta PostgreSQL en un contenedor con volumen persistente, publicado solo en la interfaz local.</td></tr>
+<tr><td><b>Npgsql</b></td><td>5.0.18</td><td>Proveedor de datos ADO.NET; todas las consultas son parametrizadas.</td></tr>
+<tr><td><b>Microsoft.Extensions.DependencyInjection</b></td><td>9.0</td><td>Contenedor de inyección de dependencias, usado únicamente en la raíz de composición.</td></tr>
+<tr><td><b>iTextSharp</b></td><td>—</td><td>Generación de remitos y reportes en PDF.</td></tr>
+<tr><td><b>xUnit + Mono.Cecil</b></td><td>2.9 / 0.11</td><td>Pruebas automatizadas e inspección de ensamblados para las pruebas de arquitectura.</td></tr>
+<tr><td><b>GitHub Actions</b></td><td>—</td><td>Integración continua: compilación y pruebas en Debug y Release.</td></tr>
+<tr><td><b>pg_dump / pg_restore</b></td><td>17</td><td>Herramientas oficiales de PostgreSQL para generar, verificar y restaurar las copias de seguridad.</td></tr>
+</tbody></table></div>
+<h3 id="seleccion">Criterios de selección</h3>
+<p>Cada tecnología se eligió frente a alternativas concretas. Los criterios fueron tres: que el sistema funcione bien en los equipos que ya tiene el taller, que los datos existentes puedan aprovecharse sin conversiones, y que el autor pudiera mantener el sistema con los conocimientos con los que ya contaba.</p>
+<div class="tbl"><table><caption>Tecnologías elegidas frente a sus alternativas</caption>
+<thead><tr><th style="width:20%">Decisión</th><th style="width:24%">Alternativas evaluadas</th><th>Motivo de la elección</th></tr></thead><tbody>
+<tr><td><b>Windows Forms</b></td><td>WPF, Electron, aplicación web</td><td>Se buscaba una aplicación liviana: arranca rápido, consume poca memoria y funciona en las computadoras de oficina del taller sin un navegador ni un servidor web de por medio. WPF ofrece más recursos gráficos que este dominio no necesita; Electron y una aplicación web suman un entorno de ejecución completo y un servidor solo para mostrar formularios.</td></tr>
+<tr><td><b>C# y .NET Framework 4.8</b></td><td>.NET 8, Java, Python</td><td>Es la plataforma que el autor domina y con la que se construyó la interfaz original, lo que permitió concentrar el esfuerzo en el diseño y no en aprender una herramienta nueva. Viene instalada en Windows 10 y 11, de modo que el puesto no requiere instalar un entorno de ejecución. Las capas de dominio y aplicación compilan para .NET Standard 2.0, por lo que una migración futura a .NET moderno solo afectaría a la presentación y a los adaptadores.</td></tr>
+<tr><td><b>PostgreSQL</b></td><td>SQL Server, MySQL, SQLite</td><td>El software que la empresa usaba antes ya trabajaba sobre PostgreSQL, así que se conservó el motor: los datos históricos se migraron sin conversiones de tipos ni de sintaxis. Además es libre y sin costo de licencia, ofrece transacciones con bloqueo de filas (<code>FOR UPDATE</code>) y restricciones declarativas, y trae herramientas oficiales de copia. SQLite no admite bien varios puestos escribiendo a la vez y SQL Server exige licencia fuera de su edición limitada.</td></tr>
+<tr><td><b>Docker</b></td><td>Instalación nativa de PostgreSQL</td><td>El contenedor deja la base con una versión fija, aislada del resto del equipo y fácil de recrear para pruebas y demostraciones. El sistema también funciona con un PostgreSQL instalado de forma nativa: solo cambia la cadena de conexión.</td></tr>
+<tr><td><b>ADO.NET con Npgsql</b></td><td>Entity Framework, Dapper</td><td>El SQL escrito a mano da control directo sobre los bloqueos de filas y el orden en que se toman, que es donde se juega la integridad del stock. Los adaptadores quedan aislados detrás de puertos, por lo que esa decisión no se filtra a las demás capas.</td></tr>
+</tbody></table></div>
+
+<!-- ============ 4 ============ -->
+<h2 id="arquitectura">Arquitectura del sistema</h2>
+<h3 id="vista-despliegue">Vista de despliegue</h3>
+<p>En tiempo de ejecución intervienen dos procesos. La aplicación <code>SteeLog.exe</code> corre en Windows y contiene la interfaz, los casos de uso y los adaptadores. PostgreSQL corre dentro de un contenedor Linux y solo acepta conexiones desde el propio equipo. Los archivos que no pertenecen a la base —fotografías, el borrador del movimiento en curso, la sesión recordada y los reportes generados— se guardan en carpetas del perfil del usuario.</p>
+<figure id="fig-despliegue">
+<svg viewBox="0 0 720 232" role="img">
+  <rect x="6" y="20" width="318" height="204" rx="10" fill="none" stroke="#9fb1a7" stroke-dasharray="5 4"/>
+  <text x="18" y="14" font-size="10" fill="#7b8a81" letter-spacing="1.4">PC CON WINDOWS</text>
+  <rect x="22" y="38" width="286" height="78" rx="7" fill="#e3f4ea" stroke="#27ae60"/>
+  <text x="36" y="64" font-size="15" font-weight="600" fill="#17211c">SteeLog.exe</text>
+  <text x="36" y="83" font-size="10.5" fill="#4a5a51">Windows Forms · .NET Framework 4.8</text>
+  <text x="36" y="100" font-size="10.5" fill="#4a5a51">Presentación · Aplicación · Dominio · Infraestructura</text>
+  <rect x="22" y="130" width="286" height="78" rx="7" fill="#fff" stroke="#b4c1b9"/>
+  <text x="36" y="156" font-size="15" font-weight="600" fill="#17211c">Archivos locales</text>
+  <text x="36" y="175" font-size="10.5" fill="#4a5a51">Fotos · borrador de movimiento · reportes PDF</text>
+  <text x="36" y="192" font-size="10.5" fill="#4a5a51">Sesión recordada (cifrada con DPAPI)</text>
+  <rect x="396" y="20" width="318" height="204" rx="10" fill="none" stroke="#9fb1a7" stroke-dasharray="5 4"/>
+  <text x="408" y="14" font-size="10" fill="#7b8a81" letter-spacing="1.4">DOCKER · MOTOR LINUX EN WSL2</text>
+  <rect x="412" y="38" width="286" height="78" rx="7" fill="#e3f4ea" stroke="#27ae60"/>
+  <text x="426" y="64" font-size="15" font-weight="600" fill="#17211c">PostgreSQL 17</text>
+  <text x="426" y="83" font-size="10.5" fill="#4a5a51">Contenedor steelog-db (postgres:17-alpine)</text>
+  <text x="426" y="100" font-size="10.5" fill="#4a5a51">Base inventario_db · 24 tablas</text>
+  <rect x="412" y="130" width="286" height="78" rx="7" fill="#fff" stroke="#b4c1b9"/>
+  <text x="426" y="156" font-size="15" font-weight="600" fill="#17211c">Volumen persistente</text>
+  <text x="426" y="175" font-size="10.5" fill="#4a5a51">steelog_postgres_data</text>
+  <text x="426" y="192" font-size="10.5" fill="#4a5a51">Conserva los datos entre reinicios</text>
+  <line x1="312" y1="77" x2="408" y2="77" stroke="#178a4b" stroke-width="1.6"/>
+  <path d="M402 72l7 5-7 5M318 72l-7 5 7 5" fill="none" stroke="#178a4b" stroke-width="1.6"/>
+  <text x="360" y="68" font-size="9.5" text-anchor="middle" fill="#178a4b" class="mo">Npgsql · TCP</text>
+  <text x="360" y="93" font-size="9.5" text-anchor="middle" fill="#178a4b" class="mo">127.0.0.1:5435</text>
+  <line x1="555" y1="116" x2="555" y2="130" stroke="#9fb1a7" stroke-width="1.4"/>
+</svg>
+<figcaption>Vista de despliegue: procesos, almacenamiento y canal de comunicación</figcaption></figure>
+
+<h3 id="capas">Estilo arquitectónico: cuatro capas</h3>
+<p>El código sigue los principios de la arquitectura limpia (Martin, 2017) en su variante de puertos y adaptadores. La idea central es que el conocimiento del negocio ocupa el centro y no depende de nada externo; la interfaz gráfica y la base de datos son detalles que se conectan desde afuera. Cada capa corresponde a un proyecto de Visual Studio, lo que convierte la separación en una frontera de compilación y no solo en una convención de carpetas.</p>
+<figure id="fig-capas">
+<svg viewBox="0 0 720 372" role="img">
+  <defs><marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#178a4b" stroke-width="1.8"/></marker></defs>
+  <g transform="translate(6,6)">
+    <path d="M180 0A180 180 0 0 0 180 360L180 298A118 118 0 0 1 180 62Z" fill="#e2eef9" stroke="#6ea6d6"/>
+    <path d="M180 0A180 180 0 0 1 180 360L180 298A118 118 0 0 0 180 62Z" fill="#fbe9e6" stroke="#dd8c82"/>
+    <circle cx="180" cy="180" r="118" fill="#fbf2d9" stroke="#d3a53c"/>
+    <circle cx="180" cy="180" r="60" fill="#d9f2e3" stroke="#27ae60" stroke-width="1.6"/>
+    <path id="pa" d="M34 180A146 146 0 0 1 180 34" fill="none"/><path id="pb" d="M180 34A146 146 0 0 1 326 180" fill="none"/><path id="pc" d="M94 180A86 86 0 0 1 266 180" fill="none"/>
+    <g font-family="Bahnschrift,Segoe UI,sans-serif" font-weight="600" text-anchor="middle">
+      <text font-size="16" fill="#2a6396"><textPath href="#pa" startOffset="50%">Presentación</textPath></text>
+      <text font-size="16" fill="#a8473b"><textPath href="#pb" startOffset="50%">Infraestructura</textPath></text>
+      <text font-size="15" fill="#8a6410"><textPath href="#pc" startOffset="50%">Aplicación</textPath></text>
+      <text x="180" y="185" font-size="16" fill="#0f6b3a">Dominio</text>
+    </g>
+    <g stroke="#178a4b" stroke-width="1.5" marker-end="url(#ar)"><path d="M62 118L86 130"/><path d="M298 118L274 130"/><path d="M180 122L180 138"/></g>
+  </g>
+  <g font-size="10.5">
+    <g transform="translate(396,14)"><rect width="318" height="76" rx="7" fill="#d9f2e3" stroke="#27ae60"/><text x="14" y="24" font-size="13.5" font-weight="600" fill="#0f6b3a">Dominio · SteeLog.Domain</text><text x="14" y="43" fill="#4a5a51">Entidades, objetos de valor e invariantes.</text><text x="14" y="60" fill="#4a5a51">Sin referencias a otros proyectos ni a bibliotecas.</text></g>
+    <g transform="translate(396,102)"><rect width="318" height="76" rx="7" fill="#fbf2d9" stroke="#d3a53c"/><text x="14" y="24" font-size="13.5" font-weight="600" fill="#8a6410">Aplicación · SteeLog.Application</text><text x="14" y="43" fill="#4a5a51">Casos de uso y puertos (interfaces).</text><text x="14" y="60" fill="#4a5a51">Solo conoce al dominio.</text></g>
+    <g transform="translate(396,190)"><rect width="318" height="76" rx="7" fill="#fbe9e6" stroke="#dd8c82"/><text x="14" y="24" font-size="13.5" font-weight="600" fill="#a8473b">Infraestructura · SteeLog.Infrastructure</text><text x="14" y="43" fill="#4a5a51">Adaptadores: PostgreSQL, PDF, archivos, DPAPI.</text><text x="14" y="60" fill="#4a5a51">Implementa los puertos de la aplicación.</text></g>
+    <g transform="translate(396,278)"><rect width="318" height="76" rx="7" fill="#e2eef9" stroke="#6ea6d6"/><text x="14" y="24" font-size="13.5" font-weight="600" fill="#2a6396">Presentación · SteeLog (host)</text><text x="14" y="43" fill="#4a5a51">Vistas, presentadores y raíz de composición.</text><text x="14" y="60" fill="#4a5a51">Único punto de entrada: SteeLog.exe.</text></g>
+  </g>
+</svg>
+<figcaption>Capas del sistema. Las flechas indican el sentido permitido de las dependencias: siempre hacia el dominio</figcaption></figure>
+
+<div class="tbl"><table><caption>Proyectos de la solución y su tamaño</caption>
+<thead><tr><th>Proyecto</th><th>Destino</th><th>Responsabilidad</th><th style="text-align:right">Archivos C#</th><th style="text-align:right">Líneas</th></tr></thead><tbody>
+<tr><td class="m">SteeLog.Domain</td><td>netstandard2.0</td><td>Reglas e invariantes del negocio</td><td style="text-align:right">18</td><td style="text-align:right">834</td></tr>
+<tr><td class="m">SteeLog.Application</td><td>netstandard2.0</td><td>Casos de uso y puertos</td><td style="text-align:right">53</td><td style="text-align:right">4.020</td></tr>
+<tr><td class="m">SteeLog.Infrastructure</td><td>net48</td><td>Adaptadores técnicos</td><td style="text-align:right">54</td><td style="text-align:right">6.517</td></tr>
+<tr><td class="m">SteeLog</td><td>net48 (ejecutable)</td><td>Interfaz, presentadores, composición</td><td style="text-align:right">129</td><td style="text-align:right">36.149</td></tr>
+<tr><td class="m">SteeLog.Tests</td><td>net48</td><td>Pruebas automatizadas</td><td style="text-align:right">86</td><td style="text-align:right">15.063</td></tr>
+</tbody></table></div>
+<p>El tamaño del proyecto de presentación incluye el código que genera el diseñador de formularios. Los dos proyectos centrales suman menos de 4.900 líneas: el conocimiento del negocio es compacto y puede leerse completo.</p>
+
+<h3 id="regla-dependencia">La regla de dependencia y su verificación</h3>
+<p>Una arquitectura en capas se degrada cuando alguien, por comodidad, abre una conexión a la base desde un formulario. Para evitarlo, la regla de dependencia se verifica de manera automática. La clase <code>ArchitectureTests</code> utiliza Mono.Cecil para leer los ensamblados ya compilados y recorrer, para cada tipo, sus campos, propiedades, parámetros, variables locales e instrucciones. Si encuentra una referencia prohibida, la prueba falla y la integración continua rechaza el cambio.</p>
+<div class="tbl"><table><caption>Dependencias permitidas y prohibidas por ensamblado</caption>
+<thead><tr><th style="width:28%">Ensamblado</th><th>Puede referenciar</th><th>No puede referenciar</th></tr></thead><tbody>
+<tr><td class="m">Domain</td><td>Biblioteca estándar</td><td>Cualquier otro proyecto de la solución</td></tr>
+<tr><td class="m">Application</td><td><code>Domain</code></td><td>Infraestructura, presentación, Npgsql</td></tr>
+<tr><td class="m">Infrastructure</td><td><code>Application</code>, <code>Domain</code>, Npgsql, iTextSharp</td><td>Windows Forms, Guna</td></tr>
+<tr><td class="m">Vistas y presentadores</td><td><code>Application</code>, <code>Domain</code></td><td>Npgsql, <code>Infrastructure</code>, iTextSharp y el contenedor de inyección</td></tr>
+<tr><td class="m">CompositionRoot</td><td>Todos</td><td>— (única excepción, por diseño)</td></tr>
+</tbody></table></div>
+
+<h3 id="composition-root">Raíz de composición e inyección de dependencias</h3>
+<p>Si ninguna capa conoce a las clases concretas de las demás, alguien tiene que conectarlas. Esa tarea se concentra en un único lugar, la raíz de composición (Seemann, 2011): la clase <code>LocalServices</code>, dentro del espacio de nombres <code>SteeLog.CompositionRoot</code>. Allí se registra qué adaptador cumple cada puerto y se construyen los casos de uso.</p>
+<p>Las vistas no acceden al contenedor. Reciben por constructor una interfaz, <code>IServiciosVista</code>, y solicitan la ejecución de un caso de uso a través de <code>IUseCaseExecutor</code>. Su implementación crea un <em>ámbito</em> nuevo para cada operación:</p>
+<div class="pre-t"><b>Listado 1.</b> Ejecución de un caso de uso en un ámbito propio (<code>UseCaseExecutor.cs</code>)</div>
+<pre><span class="k">public async</span> <span class="t">Task</span>&lt;TResult&gt; ExecuteAsync&lt;TUseCase, TResult&gt;(
+    <span class="t">Func</span>&lt;TUseCase, <span class="t">Task</span>&lt;TResult&gt;&gt; operation) <span class="k">where</span> TUseCase : <span class="k">class</span>
+{
+    <span class="k">using</span> (<span class="k">var</span> scope = scopes.CreateScope())
+        <span class="k">return await</span> operation(
+            scope.ServiceProvider.GetRequiredService&lt;TUseCase&gt;());
+}</pre>
+<div class="box"><b class="h">Decisión de diseño</b><p>Los casos de uso, la unidad de trabajo y los repositorios se registran con tiempo de vida <em>scoped</em>. En consecuencia, cada operación obtiene una conexión y una transacción propias, que se liberan al terminar. No existe una conexión compartida por toda la aplicación, y dos pantallas no pueden interferir entre sí a través de un estado común.</p></div>
+
+<!-- ============ 5 ============ -->
+<h2 id="diseno">Diseño detallado por capa</h2>
+<h3 id="capa-dominio">Dominio</h3>
+<p>El dominio contiene las entidades del negocio y las reglas que deben cumplirse siempre, cualquiera sea la pantalla o el proceso que las invoque. Las entidades validan sus datos en el constructor: no es posible crear un <code>Material</code> con stock negativo ni un <code>Movimiento</code> sin remito, porque el objeto inválido no llega a existir.</p>
+<div class="tbl"><table><caption>Principales elementos del dominio y sus invariantes</caption>
+<thead><tr><th style="width:26%">Elemento</th><th>Invariantes que protege</th></tr></thead><tbody>
+<tr><td class="m">Material</td><td>Nombre obligatorio de hasta 150 caracteres; stock y stock mínimo no negativos con dos decimales como máximo. El ajuste de stock exige que el valor esperado coincida con el actual.</td></tr>
+<tr><td class="m">Recorte</td><td>Se define por una medida lineal o por ancho y altura; estado restringido a tres valores; cantidad no negativa.</td></tr>
+<tr><td class="m">Movimiento / LineaMovimiento</td><td>Origen, destino y tipo válidos; remito obligatorio; al menos un ítem; cantidades positivas de hasta cuatro decimales; una compra eventual lleva nombre y no referencia material de inventario.</td></tr>
+<tr><td class="m">OrdenCompra / LineaOrden</td><td>Cantidades enteras; un material no se repite en la orden; la recepción es acumulativa y no supera lo pedido; el estado se deriva de lo recibido.</td></tr>
+<tr><td class="m">Conteo</td><td>Solo admite cambios mientras está abierto; no se finaliza vacío; un material aparece una sola vez.</td></tr>
+<tr><td class="m">SaldoInventario</td><td>Aplicar una variación nunca produce un saldo negativo; la suma se realiza con control de desbordamiento.</td></tr>
+<tr><td class="m">ClasificadorMovimiento</td><td>Determina si un tipo de movimiento suma, resta o no afecta al stock.</td></tr>
+<tr><td class="m">ImpactoMovimiento</td><td>Calcula el efecto real de una línea y el valor exacto necesario para revertirla.</td></tr>
+</tbody></table></div>
+<div class="pre-t"><b>Listado 2.</b> Regla de saldo no negativo (<code>SaldoInventario.cs</code>)</div>
+<pre><span class="k">public static decimal</span> Aplicar(<span class="k">decimal</span> saldo, <span class="k">decimal</span> delta)
+{
+    <span class="k">decimal</span> nuevo = <span class="k">checked</span>(saldo + delta);
+    <span class="k">if</span> (nuevo &lt; 0)
+        <span class="k">throw new</span> <span class="t">InvalidOperationException</span>(<span class="s">"Stock insuficiente…"</span>);
+    <span class="k">return</span> nuevo;
+}</pre>
+
+<h3 id="capa-aplicacion">Aplicación</h3>
+<p>La capa de aplicación define <em>qué puede hacerse</em> con el sistema. Cada intención del usuario se representa con una clase —un caso de uso— cuyo nombre la describe: <code>RegistrarMovimiento</code>, <code>EditarMovimiento</code>, <code>ConfirmarRecepcion</code>, <code>CrearMaterial</code>. Un caso de uso verifica el permiso, abre la transacción, invoca al dominio y pide a los puertos que persistan el resultado.</p>
+<p>Los <strong>puertos</strong> son interfaces declaradas en esta capa que describen lo que la aplicación necesita del exterior, sin indicar cómo se obtiene. Siguen una convención que separa lecturas de escrituras: los puertos <code>…Consulta</code> devuelven datos listos para mostrar y no participan de transacciones de escritura; los puertos <code>…Escritura</code> operan siempre dentro de la unidad de trabajo vigente.</p>
+<div class="pre-t"><b>Listado 3.</b> Un caso de uso declara sus dependencias como puertos (<code>OperacionesMovimiento.cs</code>)</div>
+<pre><span class="k">public sealed class</span> <span class="t">RegistrarMovimiento</span>
+{
+    <span class="k">public</span> RegistrarMovimiento(<span class="t">Session</span> actor, <span class="t">IUnitOfWork</span> uow,
+        <span class="t">IMovimientosEscritura</span> repo, <span class="t">IInventarioEscritura</span> inventario) { … }
+
+    <span class="k">public</span> <span class="t">Task</span>&lt;<span class="k">int</span>&gt; EjecutarAsync(<span class="t">MovimientoSolicitud</span> solicitud, …)
+    {
+        actor.Require(<span class="t">Role</span>.Galpon);            <span class="c">// autorización</span>
+        <span class="k">return</span> motor.EjecutarAsync(<span class="k">null</span>, solicitud, <span class="k">false</span>, token);
+    }
+}</pre>
+<p>Registrar, editar y eliminar un movimiento comparten un mismo componente interno, <code>MotorMovimiento</code>, de modo que las tres operaciones aplican exactamente las mismas reglas de bloqueo, reversión y cálculo de saldo.</p>
+
+<h3 id="capa-infraestructura">Infraestructura</h3>
+<p>La infraestructura contiene los adaptadores: clases que implementan los puertos con una tecnología concreta. Reemplazar una tecnología implica escribir otro adaptador y cambiar su registro en la raíz de composición, sin modificar casos de uso ni vistas.</p>
+<div class="tbl"><table><caption>Correspondencia entre puertos y adaptadores (selección)</caption>
+<thead><tr><th>Puerto</th><th>Adaptador</th><th>Tecnología</th></tr></thead><tbody>
+<tr><td class="m">IUnitOfWork</td><td class="m">NpgsqlUnitOfWork</td><td>Conexión y transacción de PostgreSQL</td></tr>
+<tr><td class="m">IMovimientosEscritura</td><td class="m">NpgsqlMovimientos</td><td>SQL parametrizado con bloqueo de filas</td></tr>
+<tr><td class="m">IRemitoPdf, IKardexPdf…</td><td class="m">MovimientoPDF, KardexPDF…</td><td>iTextSharp</td></tr>
+<tr><td class="m">ICredentialStore</td><td class="m">DpapiCredentialStore</td><td>API de protección de datos de Windows</td></tr>
+<tr><td class="m">IPhotoStorage</td><td class="m">LocalPhotoStorage</td><td>Sistema de archivos local</td></tr>
+<tr><td class="m">IClock</td><td class="m">BusinessClock</td><td>Fecha de negocio en la zona horaria de Argentina</td></tr>
+<tr><td class="m">IAuthentication</td><td class="m">DemoAuthService</td><td>Catálogo fijo de usuarios (demostración)</td></tr>
+<tr><td class="m">IBitacoraConsulta, IBitacoraEscritura</td><td class="m">NpgsqlBitacoraConsulta…</td><td>Tabla de auditoría de PostgreSQL</td></tr>
+<tr><td class="m">IColaBitacora</td><td class="m">ColaBitacoraArchivo</td><td>Archivo local de eventos pendientes</td></tr>
+<tr><td class="m">IMotorRespaldo</td><td class="m">MotorPostgresRespaldo</td><td><code>pg_dump</code> y <code>pg_restore</code></td></tr>
+<tr><td class="m">IAlmacenRespaldos</td><td class="m">AlmacenArchivosRespaldos</td><td>Carpeta de copias, fichas JSON y SHA-256</td></tr>
+</tbody></table></div>
+<p>La unidad de trabajo (Fowler, 2002) merece una mención particular. <code>NpgsqlUnitOfWork</code> abre una conexión y una transacción al comenzar, y todos los repositorios de escritura del mismo ámbito operan sobre ellas. De esta forma, un caso de uso que modifica materiales, recortes, insumos e historial confirma o deshace todos los cambios en conjunto.</p>
+
+<h3 id="capa-presentacion">Presentación</h3>
+<p>La interfaz aplica el patrón Modelo–Vista–Presentador. La <strong>vista</strong> es el formulario: muestra datos y notifica las acciones del usuario. El <strong>presentador</strong> contiene la lógica de la pantalla —qué cargar, qué validar antes de enviar, cómo reaccionar ante un error— y se comunica con la vista a través de una interfaz, por lo que puede probarse sin crear ventanas. El sistema cuenta con quince presentadores, uno por módulo.</p>
+<figure id="fig-mvp">
+<svg viewBox="0 0 720 108" role="img">
+  <defs><marker id="ar2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#178a4b" stroke-width="1.8"/></marker></defs>
+  <g font-size="10">
+    <g transform="translate(4,14)"><rect width="150" height="80" rx="7" fill="#e2eef9" stroke="#6ea6d6"/><text x="12" y="24" font-size="13.5" font-weight="600" fill="#2a6396">Vista</text><text x="12" y="44" fill="#4a5a51">Formulario WinForms.</text><text x="12" y="59" fill="#4a5a51">Muestra y notifica.</text></g>
+    <g transform="translate(190,14)"><rect width="150" height="80" rx="7" fill="#e2eef9" stroke="#6ea6d6"/><text x="12" y="24" font-size="13.5" font-weight="600" fill="#2a6396">Presentador</text><text x="12" y="44" fill="#4a5a51">Lógica de pantalla,</text><text x="12" y="59" fill="#4a5a51">sin controles gráficos.</text></g>
+    <g transform="translate(376,14)"><rect width="150" height="80" rx="7" fill="#fff" stroke="#9fb1a7"/><text x="12" y="24" font-size="13.5" font-weight="600" fill="#17211c">IUseCaseExecutor</text><text x="12" y="44" fill="#4a5a51">Crea el ámbito y</text><text x="12" y="59" fill="#4a5a51">resuelve el caso de uso.</text></g>
+    <g transform="translate(562,14)"><rect width="154" height="80" rx="7" fill="#fbf2d9" stroke="#d3a53c"/><text x="12" y="24" font-size="13.5" font-weight="600" fill="#8a6410">Caso de uso</text><text x="12" y="44" fill="#4a5a51">Permiso, transacción</text><text x="12" y="59" fill="#4a5a51">y reglas de negocio.</text></g>
+  </g>
+  <g stroke="#178a4b" stroke-width="1.6" marker-end="url(#ar2)"><path d="M156 54H186"/><path d="M342 54H372"/><path d="M528 54H558"/></g>
+</svg>
+<figcaption>Colaboración entre vista, presentador y caso de uso</figcaption></figure>
+<p>Dos utilidades resuelven problemas típicos de una interfaz asincrónica: <code>EjecucionExclusiva</code> impide que un segundo clic repita una operación en curso, y <code>CargaVigente</code> descarta la respuesta de una búsqueda ya reemplazada por otra más reciente.</p>
+
+<!-- ============ 6 ============ -->
+<h2 id="datos">Modelo de datos</h2>
+<h3 id="tablas">Estructura general</h3>
+<p>La base de datos utilizada por los adaptadores se compone de 24 tablas. El material es la entidad central: los recortes, las líneas de movimiento, las líneas de órdenes de compra y los detalles de conteo hacen referencia a él.</p>
+<div class="tbl"><table><caption>Tablas de la base de datos por grupo funcional</caption>
+<thead><tr><th style="width:22%">Grupo</th><th>Tablas</th></tr></thead><tbody>
+<tr><td><b>Inventario</b></td><td><code>materiales</code>, <code>recortes</code></td></tr>
+<tr><td><b>Movimientos</b></td><td><code>movimientos</code> (cabecera), <code>movimientomaterial</code> (líneas)</td></tr>
+<tr><td><b>Compras</b></td><td><code>ordenes_compra</code>, <code>ordenes_compra_detalle</code></td></tr>
+<tr><td><b>Conteos</b></td><td><code>conteos_inventario</code>, <code>conteos_inventario_detalle</code></td></tr>
+<tr><td><b>Activos</b></td><td><code>herramientas</code>, <code>herramienta_movimientos</code>, <code>insumos</code>, <code>insumo_movimientos</code></td></tr>
+<tr><td><b>Catálogos</b></td><td><code>categorias</code>, <code>proveedores</code>, <code>obras</code>, <code>ubicacion</code>, <code>fletes</code>, <code>tipo_movimiento</code>, <code>materiales_proveedores</code></td></tr>
+<tr><td><b>Canaletas</b></td><td><code>canaletas_plegados</code>, <code>canaletas_plegados_fotos</code></td></tr>
+<tr><td><b>Reportes</b></td><td><code>reporte_stock_secciones</code>, <code>reporte_stock_materiales</code></td></tr>
+<tr><td><b>Auditoría</b></td><td><code>bitacora_auditoria</code></td></tr>
+</tbody></table></div>
+<figure id="fig-er"><!--ER-->
+<figcaption>Modelo entidad–relación simplificado del núcleo de inventario</figcaption></figure>
+<p>Tres decisiones del modelo se reflejan directamente en el funcionamiento. Primero, cada línea de movimiento almacena el <strong>saldo resultante</strong> del material y su <strong>impacto real</strong> sobre el stock; el Kardex se obtiene leyendo el historial y la reversión no necesita reinterpretar el pasado. Segundo, el origen y el destino de un movimiento son <em>polimórficos</em>: un par (identificador, tipo) que puede señalar una obra, un proveedor o una ubicación. Tercero, los traslados de insumos guardan una fotografía del estado anterior y posterior, lo que permite deshacerlos solo cuando ese estado no cambió desde entonces.</p>
+
+<h3 id="integridad-declarativa">Integridad declarativa</h3>
+<p>Además de las reglas del dominio, la base declara sus propias restricciones. Son una segunda barrera: se cumplen aunque un dato se modifique por fuera de la aplicación.</p>
+<div class="tbl"><table><caption>Restricciones e índices incorporados por las migraciones</caption>
+<thead><tr><th style="width:28%">Mecanismo</th><th>Aplicación</th></tr></thead><tbody>
+<tr><td><b>CHECK</b></td><td>Stock de material y cantidad de recorte no negativos; precios, saldo de línea e importes no negativos; cantidad recibida entre cero y la pedida; estados restringidos a valores válidos.</td></tr>
+<tr><td><b>NOT NULL</b></td><td>Nueve columnas de cantidades y de cabecera de movimiento que antes admitían valores nulos.</td></tr>
+<tr><td><b>Claves foráneas</b></td><td>Relaciones entre entidades, incluida la de cada movimiento con su tipo.</td></tr>
+<tr><td><b>Índices</b></td><td>Veinte índices sobre claves foráneas y columnas de filtrado: historial por material, por movimiento, por insumo y por herramienta.</td></tr>
+<tr><td><b>Impacto del tipo</b></td><td>La columna <code>tipo_movimiento.impacto</code> guarda cómo afecta cada tipo al stock.</td></tr>
+<tr><td><b>Trigger de auditoría</b></td><td>Una función genérica, activada en las tablas de negocio, registra cada alta, modificación y baja en <code>bitacora_auditoria</code>.</td></tr>
+</tbody></table></div>
+<h3 id="migraciones">Evolución del esquema</h3>
+<p>Los cambios de esquema se distribuyen como scripts SQL versionados en <code>docker/migrations</code>: F4 agrega las fotografías de estado de los insumos, F10 el impacto explícito de cada tipo junto con restricciones e índices, y F11 la bitácora de auditoría. Cada script es transaccional e idempotente: puede ejecutarse más de una vez sin efectos adicionales, y antes de aplicar una restricción comprueba que los datos existentes la cumplan; si no es así, aborta e informa el conflicto sin modificar filas. La aplicación detecta al iniciar si la base cuenta con la columna de impacto y, en caso contrario, recurre a una clasificación por nombre, lo que le permite operar tanto sobre una base migrada como sobre una anterior.</p>
+
+<!-- ============ 7 ============ -->
+<h2 id="funcionamiento">Funcionamiento del sistema</h2>
+<h3 id="arranque">Arranque y sesión</h3>
+<p>Al iniciar, <code>Program.Main</code> instala los manejadores globales de errores, construye la raíz de composición y establece la cultura regional. Si existen credenciales recordadas, intenta iniciar sesión con ellas; de lo contrario muestra la pantalla de acceso. Luego abre la ventana principal, que aloja cada módulo como un formulario hijo y conserva en memoria los ya visitados para que la navegación sea inmediata.</p>
+
+<h3 id="flujo-movimiento">Registro de un movimiento</h3>
+<p>El registro de un movimiento es el flujo central del sistema y atraviesa todas las capas. La figura siguiente muestra la secuencia completa para un envío a obra.</p>
+<figure id="fig-secuencia"><!--SEQ-->
+<figcaption>Secuencia de registro de un movimiento a través de las capas</figcaption></figure>
+<ol>
+<li><strong>Preparación.</strong> El operador selecciona tipo, origen, destino y arma un carrito de ítems. El presentador construye una <code>MovimientoSolicitud</code> y bloquea reenvíos.</li>
+<li><strong>Autorización y validación.</strong> El caso de uso exige el rol necesario y construye las entidades de dominio; cualquier dato inválido se rechaza antes de abrir la transacción.</li>
+<li><strong>Bloqueo.</strong> Dentro de la transacción se bloquean, en este orden, los materiales, los recortes y los insumos involucrados, cada grupo por identificador ascendente.</li>
+<li><strong>Cálculo.</strong> El dominio clasifica el impacto del tipo de movimiento y aplica la cantidad de cada línea al saldo correspondiente.</li>
+<li><strong>Persistencia.</strong> Se guardan la cabecera, cada línea con su saldo resultante e impacto real, y los traslados de insumos.</li>
+<li><strong>Confirmación.</strong> Se confirma la transacción y la vista ofrece generar el remito en PDF.</li>
+</ol>
+
+<h3 id="tipos-movimiento">Tipos de movimiento e impacto en el stock</h3>
+<p>No todos los movimientos afectan al stock de la misma manera. El efecto de cada tipo está almacenado como dato, y una única función del dominio, <code>ClasificadorMovimiento.Clasificar</code>, lo interpreta para registrar, editar, revertir y calcular el Kardex.</p>
+<div class="tbl"><table><caption>Tipos de movimiento y su efecto sobre el stock del galpón</caption>
+<thead><tr><th>Tipo de movimiento</th><th style="width:22%">Impacto</th><th>Efecto</th></tr></thead><tbody>
+<tr><td>Carga inicial de inventario</td><td class="m">entrada</td><td>Suma la cantidad al stock</td></tr>
+<tr><td>Compra</td><td class="m">entrada</td><td>Suma la cantidad al stock</td></tr>
+<tr><td>Devolución de obra</td><td class="m">entrada</td><td>Suma la cantidad al stock</td></tr>
+<tr><td>Envío a obra</td><td class="m">salida</td><td>Resta la cantidad del stock</td></tr>
+<tr><td>Venta de material</td><td class="m">salida</td><td>Resta la cantidad del stock</td></tr>
+<tr><td>Uso interno</td><td class="m">salida</td><td>Resta la cantidad del stock</td></tr>
+<tr><td>Compra eventual</td><td class="m">sin_impacto</td><td>Se registra y valoriza para la obra; no pasa por el galpón</td></tr>
+<tr><td>Aporte de cliente</td><td class="m">sin_impacto</td><td>Material del cliente; se registra sin modificar el stock</td></tr>
+<tr><td>Registro interno</td><td class="m">registro_interno</td><td>Ajuste originado en la gestión de materiales; no se edita desde movimientos</td></tr>
+</tbody></table></div>
+<p>El esquema admite además el comportamiento <code>segun_destino</code>, que trata al movimiento como salida cuando el destino es una obra y como neutro en los demás casos.</p>
+
+<h3 id="edicion">Edición y eliminación: reversión exacta</h3>
+<p>Corregir un movimiento ya registrado es una operación delicada, porque el stock pudo haber cambiado desde entonces. El sistema la resuelve en tres pasos dentro de una sola transacción: bloquea el movimiento original y las filas afectadas, <strong>revierte</strong> cada línea aplicando el inverso de su impacto real registrado —en orden inverso al original— y finalmente <strong>aplica</strong> la versión nueva como si fuera un movimiento recién creado. La eliminación ejecuta solo los dos primeros pasos.</p>
+<figure id="fig-reversion">
+<svg viewBox="0 0 720 118" role="img">
+  <defs><marker id="ar3" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#178a4b" stroke-width="1.8"/></marker></defs>
+  <g>
+    <g transform="translate(4,10)"><rect width="150" height="96" rx="7" fill="#fff" stroke="#9fb1a7"/><text x="12" y="22" font-size="9.5" fill="#7b8a81" class="mo">stock inicial</text><text x="12" y="58" font-size="30" font-weight="700" fill="#17211c" font-family="Bahnschrift,Segoe UI">150</text><text x="12" y="80" font-size="10" fill="#4a5a51">Antes del envío</text></g>
+    <g transform="translate(190,10)"><rect width="150" height="96" rx="7" fill="#fff" stroke="#9fb1a7"/><text x="12" y="22" font-size="9.5" fill="#b3453a" class="mo">envío original · −10</text><text x="12" y="58" font-size="30" font-weight="700" fill="#17211c" font-family="Bahnschrift,Segoe UI">140</text><text x="12" y="80" font-size="10" fill="#4a5a51">Impacto real guardado: −10</text></g>
+    <g transform="translate(376,10)"><rect width="150" height="96" rx="7" fill="#fff" stroke="#9fb1a7"/><text x="12" y="22" font-size="9.5" fill="#178a4b" class="mo">reversión · +10</text><text x="12" y="58" font-size="30" font-weight="700" fill="#17211c" font-family="Bahnschrift,Segoe UI">150</text><text x="12" y="80" font-size="10" fill="#4a5a51">Inverso del impacto real</text></g>
+    <g transform="translate(562,10)"><rect width="154" height="96" rx="7" fill="#e3f4ea" stroke="#27ae60"/><text x="12" y="22" font-size="9.5" fill="#b3453a" class="mo">envío corregido · −6</text><text x="12" y="58" font-size="30" font-weight="700" fill="#17211c" font-family="Bahnschrift,Segoe UI">144</text><text x="12" y="80" font-size="10" fill="#4a5a51">Saldo final</text></g>
+  </g>
+  <g stroke="#178a4b" stroke-width="1.6" marker-end="url(#ar3)"><path d="M156 58H186"/><path d="M342 58H372"/><path d="M528 58H558"/></g>
+</svg>
+<figcaption>Edición de un movimiento como reversión seguida de reaplicación</figcaption></figure>
+<p>Como la validación de stock se realiza después de la reversión, es posible reducir o corregir una salida aunque el stock actual sea cero. Para los insumos, la reversión solo procede si el estado actual coincide con el que dejó el movimiento; de lo contrario se rechaza, porque deshacerlo produciría un historial incoherente.</p>
+
+<h3 id="flujo-recortes">Recortes en un movimiento</h3>
+<p>Una línea puede referirse a un recorte existente o describir uno nuevo por sus medidas. En el segundo caso el sistema busca un recorte con el mismo material y dimensiones; si no existe, lo crea dentro de la misma transacción. Cuando el movimiento es una salida, la pieza recién creada ingresa por la cantidad indicada y la línea la consume, de modo que el recorte queda registrado sin alterar el stock previo.</p>
+
+<h3 id="flujo-ordenes">Órdenes de compra y conteos</h3>
+<figure id="fig-estados">
+<svg viewBox="0 0 720 150" role="img">
+  <defs><marker id="ar4" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#4a5a51" stroke-width="1.6"/></marker></defs>
+  <text x="4" y="30" font-size="11.5" font-weight="600" fill="#17211c">Orden de compra</text>
+  <g font-size="11" font-weight="600" text-anchor="middle">
+    <rect x="150" y="10" width="120" height="32" rx="16" fill="#fff" stroke="#9fb1a7"/><text x="210" y="30" fill="#17211c">Pendiente</text>
+    <rect x="345" y="10" width="140" height="32" rx="16" fill="#fbf2d9" stroke="#d3a53c"/><text x="415" y="30" fill="#8a6410">Recibida parcial</text>
+    <rect x="560" y="10" width="154" height="32" rx="16" fill="#e3f4ea" stroke="#27ae60"/><text x="637" y="30" fill="#0f6b3a">Recibida completa</text>
+  </g>
+  <g stroke="#4a5a51" stroke-width="1.4" fill="none" marker-end="url(#ar4)"><path d="M272 26H341"/><path d="M487 26H556"/><path d="M210 44C210 66 637 66 637 46"/></g>
+  <text x="306" y="20" font-size="8.5" text-anchor="middle" fill="#7b8a81">recepción</text><text x="522" y="20" font-size="8.5" text-anchor="middle" fill="#7b8a81">recepción</text><text x="424" y="72" font-size="8.5" text-anchor="middle" fill="#7b8a81">recepción total</text>
+  <text x="4" y="130" font-size="11.5" font-weight="600" fill="#17211c">Conteo físico</text>
+  <g font-size="11" font-weight="600" text-anchor="middle">
+    <rect x="150" y="110" width="120" height="32" rx="16" fill="#fff" stroke="#9fb1a7"/><text x="210" y="130" fill="#17211c">Abierto</text>
+    <rect x="345" y="110" width="140" height="32" rx="16" fill="#e3f4ea" stroke="#27ae60"/><text x="415" y="130" fill="#0f6b3a">Finalizado</text>
+    <rect x="560" y="110" width="154" height="32" rx="16" fill="#fbe9e6" stroke="#dd8c82"/><text x="637" y="130" fill="#a8473b">Cancelado</text>
+  </g>
+  <g stroke="#4a5a51" stroke-width="1.4" fill="none" marker-end="url(#ar4)"><path d="M272 126H341"/><path d="M210 110C210 92 637 92 637 106" stroke-dasharray="4 3"/></g>
+  <text x="306" y="120" font-size="8.5" text-anchor="middle" fill="#7b8a81">finalizar</text><text x="524" y="92" font-size="8.5" text-anchor="middle" fill="#7b8a81">cancelar</text>
+</svg>
+<figcaption>Estados de una orden de compra y de un conteo físico</figcaption></figure>
+<p>Una <strong>orden de compra</strong> nace pendiente y solo en ese estado admite cambios en sus líneas. La recepción se informa como cantidad acumulada por línea; el dominio calcula la diferencia respecto de lo ya recibido, la suma al stock con los materiales bloqueados y registra el saldo resultante. El estado de la orden se deriva de lo recibido.</p>
+<p>Un <strong>conteo físico</strong> acumula las cantidades contadas mientras está abierto. Al finalizarlo, el sistema fija la diferencia de cada material contra el stock de ese instante. El conteo es un instrumento de control: informa las diferencias, pero no modifica el stock por sí mismo; el ajuste queda como una decisión explícita de quien administra.</p>
+
+<h3 id="flujo-reportes">Reportes</h3>
+<p>El <strong>Kardex</strong> presenta el historial de un material con sus entradas, salidas y saldo. El <strong>informe de obra</strong> valoriza lo enviado y devuelto por cada obra, incorpora fletes, compras eventuales y trabajos de canaletas pendientes. El <strong>reporte de stock</strong> permite configurar secciones y materiales incluidos. En los tres casos el cálculo reside en el dominio o en una consulta, y la generación del PDF es responsabilidad de un adaptador.</p>
+
+<h3 id="flujo-bitacora">Bitácora de auditoría</h3>
+<p>La bitácora responde a la pregunta «¿quién cambió esto y cuándo?». No depende de que cada pantalla recuerde registrar lo que hace: la escribe la propia base de datos. Una función genérica, asociada como <em>trigger</em> a las tablas de negocio, guarda cada alta, modificación y baja con la tabla, el identificador de la fila y los datos involucrados. En una modificación solo se guardan las columnas que cambiaron, con su valor anterior y el nuevo; una actualización que no cambia nada no deja registro.</p>
+<p>Para que el trigger sepa quién hizo el cambio, la aplicación envía el usuario, el rol, el nombre del equipo y la versión del programa como parámetros de arranque de cada conexión. Así la identidad llega a la base sin una consulta adicional y sin que los casos de uso tengan que ocuparse de ella. Si el registro de auditoría fallara, el trigger lo degrada a una advertencia: la operación del usuario nunca se cancela por un problema de la bitácora.</p>
+<p>La aplicación agrega a la misma tabla sus propios eventos: los errores que se le mostraron al usuario, con la pantalla en la que ocurrieron, y las operaciones de copias de seguridad. Antes de guardar un error se eliminan las contraseñas que pudiera contener el mensaje. Si la base no está disponible, el evento se guarda en un archivo local y se envía cuando vuelve la conexión. La consulta está reservada al administrador, admite filtros por fecha, usuario, tabla y acción, y se exporta a Excel, texto plano o Markdown.</p>
+
+<h3 id="flujo-respaldos">Copias de seguridad</h3>
+<p>El módulo de copias usa las herramientas oficiales de PostgreSQL. Cada copia es un archivo de <code>pg_dump</code> acompañado de una ficha JSON con la fecha, el tipo, el tamaño, la cantidad de filas de las tablas principales y el resumen SHA-256 del archivo. Hay tres tipos: <strong>manual</strong>, <strong>automática</strong> —se crea al abrir la ventana principal si la última copia tiene más horas de antigüedad que las configuradas, 24 por defecto— y <strong>previa a una restauración</strong>. Una política de retención conserva solo las últimas copias automáticas, diez por defecto.</p>
+<p>Verificar una copia significa comprobar que el archivo no cambió, comparando su SHA-256 con el de la ficha, y que <code>pg_restore</code> puede leerlo completo. Restaurar es la operación más delicada del sistema, por lo que se protege en varios pasos:</p>
+<figure id="fig-restauracion">
+<svg viewBox="0 0 720 118" role="img">
+  <defs><marker id="ar5" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M1 1L9 5L1 9" fill="none" stroke="#178a4b" stroke-width="1.8"/></marker></defs>
+  <g font-size="10">
+    <g transform="translate(4,10)"><rect width="150" height="96" rx="7" fill="#fff" stroke="#9fb1a7"/><text x="12" y="24" font-size="13" font-weight="600" fill="#17211c">1 · Confirmar</text><text x="12" y="46" fill="#4a5a51">El administrador escribe</text><text x="12" y="61" fill="#4a5a51">la palabra RESTAURAR.</text></g>
+    <g transform="translate(190,10)"><rect width="150" height="96" rx="7" fill="#fbf2d9" stroke="#d3a53c"/><text x="12" y="24" font-size="13" font-weight="600" fill="#8a6410">2 · Verificar</text><text x="12" y="46" fill="#4a5a51">SHA-256 de la ficha y</text><text x="12" y="61" fill="#4a5a51">lectura con pg_restore.</text></g>
+    <g transform="translate(376,10)"><rect width="150" height="96" rx="7" fill="#e2eef9" stroke="#6ea6d6"/><text x="12" y="24" font-size="13" font-weight="600" fill="#2a6396">3 · Copia previa</text><text x="12" y="46" fill="#4a5a51">Se respalda el estado</text><text x="12" y="61" fill="#4a5a51">actual; sin ella, no sigue.</text></g>
+    <g transform="translate(562,10)"><rect width="154" height="96" rx="7" fill="#e3f4ea" stroke="#27ae60"/><text x="12" y="24" font-size="13" font-weight="600" fill="#0f6b3a">4 · Restaurar</text><text x="12" y="46" fill="#4a5a51">En una sola transacción:</text><text x="12" y="61" fill="#4a5a51">todo o nada.</text></g>
+  </g>
+  <g stroke="#178a4b" stroke-width="1.6" marker-end="url(#ar5)"><path d="M156 58H186"/><path d="M342 58H372"/><path d="M528 58H558"/></g>
+</svg>
+<figcaption>Pasos de una restauración de copia de seguridad</figcaption></figure>
+<p>Si la restauración falla, la base queda como estaba, porque se ejecuta en una única transacción. Si termina bien, la copia previa permite volver atrás. Un bloqueo de archivo impide que dos operaciones de copia corran al mismo tiempo, aun desde dos instancias del programa, y un vigilante detecta si la restauración queda esperando a otra sesión que tiene tomada la base, para avisar en lugar de esperar sin límite. Todas las operaciones del módulo exigen el rol de administrador y quedan registradas en la bitácora.</p>
+
+<!-- ============ 8 ============ -->
+<h2 id="concurrencia">Concurrencia e integridad transaccional</h2>
+<p>La integridad del stock se protege en tres niveles complementarios: las reglas del dominio, la transacción del caso de uso y las restricciones de la base de datos. Esta sección describe el segundo.</p>
+<h3 id="bloqueo">Bloqueo pesimista ordenado</h3>
+<p>Antes de calcular un saldo, el caso de uso lee las filas afectadas con <code>SELECT … FOR UPDATE</code>. Otra transacción que necesite las mismas filas espera a que la primera termine y luego trabaja con el valor actualizado, por lo que no puede producirse una actualización perdida. Para evitar interbloqueos, las filas se bloquean siempre en el mismo orden: primero la cabecera, luego materiales, recortes e insumos, y dentro de cada grupo por identificador ascendente. Dos operaciones que comparten materiales nunca los adquieren en órdenes opuestos.</p>
+<h3 id="atomicidad">Atomicidad y resultado incierto</h3>
+<p>Si cualquier paso falla, la transacción se revierte completa y la excepción original llega al presentador. Existe un caso límite que el diseño trata de forma explícita: una falla ocurrida <em>durante</em> la confirmación. En esa situación la aplicación no puede saber si la base llegó a confirmar. En lugar de suponer un resultado, se lanza <code>ResultadoEscrituraInciertoException</code> y la interfaz indica al usuario que verifique el estado antes de reintentar, lo que evita registrar el mismo movimiento dos veces.</p>
+<div class="pre-t"><b>Listado 4.</b> Plantilla transaccional común a los casos de uso (<code>Transaccion.cs</code>, simplificado)</div>
+<pre><span class="k">await</span> uow.BeginAsync(token);
+<span class="k">bool</span> inicioCommit = <span class="k">false</span>;
+<span class="k">try</span>
+{
+    <span class="k">var</span> resultado = <span class="k">await</span> trabajo(token);
+    inicioCommit = <span class="k">true</span>;
+    <span class="k">await</span> uow.CommitAsync(token);
+    <span class="k">return</span> resultado;
+}
+<span class="k">catch</span> (<span class="t">Exception</span> error)
+{
+    <span class="k">await</span> uow.RollbackAsync();
+    <span class="k">if</span> (inicioCommit) <span class="k">throw new</span> <span class="t">ResultadoEscrituraInciertoException</span>(error);
+    <span class="k">throw</span>;
+}</pre>
+
+<!-- ============ 9 ============ -->
+<h2 id="seguridad">Seguridad</h2>
+<h3 id="autorizacion">Autorización por caso de uso</h3>
+<p>La autorización no depende de ocultar botones. Cada caso de uso comienza con una llamada a <code>Session.Require(rol)</code>, que lanza una excepción si no hay sesión activa o si el rol es insuficiente. Una vista que omitiera un control de permisos no podría, por lo tanto, ejecutar una operación no autorizada.</p>
+<div class="tbl"><table><caption>Rol mínimo requerido por operación (selección)</caption>
+<thead><tr><th>Operación</th><th style="width:24%">Rol mínimo</th></tr></thead><tbody>
+<tr><td>Consultar inventario, catálogos, historial y conteos</td><td>Galpón</td></tr>
+<tr><td>Registrar o eliminar un movimiento</td><td>Galpón</td></tr>
+<tr><td>Confirmar la recepción de una orden de compra</td><td>Galpón</td></tr>
+<tr><td>Gestionar herramientas, insumos y catálogos</td><td>Galpón</td></tr>
+<tr><td>Operar un conteo físico</td><td>Galpón</td></tr>
+<tr><td>Editar un movimiento ya registrado</td><td>Administrador</td></tr>
+<tr><td>Crear, editar o eliminar materiales</td><td>Administrador</td></tr>
+<tr><td>Crear, editar o eliminar órdenes de compra</td><td>Administrador</td></tr>
+<tr><td>Eliminar un conteo</td><td>Administrador</td></tr>
+<tr><td>Consultar la bitácora de auditoría</td><td>Administrador</td></tr>
+<tr><td>Crear, verificar, restaurar o eliminar copias de seguridad</td><td>Administrador</td></tr>
+</tbody></table></div>
+<h3 id="otras-medidas">Otras medidas</h3>
+<ul>
+<li><strong>Credenciales recordadas.</strong> Se cifran con la API de protección de datos de Windows (DPAPI), ligada a la cuenta del usuario del sistema operativo.</li>
+<li><strong>Consultas parametrizadas.</strong> Ningún valor ingresado por el usuario se concatena en una sentencia SQL.</li>
+<li><strong>Superficie de red mínima.</strong> PostgreSQL se publica únicamente en <code>127.0.0.1</code>.</li>
+<li><strong>Registro de errores.</strong> Las excepciones no controladas se registran en un archivo local y en la bitácora, y se informa al usuario sin exponer detalles internos. Las contraseñas que aparezcan en un mensaje se reemplazan antes de guardarlo.</li>
+<li><strong>Auditoría.</strong> Cada cambio en las tablas de negocio queda registrado por la base con el usuario que lo hizo, aunque se haga por fuera de la aplicación.</li>
+</ul>
+<p><strong>Alcance de la autenticación.</strong> El inicio de sesión utiliza un catálogo fijo de usuarios y la contraseña de la base incluida en el repositorio es pública. Ambas son decisiones propias de un entorno académico local. El puerto <code>IAuthentication</code> permite sustituir el adaptador por un proveedor real sin modificar casos de uso ni vistas.</p>
+
+<!-- ============ 10 ============ -->
+<h2 id="pruebas">Estrategia de pruebas</h2>
+<p>El proyecto de pruebas contiene 616 métodos de prueba distribuidos en 86 archivos y 15.063 líneas, una cifra superior a la suma de las capas de dominio, aplicación e infraestructura (11.371 líneas). Como varias pruebas se ejecutan con distintos juegos de datos, una corrida completa sin base de datos ejecuta 795 casos. Las pruebas se organizan según lo que verifican.</p>
+<div class="tbl"><table><caption>Tipos de prueba y su propósito</caption>
+<thead><tr><th style="width:24%">Tipo</th><th>Qué verifica</th><th style="width:30%">Ejemplos</th></tr></thead><tbody>
+<tr><td><b>Unitarias de dominio</b></td><td>Invariantes y cálculos, sin base de datos ni interfaz.</td><td class="m" style="white-space:normal">ClasificadorMovimientoTests, ImpactoMovimientoTests, KardexTests</td></tr>
+<tr><td><b>Unitarias de aplicación</b></td><td>Casos de uso con puertos simulados: permisos, transacción y orden de operaciones.</td><td class="m" style="white-space:normal">TransaccionTests, OrdenCompraApplicationTests</td></tr>
+<tr><td><b>De presentación</b></td><td>Presentadores y comportamiento de las vistas.</td><td class="m" style="white-space:normal">MovimientosPresenterTests, EjecucionExclusivaTests, RespaldosVistaTests</td></tr>
+<tr><td><b>De arquitectura</b></td><td>Dependencias entre capas sobre los ensamblados compilados.</td><td class="m" style="white-space:normal">ArchitectureTests</td></tr>
+<tr><td><b>De integración</b></td><td>Adaptadores SQL contra un PostgreSQL real en un contenedor descartable.</td><td class="m" style="white-space:normal">InventarioIntegrationTests, OrdenCompraIntegrationTests, scripts de bitácora y respaldos</td></tr>
+<tr><td><b>De documentos</b></td><td>Contenido de los PDF generados.</td><td class="m" style="white-space:normal">RemitoPdfTests, KardexPdfTests</td></tr>
+</tbody></table></div>
+<h3 id="ci">Integración continua</h3>
+<p>Un flujo de GitHub Actions se ejecuta en cada envío de cambios y en cada solicitud de integración. Compila la solución en las configuraciones Debug y Release y ejecuta las pruebas que no requieren base de datos. Las pruebas de integración se ejecutan localmente mediante scripts que crean una base temporal, aplican el esquema y las migraciones, corren la suite y eliminan los recursos al finalizar, sin tocar la base de trabajo.</p>
+
+<!-- ============ 11 ============ -->
+<h2 id="operacion">Despliegue y operación</h2>
+<h3 id="puesta-en-marcha">Puesta en marcha</h3>
+<p>La instalación requiere Windows 10 u 11, .NET Framework 4.8 y un motor Docker con soporte para contenedores Linux. El procedimiento consta de tres pasos:</p>
+<ol>
+<li>Ejecutar <code>docker/iniciar.ps1</code>, que valida el entorno, levanta el contenedor de PostgreSQL y espera a que acepte conexiones. En el primer arranque, los scripts de <code>docker/init</code> crean el esquema y los datos iniciales.</li>
+<li>Verificar la cadena de conexión en <code>appsettings.json</code>, que se genera a partir de un archivo de ejemplo si no existe.</li>
+<li>Iniciar <code>SteeLog.exe</code>. Las bibliotecas se incorporan al ejecutable durante la compilación, de modo que se distribuye un único archivo.</li>
+</ol>
+<h3 id="demo">Entorno de demostración aislado</h3>
+<p>Para exponer el sistema sin riesgo para los datos de trabajo, el repositorio incluye scripts que empaquetan una versión de demostración y la instalan con una base de datos y un volumen propios, en un puerto distinto y con un perfil de usuario separado. El paquete incluye un manifiesto con el <em>commit</em> de origen y los resúmenes SHA-256 de sus archivos.</p>
+
+<!-- ============ 12 ============ -->
+<h2 id="limitaciones">Limitaciones y trabajo futuro</h2>
+<p>Las siguientes limitaciones son conocidas y se documentan para delimitar con precisión lo que el sistema garantiza.</p>
+<div class="tbl"><table><caption>Limitaciones conocidas y línea de evolución</caption>
+<thead><tr><th style="width:27%">Limitación</th><th>Situación actual</th><th style="width:34%">Evolución propuesta</th></tr></thead><tbody>
+<tr><td><b>Autenticación</b></td><td>Usuarios fijos de demostración.</td><td>Implementar <code>IAuthentication</code> contra un almacén de usuarios con contraseñas derivadas.</td></tr>
+<tr><td><b>Recepciones y Kardex</b></td><td>La recepción de una orden actualiza el stock y guarda el saldo, pero no agrega una línea al historial de movimientos.</td><td>Generar un movimiento de tipo compra al confirmar la recepción.</td></tr>
+<tr><td><b>Unicidad de recortes</b></td><td>La base no impide dos recortes con igual material y medidas; lo resuelve la aplicación.</td><td>Agregar una restricción única, previa depuración de datos.</td></tr>
+<tr><td><b>Conteos</b></td><td>Finalizar un conteo no ajusta el stock.</td><td>Ofrecer la generación asistida de ajustes a partir de las diferencias.</td></tr>
+<tr><td><b>Topología</b></td><td>Un puesto con base local.</td><td>Alojar la base en un servidor de la red; el bloqueo de filas ya contempla la concurrencia.</td></tr>
+<tr><td><b>Ubicación de las copias</b></td><td>Las copias se guardan en una carpeta del mismo equipo, elegida por el administrador.</td><td>Copiar automáticamente cada copia a un disco externo o a un almacenamiento en la nube.</td></tr>
+</tbody></table></div>
+
+<!-- ============ 13 ============ -->
+<h2 id="conclusiones">Conclusiones</h2>
+<p>SteeLog resuelve un problema operativo concreto —conocer con exactitud qué hay en el galpón, dónde está y qué movimiento lo llevó allí— con un diseño en el que cada decisión puede justificarse y comprobarse.</p>
+<p>La separación en cuatro capas permitió concentrar el conocimiento del negocio en menos de 4.900 líneas independientes de la interfaz y de la base de datos, y probarlas de forma aislada. La regla que sostiene esa separación se verifica automáticamente sobre los binarios, por lo que no puede deteriorarse de manera inadvertida. La integridad del stock no descansa en un único mecanismo: las invariantes del dominio, la transacción con bloqueo ordenado y las restricciones de la base se respaldan entre sí. El registro del impacto real de cada línea hace posible corregir el pasado sin perder exactitud, y la bitácora junto con las copias de seguridad permiten saber quién hizo cada cambio y volver a un estado anterior conocido.</p>
+<p>Las limitaciones señaladas son, en todos los casos, extensiones que la arquitectura admite sin reescritura: cada una se resuelve con un adaptador nuevo, un caso de uso adicional o una migración de esquema. Ese es, en definitiva, el resultado más relevante del trabajo: un sistema que funciona y que puede seguir creciendo de manera ordenada.</p>
+
+<h2 class="nonum" id="referencias">Referencias</h2>
+<div class="refs">
+<p>Evans, E. (2003). <em>Domain-Driven Design: Tackling Complexity in the Heart of Software</em>. Addison-Wesley.</p>
+<p>Fowler, M. (2002). <em>Patterns of Enterprise Application Architecture</em>. Addison-Wesley.</p>
+<p>Gamma, E., Helm, R., Johnson, R. y Vlissides, J. (1994). <em>Design Patterns: Elements of Reusable Object-Oriented Software</em>. Addison-Wesley.</p>
+<p>Martin, R. C. (2017). <em>Clean Architecture: A Craftsman's Guide to Software Structure and Design</em>. Prentice Hall.</p>
+<p>Microsoft. (s. f.). <em>Dependency injection in .NET</em>. Microsoft Learn.</p>
+<p>Microsoft. (s. f.). <em>Windows Data Protection (DPAPI)</em>. Microsoft Learn.</p>
+<p>Seemann, M. (2011). <em>Dependency Injection in .NET</em>. Manning.</p>
+<p>The PostgreSQL Global Development Group. (2024). <em>PostgreSQL 17 Documentation</em>, capítulo 13: Concurrency Control.</p>
+</div>
+
+<h2 class="nonum" id="anexo-a"><span class="n">Anexo A</span>Estructura del repositorio</h2>
+<div class="tree">SteeLog/
+├─ SteeLog.sln
+├─ SteeLog.Domain/            <i>entidades e invariantes</i>
+│  ├─ Inventario/  Movimientos/  OrdenesCompra/  Conteos/
+│  └─ Activos/  Canaletas/  Catalogos/  Reportes/
+├─ SteeLog.Application/       <i>casos de uso y puertos</i>
+│  ├─ Common/                 <i>IUnitOfWork, IClock, Transaccion</i>
+│  ├─ Identidad/              <i>Session, Role, IAuthentication</i>
+│  ├─ Bitacora/  Respaldos/   <i>auditoría y copias de seguridad</i>
+│  └─ Inventario/  Movimientos/  OrdenesCompra/  Conteos/  Reportes/ …
+├─ SteeLog.Infrastructure/    <i>adaptadores</i>
+│  ├─ Persistence/            <i>NpgsqlUnitOfWork, PostgresConnectionFactory</i>
+│  ├─ Bitacora/  Respaldos/   <i>tabla de auditoría, pg_dump y pg_restore</i>
+│  ├─ Pdf/  Files/  Identity/  Configuration/
+│  └─ Inventario/  Movimientos/  OrdenesCompra/ …   <i>repositorios Npgsql</i>
+├─ SteeLog/                   <i>ejecutable Windows Forms</i>
+│  ├─ CompositionRoot/        <i>LocalServices, UseCaseExecutor</i>
+│  ├─ Presentation/           <i>presentadores e interfaces de vista</i>
+│  ├─ UI/                     <i>tema visual y diálogos</i>
+│  └─ Vistas/                 <i>formularios por módulo</i>
+└─ SteeLog.Tests/             <i>pruebas automatizadas</i>
+docker/
+├─ init/                      <i>esquema y datos iniciales</i>
+└─ migrations/                <i>scripts de evolución del esquema</i>
+scripts/                      <i>verificación, pruebas de integración y demo</i>
+docs/arquitectura/            <i>plan y evidencias de verificación</i></div>
+
+<h2 class="nonum" id="anexo-b"><span class="n">Anexo B</span>Glosario</h2>
+<dl>
+<dt>Adaptador</dt><dd>Clase que implementa un puerto con una tecnología concreta, por ejemplo PostgreSQL o el sistema de archivos.</dd>
+<dt>Bitácora de auditoría</dt><dd>Registro cronológico de los cambios hechos en los datos y de los eventos relevantes de la aplicación, con su autor.</dd>
+<dt>Caso de uso</dt><dd>Clase de la capa de aplicación que representa una operación completa solicitada por el usuario.</dd>
+<dt>Copia de seguridad</dt><dd>Archivo con el contenido completo de la base en un momento dado, que permite restaurarla a ese estado.</dd>
+<dt>Kardex</dt><dd>Registro cronológico de las entradas, salidas y saldos de un material.</dd>
+<dt>Puerto</dt><dd>Interfaz declarada por la capa de aplicación que describe una necesidad hacia el exterior.</dd>
+<dt>Raíz de composición</dt><dd>Único lugar del programa donde se decide qué clase concreta implementa cada interfaz.</dd>
+<dt>Recorte</dt><dd>Sobrante reutilizable de un material, identificado por sus medidas y estado.</dd>
+<dt>Remito</dt><dd>Comprobante que acompaña un traslado de mercadería e identifica al movimiento.</dd>
+<dt>Steel framing</dt><dd>Sistema constructivo en seco basado en una estructura de perfiles de acero galvanizado.</dd>
+<dt>Unidad de trabajo</dt><dd>Objeto que agrupa un conjunto de cambios para confirmarlos o deshacerlos como una sola transacción.</dd>
+</dl>
+
+</body>
+</html>
