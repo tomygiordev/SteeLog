@@ -14,7 +14,7 @@ from PIL import Image
 # --- Datos de portada: completar si se desea que aparezcan -------------------
 AUTOR = "Tomás Roldán Giorgi"
 INSTITUCION = "UADER · Facultad de Ciencia y Tecnología"
-DOCENTE = "Santiago Raul Diaz<br>Marcos Elias Rios Nuñez"   # varios: separar con <br>
+DOCENTE = "Santiago Raul Diaz<br>Marcos Elias Rios Nuñez<br>Martin Raul Arrejin"   # varios: separar con <br>
 FECHA = "Noviembre de 2026"
 # -----------------------------------------------------------------------------
 
